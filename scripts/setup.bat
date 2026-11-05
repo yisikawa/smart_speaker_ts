@@ -54,6 +54,6 @@ echo ========================================
 echo.
 echo 次の手順で起動してください:
 echo   1. Ollama と VOICEVOX を起動
-echo   2. scripts/run.bat を実行
+echo   2. start.bat を実行（ルート直下。scripts\run.bat も同じ動作です）
 echo.
 pause

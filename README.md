@@ -78,9 +78,18 @@ powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1 -Restore
 
 ## 起動
 
+Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama/VOICEVOX・モデルの有無を確認してから起動し、ブラウザを開きます）。
+
+```powershell
+.\start.bat              # 起動（3 秒後にブラウザを開く）
+.\start.bat /nobrowser   # ブラウザを自動で開かない
+```
+
+コマンドラインから直接起動する場合:
+
 ```powershell
 npm start              # node dist/backend/index.js
-# または scripts\run.bat
+# または scripts\run.bat（start.bat へ委譲）
 ```
 
 ブラウザで <http://localhost:3000> を開きます。
@@ -166,7 +175,8 @@ src/
 │   └── server/                # Express + WebSocket
 └── frontend/                  # index.html / style.css / app.ts
 config/                        # settings.toml, settings.default.toml, characters/
-scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js
+scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js, setup-whisper-cuda.ps1
+start.bat                      # Windows 用ランチャー（依存/ビルド/外部サービス確認 → 起動）
 docs/                          # DESIGN.md（As-Is）, REDESIGN.md（To-Be）
 models/, whisper.cpp/          # Whisper 本体とモデル
 logs/                          # app.log（実行ログ）

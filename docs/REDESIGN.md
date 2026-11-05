@@ -476,8 +476,9 @@ powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1 -Restore
 ### 12.2 起動と確認
 
 ```powershell
-npm start
-# または scripts\run.bat
+.\start.bat              # Windows: 依存/ビルド/外部サービスを確認して起動（ブラウザも開く）
+.\start.bat /nobrowser   # ブラウザを開かない
+npm start                # 直接起動する場合
 ```
 
 - ブラウザ: `http://localhost:3000`

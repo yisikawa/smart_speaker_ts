@@ -3,6 +3,8 @@ dist/
 dist-test/
 logs/*.log
 logs/*.wav
+logs/*.out
+logs/*.err
 models/*.bin
 whisper.cpp/*.dll
 whisper.cpp/*.exe
