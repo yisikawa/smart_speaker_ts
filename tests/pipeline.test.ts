@@ -53,9 +53,14 @@ function setup(options: {
   const config = new ConfigManager({ rootDir });
   config.update({
     // サーバー（ffmpeg）録音モードを既定にしたテスト。ブラウザモードは個別に上書きする
-    audio: { input_mode: "server" },
-    conversation: { barge_in_enabled: false, followup_enabled: false },
-    ...options.configPatch,
+    audio: { input_mode: "server", ...(options.configPatch?.audio ?? {}) },
+    // 無限に聞き続けないよう、テストでは明示的に停止させる（keep_listening のテストで上書き）
+    conversation: {
+      barge_in_enabled: false,
+      followup_enabled: false,
+      keep_listening: false,
+      ...(options.configPatch?.conversation ?? {}),
+    },
   });
 
   const events: PipelineEvent[] = [];
@@ -366,6 +371,34 @@ test("ブラウザ入力モードではサーバー側の録音を開始しな�
     );
     assert.ok(errorEvent);
     assert.match(errorEvent.message, /ブラウザのマイク/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("keep_listening=true なら回数の上限を超えても聞き取りを続ける", async () => {
+  const harness = setup({
+    specs: [
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: false, reason: "no_speech" },
+    ],
+    sttTexts: ["1 回目", "2 回目"],
+    configPatch: {
+      conversation: {
+        barge_in_enabled: false,
+        followup_enabled: true,
+        max_followup_turns: 0,
+        keep_listening: true,
+      },
+    },
+  });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    assert.equal(harness.llmCalls(), 2, "上限 0 でも継続して 2 ターン応答する");
+    assert.equal(harness.sttCalls(), 2);
+    assert.equal(harness.pipeline.getState(), "idle");
   } finally {
     harness.cleanup();
   }

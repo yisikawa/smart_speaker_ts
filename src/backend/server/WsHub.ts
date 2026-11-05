@@ -90,6 +90,7 @@ export class WsHub {
             maxTurns: conversationConfig.max_followup_turns,
             timeoutMs: conversationConfig.followup_timeout_seconds * 1000,
             guardMs: conversationConfig.followup_guard_ms,
+            keepListening: conversationConfig.keep_listening,
           },
           bargeIn: {
             enabled: conversationConfig.barge_in_enabled,

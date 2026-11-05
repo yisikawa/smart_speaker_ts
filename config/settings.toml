@@ -38,6 +38,8 @@ followup_enabled = true
 max_followup_turns = 3
 followup_timeout_seconds = 6.0
 followup_guard_ms = 250
+# フォローアップ回数の上限に達しても聞き取りを続ける（停止を押すまで待機）
+keep_listening = true
 barge_in_enabled = true
 barge_in_min_score = 0.08
 

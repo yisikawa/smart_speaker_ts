@@ -10,7 +10,7 @@
     "dev": "ts-node src/backend/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "tsc -p tsconfig.frontend.json && node scripts/build.js",
-    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/tests/*.test.js\"",
+    "test": "tsc -p tsconfig.test.json && node --test --test-timeout=30000 \"dist-test/tests/*.test.js\"",
     "check-audio": "node scripts/check-audio.js",
     "smoke": "node scripts/smoke.js"
   },

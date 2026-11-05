@@ -50,6 +50,7 @@ class SumikaApp {
   private readonly btnStop = must<HTMLButtonElement>("btnStop");
   private readonly btnClear = must<HTMLButtonElement>("btnClear");
   private readonly btnSend = must<HTMLButtonElement>("btnSend");
+  private readonly btnMicTest = must<HTMLButtonElement>("btnMicTest");
   private readonly inputEl = must<HTMLTextAreaElement>("textInput");
   private readonly deviceSelect = must<HTMLSelectElement>("inputDevice");
   private readonly toastEl = must<HTMLElement>("toast");
@@ -76,6 +77,9 @@ class SumikaApp {
     });
     this.btnClear.addEventListener("click", () => this.send({ type: "clear_history" }));
     this.btnSend.addEventListener("click", () => this.submitText());
+    this.btnMicTest.addEventListener("click", () => {
+      void this.checkMic();
+    });
     this.inputEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -398,15 +402,20 @@ class SumikaApp {
           followup = 0;
           continue;
         }
-        if (!cfg.followup.enabled || followup >= cfg.followup.maxTurns) {
+        if (!cfg.followup.enabled) {
+          break;
+        }
+        if (!cfg.followup.keepListening && followup >= cfg.followup.maxTurns) {
           break;
         }
         followup += 1;
-        this.addSystemNote(
-          `続けて話しかけてください（${followup}/${cfg.followup.maxTurns}・${Math.round(
-            cfg.followup.timeoutMs / 1000
-          )} 秒）`
-        );
+        if (followup <= cfg.followup.maxTurns) {
+          this.addSystemNote(
+            `続けて話しかけてください（${followup}/${cfg.followup.maxTurns}・${Math.round(
+              cfg.followup.timeoutMs / 1000
+            )} 秒）`
+          );
+        }
       }
     } catch (error) {
       const message =
@@ -495,6 +504,50 @@ class SumikaApp {
     const ratio = threshold > 0 ? Math.min(1, level / (threshold * 4)) : 0;
     this.levelFill.style.width = `${Math.round(Math.sqrt(ratio) * 100)}%`;
     this.levelHint.textContent = `レベル ${level.toFixed(3)} / しきい値 ${threshold.toFixed(3)}`;
+  }
+
+  /** マイク入力を 5 秒だけ確認する（送信はしない） */
+  private async checkMic(): Promise<void> {
+    const cfg = this.audioConfig;
+    if (!cfg || cfg.inputMode !== "browser" || !this.mic) {
+      this.showToast("マイク確認はブラウザ入力モードのみ対応しています", "error");
+      return;
+    }
+    if (this.micLoopRunning) {
+      this.showToast("聞き取り中は実行できません。先に停止してください", "error");
+      return;
+    }
+    try {
+      await this.mic.start(this.deviceSelect.value || undefined);
+      await this.refreshDevices();
+      this.showToast("5 秒間マイクを確認します。話しかけてください", "info");
+      const result = await this.mic.listen({
+        startTimeoutMs: 5000,
+        maxDurationMs: 5000,
+        onLevel: (level, threshold) => this.updateLevel(level, threshold),
+      });
+      const dbfs = result.peakLevel > 0 ? (20 * Math.log10(result.peakLevel)).toFixed(1) : "-∞";
+      if (result.frames === 0) {
+        this.showToast("音声データが届きません（マイクの許可・接続を確認してください）", "error");
+      } else if (result.peakLevel < cfg.silenceThreshold * 0.5) {
+        this.showToast(
+          `ほぼ無音でした（frames=${result.frames} / peak=${result.peakLevel}）。マイク選択を確認してください`,
+          "error"
+        );
+      } else {
+        this.showToast(
+          `マイクOK: peak ${result.peakLevel.toFixed(3)}（${dbfs} dBFS）/ ${result.frames} フレーム`,
+          "info"
+        );
+      }
+    } catch (error) {
+      this.showToast(
+        error instanceof BrowserMicError ? error.message : String((error as Error)?.message ?? error),
+        "error"
+      );
+    } finally {
+      this.levelFill.style.width = "0%";
+    }
   }
 
   private setState(state: AssistantState): void {

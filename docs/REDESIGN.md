@@ -321,7 +321,8 @@ ffmpeg -hide_banner -loglevel error \
 | リサンプル | `AudioContext({ sampleRate: 16000 })` を要求。実際のレートが異なる場合は `resample()` で 16kHz に変換 |
 | VAD | **サーバーと同一の `VadEngine`**（`src/shared/audio/vad.ts`）。20ms フレームで判定 |
 | 送信 | 発話確定時に WAV を生成 → Base64 → `submit_audio`（`format: "wav"`, `sampleRate: 16000`） |
-| フォローアップ | 応答後に `followup.timeoutMs` だけ待機して再録音（`turn_complete` 後にクライアントがループ） |
+| フォローアップ | 応答後に `followup.timeoutMs` だけ待機して再録音（`turn_complete` 後にクライアントがループ）。`keepListening` が true の間は上限後も「停止」まで継続 |
+| マイク確認 | 画面の「マイク確認」で 5 秒だけ録音し、`frames` / `peakLevel` / dBFS を表示（送信しない）。無音・無データ時の切り分けに使う |
 | バージイン | 再生中（`speaking_started`）に監視録音を開始し、`onSpeechStart` で `stop_speaking` を送信。取得した発話は次ターンとして送信 |
 | 無音・失敗時 | `frames === 0` / `peakLevel` が極小ならトーストで原因（許可・ミュート・入力レベル）を案内 |
 | デバイス選択 | 画面の「マイク」セレクト（`enumerateDevices`）。切替時は `stopStream()` → 再オープン |
@@ -406,6 +407,7 @@ type ServerMessage =
 | `audio` | `ffmpeg_path` | `""` | ffmpeg の明示パス |
 | `audio` | `player` | `"auto"` | `auto` / `ffplay` / `soundplayer` |
 | `conversation` | `auto_start` | `false` | 起動直後に録音を始めるか（As-Is は実質 true 固定） |
+| `conversation` | `keep_listening` | `true` | フォローアップ上限後も「停止」まで聞き取りを続ける |
 | `audio` | `input_mode` | `"browser"` | `browser`（getUserMedia）/ `server`（ffmpeg） |
 | `audio` | `device_settle_ms` | 250 | 録音セッション間の待機（server モードのデバイス競合対策） |
 | `stt` | `binary_path` | `whisper.cpp/main.exe` | whisper.cpp の実行ファイル |
@@ -511,7 +513,7 @@ type ServerMessage =
 ```powershell
 npm install
 npm run build          # clean → tsc → フロント静的ファイルのコピー
-npm test               # 62 ケース（任意）
+npm test               # 63 ケース（任意）
 ```
 
 前提: Ollama（`ollama serve`）と VOICEVOX ENGINE を起動しておく。

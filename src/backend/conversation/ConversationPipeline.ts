@@ -378,16 +378,24 @@ export class ConversationPipeline {
           continue;
         }
 
-        if (!conv.followup_enabled || followup >= conv.max_followup_turns) {
+        if (!conv.followup_enabled) {
+          break;
+        }
+        const maxFollowupTurns = conv.keep_listening
+          ? Number.POSITIVE_INFINITY
+          : conv.max_followup_turns;
+        if (followup >= maxFollowupTurns) {
           break;
         }
         followup += 1;
-        this.emit({
-          type: "followup_wait",
-          turn: followup,
-          maxTurns: conv.max_followup_turns,
-          timeoutMs: conv.followup_timeout_seconds * 1000,
-        });
+        if (followup <= conv.max_followup_turns) {
+          this.emit({
+            type: "followup_wait",
+            turn: followup,
+            maxTurns: conv.max_followup_turns,
+            timeoutMs: conv.followup_timeout_seconds * 1000,
+          });
+        }
         this.setState("recording");
       }
     } finally {

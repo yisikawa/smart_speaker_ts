@@ -107,6 +107,8 @@ npm start              # node dist/backend/index.js
 - **ブラウザのマイク入力**（既定）: `getUserMedia` で録音し、発話単位の WAV を WebSocket で送信。
   VAD はサーバーと同一実装を共有。ffmpeg は `input_mode = "server"` のフォールバックとして残置
 - マイク選択（ブラウザのデバイス一覧）とレベルメーター表示
+- **「マイク確認」ボタン**: 5 秒間だけ録音して入力レベル（peak / dBFS / フレーム数）を表示（送信はしない）
+- **聞き取りを継続**（`conversation.keep_listening = true`）: フォローアップ回数の上限後も「停止」を押すまで待機を続ける
 - ストリーミング応答（差分を逐次表示）と `AbortController` による中断
 - バージイン（発話で再生を停止し、その発話を次のターンとして処理）
 - フォローアップ（連続会話）
@@ -125,7 +127,7 @@ npm start              # node dist/backend/index.js
 | テーブル | 主なキー |
 |----------|----------|
 | `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
-| `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `barge_in_enabled`, `barge_in_min_score` |
+| `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads` |
 | `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns` |
 | `[tts]` | `endpoint`, `speaker_id`, `speed`, `pitch`, `volume` |
@@ -146,7 +148,7 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 
 ```powershell
 npm run typecheck      # 型チェック
-npm test               # ユニット/結合テスト（node:test, 62 ケース）
+npm test               # ユニット/結合テスト（node:test, 63 ケース）
 npm run smoke          # 起動中サーバーの疎通確認
 npm run check-audio    # マイク入力の診断（3 秒録音してピーク/dBFS を表示）
 npm run dev            # ts-node で直接起動
@@ -198,7 +200,7 @@ logs/                          # app.log（実行ログ）
 | 「マイクの使用が許可されていません」 | ブラウザのアドレスバー横のマイク許可。`http://localhost`（または https）で開く |
 | マイクが一覧に出ない | 画面の「マイク」で「既定のマイク」以外を選択。Windows のサウンド設定も確認 |
 | マイクが開かない（ffmpeg モード） | `audio.input_mode = "server"` の場合。`ffmpeg` の PATH、`audio.input_device`、`GET /api/audio-devices` |
-| 入力レベルが 0.000 のまま／途中から認識しない | `npm run check-audio` で実測。Windows のサウンド設定（ミュート・入力レベル 0）、キーボードのマイクミュートキー、Realtek ドライバの状態を確認 |
+| 入力レベルが動かない（マイクが拾っていない） | 「マイク確認」を押して 5 秒話す。peak が 0.02 未満なら「マイク」セレクトで別デバイスを選択 |
 | 発話を検出しない | `audio.silence_threshold`（RMS 0..1）を上げる、`audio.input_gain` を上げる。UI のレベルメーターを確認 |
 | LLM が 404 | `llm.model` が未取得（起動時に警告が出ます） |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |

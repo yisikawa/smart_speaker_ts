@@ -62,6 +62,11 @@ export interface ConversationConfig {
   followup_timeout_seconds: number;
   /** 応答直後にマイクを開くまでの待ち（エコー防止, ms） */
   followup_guard_ms: number;
+  /**
+   * フォローアップ回数の上限に達しても聞き取りを続けるか。
+   * true の間は「停止」を押すまで待機し続ける（スマートスピーカー的な使い方）。
+   */
+  keep_listening: boolean;
   barge_in_enabled: boolean;
   /** バージイン判定の RMS しきい値（0..1） */
   barge_in_min_score: number;
@@ -229,6 +234,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     max_followup_turns: 3,
     followup_timeout_seconds: 6.0,
     followup_guard_ms: 250,
+    keep_listening: true,
     barge_in_enabled: true,
     barge_in_min_score: 0.08,
   },

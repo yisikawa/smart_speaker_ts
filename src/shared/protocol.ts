@@ -90,7 +90,14 @@ export interface HelloPayload {
     inputMode: InputMode;
     sampleRate: number;
     noSpeechTimeoutMs: number;
-    followup: { enabled: boolean; maxTurns: number; timeoutMs: number; guardMs: number };
+    followup: {
+      enabled: boolean;
+      maxTurns: number;
+      timeoutMs: number;
+      guardMs: number;
+      /** 上限に達しても聞き取りを続けるか */
+      keepListening: boolean;
+    };
     bargeIn: { enabled: boolean; minScore: number };
     silenceThreshold: number;
     maxRecordMs: number;
