@@ -23,6 +23,7 @@ class SumikaApp {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: number | null = null;
+  private helloTimer: number | null = null;
   private assistantName = "さくら";
   private userName = "あなた";
   private streaming: { element: HTMLElement; text: string } | null = null;
@@ -72,11 +73,23 @@ class SumikaApp {
   }
 
   private connect(): void {
+    // start.bat を使わずに HTML を直接開いた場合は WebSocket を張れないため、明示する
+    if (window.location.protocol === "file:") {
+      this.servicesEl.className = "services offline";
+      this.servicesEl.textContent = "未接続（start.bat で起動し http://localhost:3000 を開いてください）";
+      this.statusEl.className = "status error";
+      this.statusEl.textContent = "未接続";
+      return;
+    }
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     this.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
+      this.servicesEl.className = "services";
+      this.servicesEl.textContent = "接続済み（状態を取得中…）";
+      this.startHelloTimer();
       this.showToast("サーバーに接続しました", "info");
     };
 
@@ -89,6 +102,9 @@ class SumikaApp {
     };
 
     this.ws.onclose = () => {
+      this.clearHelloTimer();
+      this.servicesEl.className = "services offline";
+      this.servicesEl.textContent = "サーバー未接続（再接続中…）";
       this.setState("error");
       this.showToast("サーバーとの接続が切れました（再接続します）", "error");
       this.scheduleReconnect();
@@ -97,6 +113,25 @@ class SumikaApp {
     this.ws.onerror = () => {
       // 再接続は onclose で処理する
     };
+  }
+
+  /** hello が一定時間届かない場合は「接続済みだが応答なし」と表示する */
+  private startHelloTimer(): void {
+    this.clearHelloTimer();
+    this.helloTimer = window.setTimeout(() => {
+      this.helloTimer = null;
+      if (this.servicesEl.textContent?.startsWith("接続済み")) {
+        this.servicesEl.className = "services offline";
+        this.servicesEl.textContent = "サーバーの応答がありません（ページを再読み込みしてください）";
+      }
+    }, 5000);
+  }
+
+  private clearHelloTimer(): void {
+    if (this.helloTimer !== null) {
+      window.clearTimeout(this.helloTimer);
+      this.helloTimer = null;
+    }
   }
 
   private scheduleReconnect(): void {
@@ -142,6 +177,8 @@ class SumikaApp {
   }
 
   private applyHello(hello: HelloPayload): void {
+    this.clearHelloTimer();
+    this.servicesEl.className = "services";
     this.assistantName = hello.character.name;
     this.userName = hello.user;
     this.nameEl.textContent = hello.character.name;

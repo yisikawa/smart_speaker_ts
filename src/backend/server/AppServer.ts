@@ -82,7 +82,16 @@ export class AppServer {
   private mountStatic(): void {
     const dirs = this.deps.frontendDirs.filter((dir) => fs.existsSync(dir));
     for (const dir of dirs) {
-      this.app.use(express.static(dir));
+      this.app.use(
+        express.static(dir, {
+          etag: false,
+          lastModified: false,
+          setHeaders: (res) => {
+            // ビルドし直した JS/CSS をブラウザがキャッシュしないようにする
+            res.setHeader("Cache-Control", "no-store");
+          },
+        })
+      );
     }
 
     this.app.get("/", (_req, res) => {

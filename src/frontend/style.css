@@ -140,6 +140,11 @@ main {
   margin-top: 4px;
 }
 
+.services.offline {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .conversation {
   flex: 1;
   min-height: 260px;
