@@ -67,6 +67,31 @@ export function concatInt16(chunks: Int16Array[]): Int16Array {
   return out;
 }
 
+/**
+ * 受信サンプルを固定長フレームへ分割する。
+ *
+ * AudioWorklet は 128 サンプルずつ届くことがあり、VAD の 1 フレーム（例: 16kHz × 20ms = 320）より
+ * 小さいことが多い。前回の端数と連結してから分割し、余りを次回へ持ち越す。
+ */
+export function splitInt16Frames(
+  pending: Int16Array,
+  incoming: Int16Array,
+  frameSamples: number
+): { frames: Int16Array[]; remainder: Int16Array } {
+  if (frameSamples <= 0) {
+    return { frames: [], remainder: new Int16Array(0) };
+  }
+  const buffer =
+    pending.length > 0 ? concatInt16([pending, incoming]) : incoming;
+  const frames: Int16Array[] = [];
+  let offset = 0;
+  while (offset + frameSamples <= buffer.length) {
+    frames.push(buffer.slice(offset, offset + frameSamples));
+    offset += frameSamples;
+  }
+  return { frames, remainder: buffer.slice(offset) };
+}
+
 /** 線形補間による簡易リサンプリング（発話単位の変換用途） */
 export function resample(samples: Int16Array, fromRate: number, toRate: number): Int16Array {
   if (fromRate === toRate || samples.length === 0) {

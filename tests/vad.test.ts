@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { VadSettings } from "../src/backend/core/ports";
+import { splitInt16Frames } from "../src/shared/audio/pcm";
 import { VadEngine } from "../src/shared/audio/vad";
 
 const SETTINGS: VadSettings = {
@@ -113,6 +114,29 @@ test("frames / peakLevel を集計する", () => {
 
   assert.equal(engine.frames, 2);
   assert.ok(engine.peakLevel > 0.2, `peak=${engine.peakLevel}`);
+});
+
+test("128 サンプルずつ届いても VAD が発話を検出する（AudioWorklet 回帰テスト）", () => {
+  const engine = new VadEngine(SETTINGS, { maxDurationMs: 3000 });
+  const chunk = new Int16Array(128);
+  for (let i = 0; i < chunk.length; i++) {
+    chunk[i] = i % 2 === 0 ? 8000 : -8000;
+  }
+
+  let pending: Int16Array = new Int16Array(0);
+  let speech = false;
+  for (let i = 0; i < 40 && !speech; i++) {
+    const { frames, remainder } = splitInt16Frames(pending, chunk, engine.frameSamples);
+    pending = remainder;
+    for (const frame of frames) {
+      if (engine.push(frame).kind === "speech_start") {
+        speech = true;
+      }
+    }
+  }
+
+  assert.equal(speech, true, "128 サンプル単位でも 20ms フレームを組み立てて検出できること");
+  assert.ok(engine.frames > 0);
 });
 
 test("finish は中断理由を返し、以降のフレームを無視する", () => {

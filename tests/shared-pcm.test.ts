@@ -12,6 +12,7 @@ import {
   readWavInfo,
   resample,
   rmsLevel,
+  splitInt16Frames,
   wavDurationMs,
 } from "../src/shared/audio/pcm";
 
@@ -55,6 +56,29 @@ test("int16ToBytes / bytesToInt16 は往復変換できる", () => {
 test("concatInt16 は順序を保って連結する", () => {
   const merged = concatInt16([new Int16Array([1, 2]), new Int16Array([3])]);
   assert.deepEqual(Array.from(merged), [1, 2, 3]);
+});
+
+test("splitInt16Frames は端数を次回へ持ち越してフレームを組み立てる", () => {
+  const frameSamples = 320;
+
+  // 128 サンプル × 10 = 1280 → 320 サンプル × 4 フレーム、端数なし
+  let pending: Int16Array = new Int16Array(0);
+  const frames: Int16Array[] = [];
+  for (let i = 0; i < 10; i++) {
+    const result = splitInt16Frames(pending, new Int16Array(128).fill(i + 1), frameSamples);
+    frames.push(...result.frames);
+    pending = result.remainder;
+  }
+  assert.equal(frames.length, 4);
+  assert.equal(frames[0].length, frameSamples);
+  assert.equal(frames[0][0], 1);
+  assert.equal(frames[3][frameSamples - 1], 10);
+  assert.equal(pending.length, 0);
+
+  // 128 × 3 = 384 → 1 フレーム + 64 サンプルの端数
+  const short = splitInt16Frames(new Int16Array(0), new Int16Array(384), frameSamples);
+  assert.equal(short.frames.length, 1);
+  assert.equal(short.remainder.length, 64);
 });
 
 test("rmsLevel は無音 0・最大振幅 1 になる", () => {

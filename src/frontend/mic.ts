@@ -1,5 +1,5 @@
 import type { CaptureEndReason, HelloPayload } from "../shared/protocol";
-import { applyGain, bytesToBase64, encodeWav, resample } from "../shared/audio/pcm";
+import { applyGain, bytesToBase64, encodeWav, resample, splitInt16Frames } from "../shared/audio/pcm";
 import { VadEngine } from "../shared/audio/vad";
 
 /** hello で受け取る音声設定 */
@@ -64,6 +64,8 @@ export class BrowserMic {
   private deviceId: string | null = null;
   private session: ActiveSession | null = null;
   private sampleCallbacks = 0;
+  /** フレーム長に満たない受信サンプルの持ち越し */
+  private pending: Int16Array = new Int16Array(0);
 
   constructor(private readonly config: MicAudioConfig) {}
 
@@ -236,6 +238,7 @@ export class BrowserMic {
     }
 
     const vad = this.config.vad;
+    this.pending = new Int16Array(0);
     const engine = new VadEngine(
       {
         sampleRate: this.captureRate,
@@ -310,10 +313,16 @@ export class BrowserMic {
     if (!session) {
       return;
     }
-    const samples = toInt16(input);
-    const frameSamples = session.engine.frameSamples;
-    for (let offset = 0; offset + frameSamples <= samples.length; offset += frameSamples) {
-      const frame = samples.slice(offset, offset + frameSamples);
+
+    // AudioWorklet は 128 サンプル単位で届くため、端数を次回へ持ち越して 20ms フレームを組み立てる
+    const { frames, remainder } = splitInt16Frames(
+      this.pending,
+      toInt16(input),
+      session.engine.frameSamples
+    );
+    this.pending = remainder;
+
+    for (const frame of frames) {
       const decision = session.engine.push(frame);
       session.options.onLevel?.(session.engine.level, session.engine.threshold);
       if (decision.kind === "speech_start") {
@@ -332,6 +341,7 @@ export class BrowserMic {
       return;
     }
     this.session = null;
+    this.pending = new Int16Array(0);
     session.engine.finish(reason);
     if (session.startTimer !== null) {
       window.clearTimeout(session.startTimer);
