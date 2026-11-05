@@ -26,3 +26,16 @@ for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
 }
 
 console.log(`[build] 静的ファイルをコピーしました: ${copied} 件 -> ${path.relative(root, outDir)}`);
+
+// tsc はファイルがモジュール扱いのとき `export {};` を出力する。
+// index.html は classic script（type="module" なし）で読み込むため、
+// そのままでは "Unexpected token 'export'" で全体が実行されなくなる。
+const appJs = path.join(outDir, "app.js");
+if (fs.existsSync(appJs)) {
+  const code = fs.readFileSync(appJs, "utf-8");
+  const cleaned = code.replace(/^export\s*\{\s*\};?\s*$/gm, "");
+  if (cleaned !== code) {
+    fs.writeFileSync(appJs, cleaned, "utf-8");
+    console.log("[build] app.js からモジュールマーカー (export {}) を除去しました");
+  }
+}

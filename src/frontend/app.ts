@@ -46,8 +46,9 @@ class SumikaApp {
 
   start(): void {
     this.bindEvents();
-    this.connect();
+    // connect() より先に初期状態を設定する（未接続時の表示を上書きしないため）
     this.setState("idle");
+    this.connect();
   }
 
   private bindEvents(): void {

@@ -9,6 +9,7 @@
     "start": "node dist/backend/index.js",
     "dev": "ts-node src/backend/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "tsc -p tsconfig.frontend.json && node scripts/build.js",
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/tests/*.test.js\"",
     "smoke": "node scripts/smoke.js"
   },
