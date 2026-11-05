@@ -63,6 +63,7 @@ export class BrowserMic {
   private sink: GainNode | null = null;
   private deviceId: string | null = null;
   private session: ActiveSession | null = null;
+  private sampleCallbacks = 0;
 
   constructor(private readonly config: MicAudioConfig) {}
 
@@ -78,15 +79,25 @@ export class BrowserMic {
   async start(deviceId?: string): Promise<void> {
     const target = deviceId ?? null;
     if (this.stream && this.deviceId === target) {
+      await this.ensureRunning(true);
       return;
     }
     await this.stopStream();
 
+    if (!window.isSecureContext) {
+      throw new BrowserMicError(
+        `マイクは https または http://localhost でのみ使用できます（現在: ${window.location.origin}）`
+      );
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new BrowserMicError(
         "このブラウザはマイク入力に対応していません（http://localhost または https で開いてください）"
       );
     }
+
+    // 自動再生ポリシー対策: クリック操作中に AudioContext を作り、すぐ resume する
+    const context = this.ensureContext();
+    await this.ensureRunning(false);
 
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
@@ -103,24 +114,87 @@ export class BrowserMic {
     }
     this.deviceId = target;
 
+    const track = this.stream.getAudioTracks()[0];
+    if (track) {
+      track.addEventListener("ended", () => this.log(`マイクトラックが終了しました: ${track.label}`));
+      track.addEventListener("mute", () => this.log(`マイクがミュートされました: ${track.label}`));
+    }
+
+    // 許可ダイアログの待ち時間で suspend に戻ることがあるため、ここでも再開を試みる
+    await this.ensureRunning(true);
+
+    this.source = context.createMediaStreamSource(this.stream);
+    this.node = await this.createCaptureNode(context);
+    // 音を出さずにワークレットを動かすためのダミー経路（フィードバック防止）
+    this.sink = context.createGain();
+    this.sink.gain.value = 0;
+    this.source.connect(this.node);
+    this.node.connect(this.sink);
+    this.sink.connect(context.destination);
+    await this.ensureRunning(true);
+
+    this.log(`マイク開始: ${this.diagnostics()}`);
+  }
+
+  /** AudioContext を（必要なら）作る */
+  private ensureContext(): AudioContext {
+    if (this.context && this.context.state !== "closed") {
+      return this.context;
+    }
     const AudioContextCtor =
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextCtor) {
       throw new BrowserMicError("Web Audio API を利用できません");
     }
     this.context = new AudioContextCtor({ sampleRate: this.config.sampleRate });
-    if (this.context.state === "suspended") {
-      await this.context.resume();
-    }
+    return this.context;
+  }
 
-    this.source = this.context.createMediaStreamSource(this.stream);
-    this.node = await this.createCaptureNode(this.context);
-    // 音を出さずにワークレットを動かすためのダミー経路（フィードバック防止）
-    this.sink = this.context.createGain();
-    this.sink.gain.value = 0;
-    this.source.connect(this.node);
-    this.node.connect(this.sink);
-    this.sink.connect(this.context.destination);
+  /**
+   * AudioContext が running になるまで待つ。
+   * 自動再生ポリシーで開始できない場合は、次のクリックで再開できるようにする。
+   */
+  private async ensureRunning(strict: boolean): Promise<void> {
+    const context = this.context;
+    if (!context || context.state === "running") {
+      return;
+    }
+    await context.resume().catch(() => undefined);
+    if ((context.state as string) === "running") {
+      return;
+    }
+    // 次のクリックで resume を試みる（ユーザー操作が必要なブラウザ向け）
+    document.addEventListener(
+      "pointerdown",
+      () => {
+        if (this.context?.state === "suspended") {
+          void this.context.resume().catch(() => undefined);
+        }
+      },
+      { once: true }
+    );
+    if (strict) {
+      throw new BrowserMicError(
+        "ブラウザが音声処理を開始できませんでした。画面をもう一度クリックして再試行してください。"
+      );
+    }
+  }
+
+  /** 切り分け用の状態文字列 */
+  diagnostics(): string {
+    const track = this.stream?.getAudioTracks()[0];
+    return [
+      `ctx=${this.context?.state ?? "none"}`,
+      `rate=${this.context?.sampleRate ?? "-"}`,
+      `device="${track?.label ?? "(未取得)"}"`,
+      `muted=${track?.muted ?? "-"}`,
+      `samples=${this.sampleCallbacks}`,
+      `secure=${window.isSecureContext}`,
+    ].join(" ");
+  }
+
+  private log(message: string): void {
+    console.info(`[mic] ${message}`);
   }
 
   private async createCaptureNode(context: AudioContext): Promise<AudioNode> {
@@ -231,6 +305,7 @@ export class BrowserMic {
   }
 
   private onSamples(input: Float32Array): void {
+    this.sampleCallbacks += 1;
     const session = this.session;
     if (!session) {
       return;

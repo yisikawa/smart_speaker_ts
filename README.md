@@ -81,6 +81,9 @@ powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1 -Restore
 
 Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama/VOICEVOX・モデルの有無を確認してから起動し、ブラウザを開きます）。
 
+> ブラウザのマイクは **`http://localhost:3000`（または `http://127.0.0.1:3000`）** で開けば使えます（localhost は「安全なコンテキスト」扱いのため **https は不要**）。
+> LAN の IP・PC 名（例 `http://192.168.0.5:3000`）で開いた場合のみ、ブラウザがマイクを許可しません。
+
 ```powershell
 .\start.bat              # 起動（3 秒後にブラウザを開く）
 .\start.bat /nobrowser   # ブラウザを自動で開かない
@@ -197,7 +200,9 @@ logs/                          # app.log（実行ログ）
 
 | 症状 | 確認ポイント |
 |------|--------------|
+| マイクが使えない／許可が出ない | `http://localhost` か `http://127.0.0.1`（または https）で開く。LAN の IP では使えません |
 | 「マイクの使用が許可されていません」 | ブラウザのアドレスバー横のマイク許可。`http://localhost`（または https）で開く |
+| 「音声データが届きません（ctx=suspended …）」 | 自動再生ポリシーで音声処理が停止しています。**画面をもう一度クリック**して再試行（「マイク確認」は自動で再初期化も試します） |
 | マイクが一覧に出ない | 画面の「マイク」で「既定のマイク」以外を選択。Windows のサウンド設定も確認 |
 | マイクが開かない（ffmpeg モード） | `audio.input_mode = "server"` の場合。`ffmpeg` の PATH、`audio.input_device`、`GET /api/audio-devices` |
 | 入力レベルが動かない（マイクが拾っていない） | 「マイク確認」を押して 5 秒話す。peak が 0.02 未満なら「マイク」セレクトで別デバイスを選択 |

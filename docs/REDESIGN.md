@@ -318,6 +318,8 @@ ffmpeg -hide_banner -loglevel error \
 |------|------|
 | マイク取得 | `navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })` |
 | 取り込み | `AudioContext` + `AudioWorklet`（Blob URL でプロセッサを登録、追加ファイル不要）。未対応環境は `ScriptProcessor` にフォールバック |
+| 自動再生ポリシー | クリック操作中に `AudioContext` を生成して `resume()`。許可ダイアログ待ちで suspend に戻った場合は再度 `resume()` し、それでも駄目なら次のクリックで再開（`pointerdown` を 1 回だけ購読） |
+| 診断 | `diagnostics()` が `ctx` / `rate` / `device` / `muted` / `samples` / `secure` を返し、失敗時のトーストに表示 |
 | リサンプル | `AudioContext({ sampleRate: 16000 })` を要求。実際のレートが異なる場合は `resample()` で 16kHz に変換 |
 | VAD | **サーバーと同一の `VadEngine`**（`src/shared/audio/vad.ts`）。20ms フレームで判定 |
 | 送信 | 発話確定時に WAV を生成 → Base64 → `submit_audio`（`format: "wav"`, `sampleRate: 16000`） |

@@ -444,7 +444,7 @@ class SumikaApp {
     }
     if (result.frames === 0) {
       this.showToast(
-        "マイクから音声データが届きませんでした（マイクの許可・接続を確認してください）",
+        `マイクから音声データが届きませんでした（${this.mic ? this.mic.diagnostics() : "-"}）`,
         "error"
       );
     } else if (result.peakLevel < cfg.silenceThreshold * 0.5) {
@@ -521,14 +521,26 @@ class SumikaApp {
       await this.mic.start(this.deviceSelect.value || undefined);
       await this.refreshDevices();
       this.showToast("5 秒間マイクを確認します。話しかけてください", "info");
-      const result = await this.mic.listen({
-        startTimeoutMs: 5000,
-        maxDurationMs: 5000,
-        onLevel: (level, threshold) => this.updateLevel(level, threshold),
-      });
+
+      const runListen = () =>
+        this.mic!.listen({
+          startTimeoutMs: 5000,
+          maxDurationMs: 5000,
+          onLevel: (level, threshold) => this.updateLevel(level, threshold),
+        });
+
+      let result = await runListen();
+      if (result.frames === 0) {
+        // AudioContext が suspend していた場合などに備えて、開き直して 1 回だけ再試行する
+        this.showToast("音声処理を再初期化して再試行します…", "info");
+        await this.mic.stopStream();
+        await this.mic.start(this.deviceSelect.value || undefined);
+        result = await runListen();
+      }
+
       const dbfs = result.peakLevel > 0 ? (20 * Math.log10(result.peakLevel)).toFixed(1) : "-∞";
       if (result.frames === 0) {
-        this.showToast("音声データが届きません（マイクの許可・接続を確認してください）", "error");
+        this.showToast(`音声データが届きません（${this.mic.diagnostics()}）`, "error");
       } else if (result.peakLevel < cfg.silenceThreshold * 0.5) {
         this.showToast(
           `ほぼ無音でした（frames=${result.frames} / peak=${result.peakLevel}）。マイク選択を確認してください`,
