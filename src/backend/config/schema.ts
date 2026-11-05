@@ -40,6 +40,10 @@ export interface AudioConfig {
   ffmpeg_path: string;
   /** 再生バックエンド: auto | ffplay | soundplayer */
   player: "auto" | "ffplay" | "soundplayer";
+  /** 録音セッション間で待つ時間（ms）。マイクの解放待ち */
+  device_settle_ms: number;
+  /** 音声入力の方式: browser（ブラウザのマイク） / server（ffmpeg で録音） */
+  input_mode: "browser" | "server";
 }
 
 export interface WakewordConfig {
@@ -199,7 +203,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     max_record_seconds: 12,
     silence_threshold: 0.02,
     silence_duration: 1.0,
-    no_speech_timeout: 4.0,
+    no_speech_timeout: 3.0,
     input_gain: 1.0,
     output_volume: 1.0,
     input_device: "",
@@ -210,6 +214,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     debounce_frames: 2,
     ffmpeg_path: "",
     player: "auto",
+    device_settle_ms: 250,
+    input_mode: "browser",
   },
   wakeword: {
     wakeword_path: [],
@@ -220,9 +226,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   conversation: {
     auto_start: false,
     followup_enabled: true,
-    max_followup_turns: 2,
+    max_followup_turns: 3,
     followup_timeout_seconds: 6.0,
-    followup_guard_ms: 400,
+    followup_guard_ms: 250,
     barge_in_enabled: true,
     barge_in_min_score: 0.08,
   },

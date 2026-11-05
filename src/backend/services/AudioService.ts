@@ -3,6 +3,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import type { CaptureEndReason } from "../../shared/protocol";
+import { applyGain, bytesToInt16, int16ToBytes } from "../../shared/audio/pcm";
+import { VadEngine, VadSettings } from "../../shared/audio/vad";
 import { ConfigManager } from "../config/ConfigManager";
 import { AudioConfig } from "../config/schema";
 import { Logger } from "../core/logger";
@@ -13,10 +15,8 @@ import {
   CaptureOptions,
   CaptureResult,
   PlaybackHandle,
-  VadSettings,
 } from "../core/ports";
 import { encodeWav, ensureWav } from "./wav";
-import { VadEngine } from "./vad";
 
 /**
  * 音声入出力（Windows / ffmpeg 前提）。
@@ -30,6 +30,8 @@ export class AudioService implements AudioIO {
   private readonly children = new Set<ChildProcess>();
   private deviceCache: AudioDevice[] | null = null;
   private playerKind: "ffplay" | "soundplayer" | null = null;
+  /** 録音セッションの直列化用ロック */
+  private deviceLock: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
     this.logger = deps.logger ? deps.logger.child("Audio") : new Logger("Audio");
@@ -137,13 +139,22 @@ export class AudioService implements AudioIO {
         }
       }
       const hasSpeech = engine.hasSpeech;
-      const pcm = hasSpeech ? engine.collectedPcm() : Buffer.alloc(0);
+      // 発話区間のみを取り出し、設定された input_gain を実サンプルに適用する
+      const samples = hasSpeech ? applyGain(engine.collectedPcm(), cfg.input_gain) : new Int16Array(0);
+      const pcm = hasSpeech ? Buffer.from(int16ToBytes(samples)) : Buffer.alloc(0);
+      if (engine.frames === 0 && reason !== "aborted") {
+        this.logger.warn(
+          `録音フレームが 0 件でした（reason=${reason}）。マイクの使用状況・ミュート・デバイス設定を確認してください。`
+        );
+      }
       resolveResult({
         pcm,
         wav: encodeWav(pcm, cfg.sample_rate),
         durationMs: Math.round(engine.elapsedMs),
         hasSpeech: hasSpeech && pcm.length > 0,
         reason,
+        frames: engine.frames,
+        peakLevel: Number(engine.peakLevel.toFixed(3)),
       });
     };
 
@@ -164,14 +175,51 @@ export class AudioService implements AudioIO {
       options.signal.addEventListener("abort", abortListener);
     }
 
-    void this.runCapture(cfg, engine, options, finalize, (p) => {
-      proc = p;
-    }).catch((error: unknown) => {
-      this.logger.error("録音の開始に失敗しました", error);
-      finalize("device_error");
-    });
+    // マイクは 1 セッションずつ排他的に使う（バージイン監視とフォローアップの競合対策）
+    void (async () => {
+      const release = await this.acquireDevice();
+      try {
+        if (settled) {
+          return;
+        }
+        await this.runCapture(cfg, engine, options, finalize, () => settled, (p) => {
+          proc = p;
+          if (settled) {
+            // finalize 後に spawn された場合は即座に止める（孤児プロセス防止）
+            try {
+              p.kill();
+            } catch {
+              // 無視
+            }
+          }
+        });
+      } catch (error) {
+        this.logger.error("録音の開始に失敗しました", error);
+        finalize("device_error");
+      } finally {
+        release();
+      }
+    })();
 
     return handle;
+  }
+
+  /**
+   * 録音セッションを直列化する。
+   * 前のセッションの ffmpeg が終了してから `device_settle_ms` 待ってマイクを開く。
+   */
+  private async acquireDevice(): Promise<() => void> {
+    const previous = this.deviceLock;
+    let release!: () => void;
+    this.deviceLock = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    const settleMs = this.deps.config.getAudio().device_settle_ms;
+    if (settleMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, settleMs));
+    }
+    return () => release();
   }
 
   private async runCapture(
@@ -179,9 +227,15 @@ export class AudioService implements AudioIO {
     engine: VadEngine,
     options: CaptureOptions,
     onFinish: (reason: CaptureEndReason) => void,
+    isSettled: () => boolean,
     setProcess: (proc: ChildProcessWithoutNullStreams) => void
   ): Promise<void> {
     const device = await this.resolveInputDevice(cfg);
+    if (isSettled()) {
+      // デバイス解決中に停止された場合は起動しない（孤児プロセス防止）
+      this.logger.debug("録音開始前にセッションが終了したため ffmpeg は起動しません");
+      return;
+    }
     const args = [
       "-hide_banner",
       "-loglevel",
@@ -205,8 +259,10 @@ export class AudioService implements AudioIO {
     const proc = spawn(this.ffmpegBinary(), args, { windowsHide: true });
     setProcess(proc);
     this.children.add(proc);
+    this.logger.debug(`ffmpeg 起動: pid=${proc.pid} device="${device}"`);
 
-    const frameBytes = engine.frameBytes;
+    const frameSamples = engine.frameSamples;
+    const frameBytes = frameSamples * 2;
     let pending: Buffer = Buffer.alloc(0);
     let stderr = "";
     let speechNotified = false;
@@ -217,7 +273,7 @@ export class AudioService implements AudioIO {
         const frame = pending.subarray(0, frameBytes);
         pending = pending.subarray(frameBytes);
 
-        const decision = engine.push(frame);
+        const decision = engine.push(bytesToInt16(new Uint8Array(frame.buffer, frame.byteOffset, frameBytes)));
         options.onLevel?.(engine.level, engine.threshold);
 
         if (decision.kind === "speech_start" && !speechNotified) {
@@ -241,15 +297,23 @@ export class AudioService implements AudioIO {
       onFinish("device_error");
     });
 
-    proc.on("close", (code) => {
-      this.children.delete(proc);
-      if (stderr.trim()) {
-        this.logger.warn(`ffmpeg: ${stderr.trim().slice(0, 400)}`);
-      }
-      // 正常終了（= こちらからの kill 後に finalize 済み）以外は異常とみなす
-      if (code !== 0) {
-        onFinish("device_error");
-      }
+    // プロセスの終了（= デバイス解放）まで待つ。次の録音はこの後に開始される。
+    await new Promise<void>((resolve) => {
+      proc.on("close", (code) => {
+        this.children.delete(proc);
+        const stderrText = stderr.trim();
+        if (stderrText) {
+          this.logger.warn(`ffmpeg: ${stderrText.slice(0, 400)}`);
+        }
+        this.logger.info(
+          `録音終了: frames=${engine.frames} peak=${engine.peakLevel.toFixed(3)} code=${code} device="${device}"`
+        );
+        // 正常終了（= こちらからの kill 後に finalize 済み）以外は異常とみなす
+        if (code !== 0) {
+          onFinish("device_error");
+        }
+        resolve();
+      });
     });
   }
 

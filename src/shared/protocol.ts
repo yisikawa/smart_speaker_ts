@@ -58,7 +58,9 @@ export type ClientCommand =
   | { type: "start_listening" }
   | { type: "stop_listening" }
   | { type: "submit_text"; text: string }
+  | { type: "submit_audio"; format: "wav"; sampleRate: number; data: string }
   | { type: "speak"; text: string }
+  | { type: "stop_speaking" }
   | { type: "simulate_wakeword"; phrase?: string }
   | { type: "clear_history" }
   | { type: "get_state" }
@@ -71,6 +73,9 @@ export interface ServiceStatus {
   stt: boolean;
 }
 
+/** 音声入力の方式（browser: ブラウザのマイク / server: サーバーの ffmpeg） */
+export type InputMode = "browser" | "server";
+
 /** 接続直後に送られる初期化メッセージ */
 export interface HelloPayload {
   type: "hello";
@@ -80,6 +85,27 @@ export interface HelloPayload {
   user: string;
   version: string;
   services: ServiceStatus;
+  /** ブラウザ側の録音制御に必要な情報 */
+  audio: {
+    inputMode: InputMode;
+    sampleRate: number;
+    noSpeechTimeoutMs: number;
+    followup: { enabled: boolean; maxTurns: number; timeoutMs: number; guardMs: number };
+    bargeIn: { enabled: boolean; minScore: number };
+    silenceThreshold: number;
+    maxRecordMs: number;
+    /** ブラウザの VAD に使う設定（サーバー側と同じアルゴリズム） */
+    vad: {
+      frameMs: number;
+      preRollMs: number;
+      silenceDurationMs: number;
+      smoothingAlpha: number;
+      relativeThresholdMultiplier: number;
+      calibrationMs: number;
+      debounceFrames: number;
+      inputGain: number;
+    };
+  };
 }
 
 /** サーバー → クライアントへ流れるメッセージ */

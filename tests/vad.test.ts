@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { VadSettings } from "../src/backend/core/ports";
-import { VadEngine } from "../src/backend/services/vad";
+import { VadEngine } from "../src/shared/audio/vad";
 
 const SETTINGS: VadSettings = {
   sampleRate: 16000,
@@ -16,16 +16,16 @@ const SETTINGS: VadSettings = {
   inputGain: 1,
 };
 
-const FRAME_BYTES = Math.round((SETTINGS.sampleRate * 2 * SETTINGS.frameMs) / 1000);
+const FRAME_SAMPLES = Math.round((SETTINGS.sampleRate * SETTINGS.frameMs) / 1000); // 320
 
-function silentFrame(): Buffer {
-  return Buffer.alloc(FRAME_BYTES);
+function silentFrame(): Int16Array {
+  return new Int16Array(FRAME_SAMPLES);
 }
 
-function loudFrame(amplitude = 8000): Buffer {
-  const frame = Buffer.alloc(FRAME_BYTES);
-  for (let i = 0; i < frame.length; i += 2) {
-    frame.writeInt16LE(i % 4 === 0 ? amplitude : -amplitude, i);
+function loudFrame(amplitude = 8000): Int16Array {
+  const frame = new Int16Array(FRAME_SAMPLES);
+  for (let i = 0; i < frame.length; i++) {
+    frame[i] = i % 2 === 0 ? amplitude : -amplitude;
   }
   return frame;
 }
@@ -71,7 +71,7 @@ test("発話 → 無音で silence 終了し、プリロールを含む PCM が�
 
   const pcm = engine.collectedPcm();
   // プリロール 5 + 発話 5 + 無音 10 フレーム以上が含まれる
-  assert.ok(pcm.length >= FRAME_BYTES * 15, `pcm.length=${pcm.length}`);
+  assert.ok(pcm.length >= FRAME_SAMPLES * 15, `samples=${pcm.length}`);
 });
 
 test("最大録音時間を超えると max_duration で終了する", () => {
@@ -103,6 +103,16 @@ test("キャリブレーション中の暗騒音より下の音は発話と判�
   }
   assert.equal(engine.hasSpeech, false);
   assert.ok(engine.threshold > 0.061, `threshold=${engine.threshold}`);
+});
+
+test("frames / peakLevel を集計する", () => {
+  const engine = new VadEngine(SETTINGS, { maxDurationMs: 1000 });
+
+  engine.push(loudFrame());
+  engine.push(silentFrame());
+
+  assert.equal(engine.frames, 2);
+  assert.ok(engine.peakLevel > 0.2, `peak=${engine.peakLevel}`);
 });
 
 test("finish は中断理由を返し、以降のフレームを無視する", () => {

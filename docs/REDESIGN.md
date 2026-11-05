@@ -24,6 +24,17 @@
 - ウェイクワードエンジン（Porcupine 等）の実装 → トリガーは UI / API
 - RAG / レシピ DB / 音楽再生 / Home Assistant / プロアクティブ発話 → 設定と拡張点のみ維持
 
+### 音声入力の方式（A 案：ブラウザ録音）
+
+既定は **ブラウザのマイク**（`audio.input_mode = "browser"`）で録音し、発話単位の WAV を
+WebSocket（`submit_audio`）で送る。VAD は `src/shared/audio/vad.ts` に置き、
+サーバー（ffmpeg モード）とブラウザで**同一実装を共有**する。
+
+- 長所: OS のマイク許可 UI・デバイス選択・入力レベルの可視化が得られ、dshow 名の設定が不要。
+  ffmpeg を開かないため、複数プロセスによるデバイス競合も起きない。
+- 短所: 録音できるのは画面を開いている間だけ（常駐・ウェイクワードは不可）。
+- フォールバック: `audio.input_mode = "server"` で従来の ffmpeg 録音（`AudioService`）に切り替え可能。
+
 ---
 
 ## 2. アーキテクチャ
@@ -69,7 +80,10 @@
 ```text
 src/
 ├── shared/
-│   └── protocol.ts            # PipelineEvent / ClientCommand / ServerMessage / HealthReport
+│   ├── protocol.ts            # PipelineEvent / ClientCommand / ServerMessage / HealthReport
+│   └── audio/
+│       ├── pcm.ts             # Int16 PCM / WAV / Base64 / リサンプル（ブラウザ・Node 共通）
+│       └── vad.ts             # VadEngine（ブラウザの録音とサーバーの録音で共有）
 ├── backend/
 │   ├── index.ts               # コンポジションルート（DI 配線・起動・終了処理）
 │   ├── config/
@@ -99,11 +113,13 @@ src/
 │   └── server/
 │       ├── AppServer.ts       # Express + HTTP + 静的配信 + ライフサイクル
 │       ├── ApiRouter.ts       # REST（health/config/history/tts/devices）
+│       ├── audioPayload.ts    # ブラウザ音声（Base64 WAV）の検証
 │       └── WsHub.ts           # WebSocket（hello/heartbeat/コマンド振り分け）
 └── frontend/
     ├── index.html
     ├── style.css
-    └── app.ts                 # 型は `import type` のみ → 実行時依存なし
+    ├── mic.ts                 # getUserMedia + AudioWorklet + 共有 VAD（ブラウザ録音）
+    └── app.ts                 # UI・WS・ブラウザ録音ループ（esbuild でバンドル）
 ```
 
 ### ビルド成果物
@@ -111,17 +127,19 @@ src/
 ```text
 dist/
 ├── backend/**            # tsc 出力（CommonJS）
-├── shared/protocol.js    # フロントからは型参照のみなので実質未使用
+├── shared/**             # バックエンドが参照する共有モジュール（CommonJS）
 └── frontend/
-    ├── app.js            # tsc 出力
+    ├── app.js            # esbuild でバンドルした IIFE（app.ts + mic.ts + shared/audio）
+    ├── app.js.map
     ├── index.html        # scripts/build.js がコピー
     └── style.css         # scripts/build.js がコピー
 ```
 
-`npm run build` = `clean` → `tsc -p tsconfig.frontend.json` → `tsc -p tsconfig.json` → 静的ファイルコピー。
+`npm run build` = `clean` → `tsc -p tsconfig.json`（バックエンド） →
+`tsc -p tsconfig.frontend.json`（型チェックのみ） → `node scripts/build.js`（HTML/CSS コピー + esbuild バンドル）。
 
-- **フロントは ES2020 モジュールとして別ビルド**する。バックエンドと同じ CommonJS 設定でビルドすると
-  `Object.defineProperty(exports, ...)` が出力され、ブラウザで `exports is not defined` になるため。
+- フロントは **esbuild で 1 ファイルにバンドル（IIFE）**する。tsc の CommonJS 出力は `exports`、
+  ES2020 出力は `export {}` や拡張子なし import がブラウザで問題になるため。
 - サーバーは `dist/frontend` を優先配信し、未ビルド時は `src/frontend` にフォールバックする（開発時の利便性）。
 
 
@@ -254,7 +272,12 @@ ffmpeg -hide_banner -loglevel error \
 - `spawn` + 引数配列で起動するため、デバイス名の空白・日本語・記号をそのまま渡せる（シェル非経由）。
 - WAV ファイルを作らず、stdout の PCM を 20ms フレームに分割して VAD に流す（イベントループを止めない）。
 - デバイス名が未設定なら `ffmpeg -list_devices` の出力から最初の `(audio)` デバイスを自動選択。
+- **録音セッションは直列化**する（`AudioService.deviceLock`）。前の ffmpeg が終了して
+  `audio.device_settle_ms` 待ってから次を開くため、バージイン監視とフォローアップが競合しない。
+  停止要求と同時に spawn された場合は即 kill し、孤児プロセスを残さない。
 - 終了時は必ず `proc.kill()`。`dispose()` で全子プロセスを掃除。
+- 録音終了時は `frames` / `peak` をログ出力し、`frames=0` や `peak` が極端に小さい場合は
+  UI にエラー（マイクのミュート・入力レベル・他アプリの使用）を通知する。
 
 ### 6.2 VAD アルゴリズム（`VadEngine`）
 
@@ -287,6 +310,26 @@ ffmpeg -hide_banner -loglevel error \
 | `OllamaLlmService` | NDJSON の**残りバッファ保持**（チャンク境界対策）、非 200 応答の本文をエラーに含める、`AbortSignal` とアプリ独自タイムアウトの二重防御、`think:false` |
 | `VoicevoxTtsService` | 応答は常に `Buffer`。`/audio_query` の `speedScale` / `pitchScale` / `volumeScale` を設定値で上書き。ステータス異常は本文付きで throw |
 
+### 6.5 ブラウザ録音（既定モード）
+
+`src/frontend/mic.ts` の `BrowserMic` が担当する。
+
+| 項目 | 実装 |
+|------|------|
+| マイク取得 | `navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } })` |
+| 取り込み | `AudioContext` + `AudioWorklet`（Blob URL でプロセッサを登録、追加ファイル不要）。未対応環境は `ScriptProcessor` にフォールバック |
+| リサンプル | `AudioContext({ sampleRate: 16000 })` を要求。実際のレートが異なる場合は `resample()` で 16kHz に変換 |
+| VAD | **サーバーと同一の `VadEngine`**（`src/shared/audio/vad.ts`）。20ms フレームで判定 |
+| 送信 | 発話確定時に WAV を生成 → Base64 → `submit_audio`（`format: "wav"`, `sampleRate: 16000`） |
+| フォローアップ | 応答後に `followup.timeoutMs` だけ待機して再録音（`turn_complete` 後にクライアントがループ） |
+| バージイン | 再生中（`speaking_started`）に監視録音を開始し、`onSpeechStart` で `stop_speaking` を送信。取得した発話は次ターンとして送信 |
+| 無音・失敗時 | `frames === 0` / `peakLevel` が極小ならトーストで原因（許可・ミュート・入力レベル）を案内 |
+| デバイス選択 | 画面の「マイク」セレクト（`enumerateDevices`）。切替時は `stopStream()` → 再オープン |
+
+サーバーは受け取った WAV を `src/backend/server/audioPayload.ts` で検証する
+（Base64・サイズ上限 8MB・RIFF/WAVE・16bit モノラル）→ `ConversationPipeline.submitAudio()` で
+「STT → LLM → TTS → 再生 → `turn_complete`」を 1 ターン実行する。サーバー側の録音・フォローアップは行わない。
+
 ---
 
 ## 7. プロトコル仕様
@@ -313,10 +356,12 @@ ffmpeg -hide_banner -loglevel error \
 
 ```ts
 type ClientCommand =
-  | { type: "start_listening" }                   // 聞き取り開始（ターンループ起動）
+  | { type: "start_listening" }                   // 聞き取り開始（server モードのみ）
   | { type: "stop_listening" }                    // 中断
   | { type: "submit_text"; text: string }          // テキスト入力（STT スキップ）
+  | { type: "submit_audio"; format: "wav"; sampleRate: number; data: string } // ブラウザ録音の発話（Base64 WAV）
   | { type: "speak"; text: string }                // 読み上げのみ
+  | { type: "stop_speaking" }                      // 再生停止（ブラウザ側のバージイン）
   | { type: "simulate_wakeword"; phrase?: string } // 疑似ウェイクワード
   | { type: "clear_history" }
   | { type: "get_state" }
@@ -361,6 +406,8 @@ type ServerMessage =
 | `audio` | `ffmpeg_path` | `""` | ffmpeg の明示パス |
 | `audio` | `player` | `"auto"` | `auto` / `ffplay` / `soundplayer` |
 | `conversation` | `auto_start` | `false` | 起動直後に録音を始めるか（As-Is は実質 true 固定） |
+| `audio` | `input_mode` | `"browser"` | `browser`（getUserMedia）/ `server`（ffmpeg） |
+| `audio` | `device_settle_ms` | 250 | 録音セッション間の待機（server モードのデバイス競合対策） |
 | `stt` | `binary_path` | `whisper.cpp/main.exe` | whisper.cpp の実行ファイル |
 | `stt` | `threads` | 4 | 推論スレッド数（`-t`） |
 | `stt` | `timeout_seconds` | 60 | 認識タイムアウト |
@@ -374,8 +421,10 @@ type ServerMessage =
 |------|-------|-------|------|
 | `audio.max_record_seconds` | 10 | 12 | 「固定録音時間」から「1 発話の上限」へ意味変更 |
 | `audio.silence_threshold` | 0.03 | 0.02 | 相対しきい値（暗騒音×倍率）との併用を前提に調整 |
-| `audio.no_speech_timeout` | 3.0 | 4.0 | 発話開始待ちとして実際に機能するようになったため |
-| `conversation.max_followup_turns` | 3 | 2 | 実際に連続会話するようになり既定を控えめに |
+| `audio.no_speech_timeout` | 3.0 | 3.0 | 参考実装（Sumika v0.3.x）に合わせて維持（ブラウザ録音でも同じ待機時間） |
+| `conversation.max_followup_turns` | 2 | 3 | 参考実装（Sumika v0.3.x）に合わせて 3 に戻した |
+| `conversation.followup_guard_ms` | 400 | 250 | 参考実装と同じ待機時間 |
+| `audio.input_gain` | レベル計算のみ | 実サンプルにも適用 | 小さいマイク入力を実際に増幅できるようにした |
 | `conversation.barge_in_min_score` | 0.5 | 0.08 | **RMS（0..1）しきい値**として定義し直した |
 | `llm.response_timeout_seconds` | 30 | 60 | 長文応答の打ち切り防止 |
 | `stt.use_gpu` | 意味が逆 | `true` = GPU 使用 | `-ng` の付与条件を修正 |
@@ -425,7 +474,9 @@ type ServerMessage =
 |------|------|------|
 | 単体（純粋ロジック） | `wav.ts`（WAV / RMS / 長さ / ゲイン）、`vad.ts`（終了理由・キャリブレーション・中断）、`merge` / `sanitize` / `tomlSerializer`、`ConversationHistory` | `npm test` |
 | 結合（ローカル HTTP） | `OllamaLlmService`（NDJSON の分割受信）、`VoicevoxTtsService`（バイナリ透過・パラメータ反映） | `npm test` |
-| 結合（DI フェイク） | `ConversationPipeline`（無音 / 1 ターン / テキスト入力 / フォローアップ / バージイン / 中断） | `npm test` |
+| 結合（DI フェイク） | `ConversationPipeline`（無音 / 1 ターン / テキスト入力 / フォローアップ / バージイン / 中断 / ブラウザ音声 1 ターン / ブラウザモードの録音拒否） | `npm test` |
+| ブラウザ実行 | ビルド済み `app.js`（IIFE）を擬似 DOM で実行し、WS 接続・hello 描画・ボタン送信・`file://` 案内を検証 | `npm test` |
+| プロトコル | `submit_audio` の Base64/WAV/サイズ/形式の検証 | `npm test` |
 | 型 | 全ソース | `npm run typecheck` |
 | スモーク（実プロセス） | 起動 → `/api/health` → `/api/config` → `/api/audio-devices` → WS `hello/get_state/ping` | `npm start` した状態で `npm run smoke` |
 
@@ -460,7 +511,7 @@ type ServerMessage =
 ```powershell
 npm install
 npm run build          # clean → tsc → フロント静的ファイルのコピー
-npm test               # 38 ケース（任意）
+npm test               # 62 ケース（任意）
 ```
 
 前提: Ollama（`ollama serve`）と VOICEVOX ENGINE を起動しておく。
@@ -490,6 +541,7 @@ npm start                # 直接起動する場合
 | 症状 | 確認ポイント |
 |------|--------------|
 | 「マイク入力を開始できませんでした」 | `audio.input_device`（空なら自動検出）、`ffmpeg` の PATH、`/api/audio-devices` の一覧 |
+| 入力レベルが 0.000 のまま／途中から認識しない | `npm run check-audio` で実測（`frames` と `peak` dBFS）。Windows のサウンド設定・マイクミュートキー・Realtek ドライバを確認 |
 | 発話が検出されない | `audio.silence_threshold` を調整、UI のレベルメーター（`level` イベント）を確認 |
 | 認識結果が空 | `stt.model_path` / `stt.binary_path` / `stt.language` |
 | LLM が 404 | `llm.model` が未取得（起動時警告）、`ollama list` |

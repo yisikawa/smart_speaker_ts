@@ -9,18 +9,8 @@ export interface AudioDevice {
   name: string;
 }
 
-export interface VadSettings {
-  sampleRate: number;
-  frameMs: number;
-  preRollMs: number;
-  silenceThreshold: number;
-  silenceDurationMs: number;
-  smoothingAlpha: number;
-  relativeThresholdMultiplier: number;
-  calibrationMs: number;
-  debounceFrames: number;
-  inputGain: number;
-}
+// VAD の設定・実装はブラウザと共有する（src/shared/audio/vad.ts）
+export type { VadSettings, VadOptions } from "../../shared/audio/vad";
 
 export interface CaptureOptions {
   /** 1 発話の最大長（ms） */
@@ -46,6 +36,10 @@ export interface CaptureResult {
   durationMs: number;
   hasSpeech: boolean;
   reason: CaptureEndReason;
+  /** 受信したフレーム数（0 ならデバイスから音声が来ていない） */
+  frames?: number;
+  /** 観測した最大レベル（0..1） */
+  peakLevel?: number;
 }
 
 export interface CaptureHandle {

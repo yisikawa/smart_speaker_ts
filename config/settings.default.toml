@@ -16,7 +16,7 @@ silence_threshold = 0.02
 # この秒数だけ無音が続いたら発話終了
 silence_duration = 1.0
 # 発話開始までの待ち時間（秒）
-no_speech_timeout = 4.0
+no_speech_timeout = 3.0
 # 入力ゲイン（レベル計算に適用）
 input_gain = 1.0
 # 出力音量（0..1）
@@ -37,6 +37,11 @@ debounce_frames = 2
 ffmpeg_path = ""
 # 再生バックエンド: auto | ffplay | soundplayer
 player = "auto"
+# 録音セッションの間隔（ms）。前の ffmpeg がマイクを解放するのを待つ
+device_settle_ms = 250
+# 音声入力の方式: browser（ブラウザのマイク） / server（ffmpeg で録音）
+# browser では画面の「聞き取り開始」から録音します（ffmpeg 不要）
+input_mode = "browser"
 
 [wakeword]
 # ウェイクワードモデル（将来のエンジン用・現在は未使用）
@@ -49,10 +54,10 @@ min_scores = 3
 # 起動直後に自動で聞き取りを開始するか
 auto_start = false
 followup_enabled = true
-max_followup_turns = 2
+max_followup_turns = 3
 followup_timeout_seconds = 6.0
 # 応答直後にマイクを開くまでの待ち（エコー防止, ms）
-followup_guard_ms = 400
+followup_guard_ms = 250
 barge_in_enabled = true
 # バージイン判定の RMS しきい値（0..1）
 barge_in_min_score = 0.08

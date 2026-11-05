@@ -94,6 +94,15 @@ export class ConversationPipeline {
 
   /** ウェイクワード（または UI の「聞き取り開始」）からターンループを開始する */
   async handleWakeWord(phrase = "ウェイクワード"): Promise<void> {
+    if (this.deps.config.getAudio().input_mode === "browser") {
+      this.emit({
+        type: "error",
+        scope: "pipeline",
+        message:
+          "音声入力はブラウザのマイクを使用しています。画面の「聞き取り開始」から操作してください。",
+      });
+      return;
+    }
     if (this.busy) {
       this.emit({
         type: "error",
@@ -175,6 +184,81 @@ export class ConversationPipeline {
   /**
    * ターンループ本体。バージイン発話・フォローアップをまたいで継続する。
    */
+  /** ブラウザから送られた発話（WAV）を 1 ターン処理する */
+  async submitAudio(wav: Buffer): Promise<void> {
+    if (this.busy) {
+      this.emit({
+        type: "error",
+        scope: "pipeline",
+        message: "現在応答中です。完了してからもう一度お試しください。",
+      });
+      return;
+    }
+    this.busy = true;
+    this.active = true;
+    this.turnCounter = 0;
+    this.deps.history.setMaxTurns(this.deps.config.getLLM().history_turns);
+
+    try {
+      const text = await this.transcribe(wav);
+      if (!text || !this.active) {
+        return;
+      }
+      this.turnCounter += 1;
+      await this.respond(text);
+      if (this.active) {
+        this.emit({ type: "turn_complete", turn: this.turnCounter });
+      }
+    } finally {
+      this.active = false;
+      this.busy = false;
+      this.abort = null;
+      this.playback = null;
+      this.setState("idle");
+    }
+  }
+
+  /** 再生のみ停止する（ブラウザからのバージイン用） */
+  stopSpeaking(): void {
+    this.playback?.stop();
+  }
+
+  /** 音声を認識してテキストを返す（失敗時は null。エラーはイベントで通知する） */
+  private async transcribe(wav: Buffer): Promise<string | null> {
+    this.setState("transcribing");
+    this.emit({ type: "stt_started" });
+    try {
+      const controller = this.newAbort();
+      const transcript = await this.deps.stt.transcribe(wav, { signal: controller.signal });
+      if (!this.active) {
+        return null;
+      }
+      const text = transcript.text.trim();
+      if (!text) {
+        // 認識結果が空のときは UI に空の吹き出しを出さない
+        this.emit({
+          type: "error",
+          scope: "stt",
+          message: "音声を認識できませんでした。もう一度お話しください。",
+        });
+        return null;
+      }
+      this.emit({
+        type: "stt_complete",
+        text,
+        language: transcript.language,
+        elapsedMs: transcript.elapsedMs,
+      });
+      return text;
+    } catch (error) {
+      if (!this.active || isAbortError(error)) {
+        return null;
+      }
+      this.emitError("stt", error);
+      return null;
+    }
+  }
+
   private async runLoop(options: { initialWav?: Buffer; initialText?: string }): Promise<void> {
     if (this.busy) {
       return;
@@ -249,43 +333,35 @@ export class ConversationPipeline {
                   message:
                     "マイク入力を開始できませんでした。音声デバイスの設定（audio.input_device）を確認してください。",
                 });
+              } else if (result.frames === 0 && result.reason !== "aborted") {
+                this.emit({
+                  type: "error",
+                  scope: "audio",
+                  message:
+                    "マイクから音声データが取得できませんでした（他アプリがマイクを使用中／ミュート／デバイス設定を確認してください）。",
+                });
+              } else if (
+                followup === 0 &&
+                result.peakLevel !== undefined &&
+                result.peakLevel < audio.silence_threshold * 0.5
+              ) {
+                // 録音はできているがレベルがほぼ 0（ミュート・入力レベル 0 など）
+                this.emit({
+                  type: "error",
+                  scope: "audio",
+                  message: `マイクの入力レベルがほぼ 0 です（peak=${result.peakLevel}）。Windows のサウンド設定でミュート／入力レベルを確認してください。`,
+                });
               }
               break;
             }
             wav = result.wav;
           }
 
-          this.setState("transcribing");
-          this.emit({ type: "stt_started" });
-          try {
-            const controller = this.newAbort();
-            const transcript = await this.deps.stt.transcribe(wav, { signal: controller.signal });
-            if (!this.active) {
-              break;
-            }
-            text = transcript.text.trim();
-            if (!text) {
-              // 認識結果が空のときは UI に空の吹き出しを出さない
-              this.emit({
-                type: "error",
-                scope: "stt",
-                message: "音声を認識できませんでした。もう一度お話しください。",
-              });
-              break;
-            }
-            this.emit({
-              type: "stt_complete",
-              text,
-              language: transcript.language,
-              elapsedMs: transcript.elapsedMs,
-            });
-          } catch (error) {
-            if (!this.active || isAbortError(error)) {
-              break;
-            }
-            this.emitError("stt", error);
+          const recognized = await this.transcribe(wav);
+          if (recognized === null) {
             break;
           }
+          text = recognized;
         }
 
         this.turnCounter += 1;
@@ -390,7 +466,8 @@ export class ConversationPipeline {
     this.playback = playback;
     this.emit({ type: "speaking_started" });
 
-    if (!conv.barge_in_enabled) {
+    if (!conv.barge_in_enabled || audio.input_mode === "browser") {
+      // ブラウザ入力モードでは、クライアントがマイクを監視して stop_speaking を送る
       await playback.finished;
       this.playback = null;
       this.emit({ type: "speaking_finished" });

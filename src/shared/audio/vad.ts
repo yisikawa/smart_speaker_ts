@@ -1,11 +1,23 @@
-import type { CaptureEndReason } from "../../shared/protocol";
-import { VadSettings } from "../core/ports";
-import { rmsLevel } from "./wav";
+import type { CaptureEndReason } from "../protocol";
+import { concatInt16, rmsLevel } from "./pcm";
 
 export type VadDecision =
   | { kind: "continue" }
   | { kind: "speech_start" }
   | { kind: "finish"; reason: CaptureEndReason };
+
+export interface VadSettings {
+  sampleRate: number;
+  frameMs: number;
+  preRollMs: number;
+  silenceThreshold: number;
+  silenceDurationMs: number;
+  smoothingAlpha: number;
+  relativeThresholdMultiplier: number;
+  calibrationMs: number;
+  debounceFrames: number;
+  inputGain: number;
+}
 
 export interface VadOptions {
   /** 1 発話の最大長（ms） */
@@ -19,8 +31,7 @@ export interface VadOptions {
 /**
  * フレーム単位の VAD（発話区間検出）。
  *
- * プロセスや I/O に依存しない純粋なロジックとして実装し、
- * 単体テストで擬似フレームを流して検証できるようにしている。
+ * ブラウザ・Node の双方で動く純粋ロジック。1 フレーム = frameMs 分の Int16 PCM。
  */
 export class VadEngine {
   private readonly sampleRate: number;
@@ -43,9 +54,11 @@ export class VadEngine {
   private speechStarted = false;
   private done = false;
   private finishReason: CaptureEndReason | null = null;
+  private receivedFrames = 0;
+  private maxLevel = 0;
 
-  private readonly collected: Buffer[] = [];
-  private readonly preRoll: Buffer[] = [];
+  private readonly collected: Int16Array[] = [];
+  private readonly preRoll: Int16Array[] = [];
 
   constructor(
     private readonly settings: VadSettings,
@@ -81,9 +94,19 @@ export class VadEngine {
     return this.elapsed;
   }
 
-  /** 1 フレーム分のバイト数（16bit モノラル） */
-  get frameBytes(): number {
-    return Math.max(2, Math.round((this.sampleRate * 2 * this.frameMs) / 1000));
+  /** 受信したフレーム数（0 はデバイスから音声が来ていない） */
+  get frames(): number {
+    return this.receivedFrames;
+  }
+
+  /** 観測した最大レベル（0..1） */
+  get peakLevel(): number {
+    return this.maxLevel;
+  }
+
+  /** 1 フレーム分のサンプル数 */
+  get frameSamples(): number {
+    return Math.max(1, Math.round((this.sampleRate * this.frameMs) / 1000));
   }
 
   /** フレーム長（ms） */
@@ -91,8 +114,8 @@ export class VadEngine {
     return this.frameMs;
   }
 
-  /** 1 フレーム（frame_ms 分の 16bit PCM）を入力し、判定結果を返す */
-  push(frame: Buffer): VadDecision {
+  /** 1 フレーム（frameSamples 分の 16bit PCM）を入力し、判定結果を返す */
+  push(frame: Int16Array): VadDecision {
     if (this.done) {
       return { kind: "finish", reason: this.finishReason ?? "aborted" };
     }
@@ -101,6 +124,8 @@ export class VadEngine {
     const level = rmsLevel(frame, this.settings.inputGain);
     const alpha = this.settings.smoothingAlpha;
     this.smoothed = alpha * level + (1 - alpha) * this.smoothed;
+    this.receivedFrames += 1;
+    this.maxLevel = Math.max(this.maxLevel, level);
 
     // 起動直後は暗騒音を測定し、相対しきい値を決める（この間は発話判定しない）
     if (this.calibrationFrame < this.calibrationFrames) {
@@ -140,8 +165,8 @@ export class VadEngine {
   }
 
   /** 収集済み PCM（プリロール + 発話区間） */
-  collectedPcm(): Buffer {
-    return Buffer.concat(this.collected);
+  collectedPcm(): Int16Array {
+    return concatInt16(this.collected);
   }
 
   /** 外部要因（中断・デバイスエラー）で終了させる */
@@ -170,7 +195,7 @@ export class VadEngine {
     return { kind: "continue" };
   }
 
-  private pushPreRoll(frame: Buffer): void {
+  private pushPreRoll(frame: Int16Array): void {
     if (this.preRollFrames === 0) {
       return;
     }

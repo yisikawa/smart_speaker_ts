@@ -26,6 +26,10 @@ interface CaptureSpec {
   hasSpeech: boolean;
   reason: CaptureEndReason;
   triggerSpeech?: boolean;
+  /** 受信フレーム数（0 を指定すると「マイクから音声が来ない」状態を再現できる） */
+  frames?: number;
+  /** 観測ピークレベル（既定 0.2） */
+  peakLevel?: number;
 }
 
 interface Harness {
@@ -48,6 +52,8 @@ function setup(options: {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-pipe-"));
   const config = new ConfigManager({ rootDir });
   config.update({
+    // サーバー（ffmpeg）録音モードを既定にしたテスト。ブラウザモードは個別に上書きする
+    audio: { input_mode: "server" },
     conversation: { barge_in_enabled: false, followup_enabled: false },
     ...options.configPatch,
   });
@@ -84,6 +90,8 @@ function setup(options: {
         durationMs: 100,
         hasSpeech: spec.hasSpeech,
         reason: spec.reason,
+        frames: spec.frames ?? 75,
+        peakLevel: spec.peakLevel ?? 0.2,
       };
       return { result: Promise.resolve(result), stop: () => undefined };
     },
@@ -285,6 +293,79 @@ test("認識結果が空のときは stt_complete を出さずエラー通知す
     assert.equal(harness.llmCalls(), 0);
     assert.equal(harness.history.length, 0);
     assert.equal(harness.pipeline.getState(), "idle");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("マイクからフレームが来ない場合はその旨をエラー通知する", async () => {
+  const harness = setup({ specs: [{ hasSpeech: false, reason: "no_speech", frames: 0 }] });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    const errorEvent = harness.events.find(
+      (event): event is Extract<PipelineEvent, { type: "error" }> => event.type === "error"
+    );
+    assert.ok(errorEvent, "エラーイベントが発火すること");
+    assert.equal(errorEvent?.scope, "audio");
+    assert.match(errorEvent.message, /マイクから音声データが取得できませんでした/);
+    assert.equal(harness.pipeline.getState(), "idle");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("マイクの入力レベルがほぼ 0 の場合はミュート等を案内する", async () => {
+  const harness = setup({
+    specs: [{ hasSpeech: false, reason: "no_speech", frames: 75, peakLevel: 0.001 }],
+  });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    const errorEvent = harness.events.find(
+      (event): event is Extract<PipelineEvent, { type: "error" }> => event.type === "error"
+    );
+    assert.ok(errorEvent, "エラーイベントが発火すること");
+    assert.equal(errorEvent?.scope, "audio");
+    assert.match(errorEvent.message, /入力レベルがほぼ 0/);
+    assert.equal(harness.pipeline.getState(), "idle");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("ブラウザから送られた音声はサーバー録音せずに 1 ターン処理する", async () => {
+  const harness = setup({ specs: [{ hasSpeech: false, reason: "no_speech" }] });
+  try {
+    const wav = encodeWav(Buffer.alloc(3200, 1), 16000);
+    await harness.pipeline.submitAudio(wav);
+
+    assert.equal(harness.captureCalls(), 0, "サーバー側の録音は行わない");
+    assert.equal(harness.sttCalls(), 1);
+    assert.equal(harness.llmCalls(), 1);
+    assert.equal(harness.playCalls(), 1);
+    assert.equal(harness.history.all()[0]?.content, "こんにちは");
+    assert.ok(typesOf(harness.events).includes("turn_complete"));
+    assert.equal(harness.pipeline.getState(), "idle");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("ブラウザ入力モードではサーバー側の録音を開始しない", async () => {
+  const harness = setup({
+    specs: [{ hasSpeech: true, reason: "silence" }],
+    configPatch: { audio: { input_mode: "browser" } },
+  });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    assert.equal(harness.captureCalls(), 0);
+    const errorEvent = harness.events.find(
+      (event): event is Extract<PipelineEvent, { type: "error" }> => event.type === "error"
+    );
+    assert.ok(errorEvent);
+    assert.match(errorEvent.message, /ブラウザのマイク/);
   } finally {
     harness.cleanup();
   }

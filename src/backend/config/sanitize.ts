@@ -47,6 +47,7 @@ export function sanitizeConfig(config: AppConfig): string[] {
   clampField(config.audio, "debounce_frames", 1, 50, "audio.debounce_frames", warnings);
   clampField(config.audio, "input_gain", 0.1, 10, "audio.input_gain", warnings);
   clampField(config.audio, "output_volume", 0, 1, "audio.output_volume", warnings);
+  clampField(config.audio, "device_settle_ms", 0, 3000, "audio.device_settle_ms", warnings);
 
   clampField(config.conversation, "max_followup_turns", 0, 10, "conversation.max_followup_turns", warnings);
   clampField(
@@ -86,6 +87,12 @@ export function sanitizeConfig(config: AppConfig): string[] {
   if (player !== "auto" && player !== "ffplay" && player !== "soundplayer") {
     warnings.push(`audio.player=${String(player)} は未対応のため "auto" を使用します`);
     config.audio.player = "auto";
+  }
+
+  const inputMode = config.audio.input_mode;
+  if (inputMode !== "browser" && inputMode !== "server") {
+    warnings.push(`audio.input_mode=${String(inputMode)} は未対応のため "browser" を使用します`);
+    config.audio.input_mode = "browser";
   }
 
   if (!Array.isArray(config.wakeword.wakeword_path)) {

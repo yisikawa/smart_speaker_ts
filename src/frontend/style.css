@@ -200,6 +200,36 @@ main {
   margin-bottom: 12px;
 }
 
+.mic-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.mic-row label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mic-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #1f2937;
+}
+
+.mic-row select:disabled {
+  opacity: 0.6;
+}
+
 .composer textarea {
   flex: 1;
   resize: none;

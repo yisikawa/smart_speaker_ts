@@ -5,6 +5,7 @@ import { ConfigManager } from "../config/ConfigManager";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
 import { CharacterService } from "../services/CharacterService";
+import { AudioPayloadError, decodeAudioPayload } from "./audioPayload";
 
 export interface WsHubDeps {
   server: http.Server;
@@ -21,7 +22,9 @@ const CLIENT_COMMANDS = new Set([
   "start_listening",
   "stop_listening",
   "submit_text",
+  "submit_audio",
   "speak",
+  "stop_speaking",
   "simulate_wakeword",
   "clear_history",
   "get_state",
@@ -63,6 +66,9 @@ export class WsHub {
 
     ws.on("pong", () => this.alive.set(ws, true));
 
+    const audioConfig = this.deps.config.getAudio();
+    const conversationConfig = this.deps.config.getConversation();
+
     ws.send(
       JSON.stringify({
         type: "hello",
@@ -75,6 +81,33 @@ export class WsHub {
         user: this.deps.config.getGUI().user_name,
         version: this.deps.version,
         services: this.deps.serviceStatus(),
+        audio: {
+          inputMode: audioConfig.input_mode,
+          sampleRate: audioConfig.sample_rate,
+          noSpeechTimeoutMs: audioConfig.no_speech_timeout * 1000,
+          followup: {
+            enabled: conversationConfig.followup_enabled,
+            maxTurns: conversationConfig.max_followup_turns,
+            timeoutMs: conversationConfig.followup_timeout_seconds * 1000,
+            guardMs: conversationConfig.followup_guard_ms,
+          },
+          bargeIn: {
+            enabled: conversationConfig.barge_in_enabled,
+            minScore: conversationConfig.barge_in_min_score,
+          },
+          silenceThreshold: audioConfig.silence_threshold,
+          maxRecordMs: audioConfig.max_record_seconds * 1000,
+          vad: {
+            frameMs: audioConfig.frame_ms,
+            preRollMs: audioConfig.pre_roll_ms,
+            silenceDurationMs: audioConfig.silence_duration * 1000,
+            smoothingAlpha: audioConfig.smoothing_alpha,
+            relativeThresholdMultiplier: audioConfig.relative_threshold_multiplier,
+            calibrationMs: audioConfig.calibration_duration * 1000,
+            debounceFrames: audioConfig.debounce_frames,
+            inputGain: audioConfig.input_gain,
+          },
+        },
       })
     );
 
@@ -116,6 +149,12 @@ export class WsHub {
       case "submit_text":
         void this.deps.pipeline.submitText(String(command.text ?? ""));
         break;
+      case "submit_audio":
+        this.handleSubmitAudio(ws, command);
+        break;
+      case "stop_speaking":
+        this.deps.pipeline.stopSpeaking();
+        break;
       case "speak":
         void this.deps.pipeline.speak(String(command.text ?? ""));
         break;
@@ -133,6 +172,36 @@ export class WsHub {
       case "ping":
         ws.send(JSON.stringify({ type: "pong" }));
         break;
+    }
+  }
+
+  private handleSubmitAudio(
+    ws: WebSocket,
+    command: Extract<ClientCommand, { type: "submit_audio" }>
+  ): void {
+    if (command.format !== "wav") {
+      ws.send(JSON.stringify({ type: "error", message: `未対応の音声形式です: ${String(command.format)}` }));
+      return;
+    }
+    try {
+      const decoded = decodeAudioPayload(command.data);
+      const expected = this.deps.config.getAudio().sample_rate;
+      if (decoded.sampleRate !== expected) {
+        this.logger.warn(`音声のサンプリングレートが ${decoded.sampleRate}Hz です（想定 ${expected}Hz）`);
+      }
+      if (decoded.durationMs <= 0) {
+        ws.send(JSON.stringify({ type: "error", message: "音声が空でした。もう一度お話しください。" }));
+        return;
+      }
+      this.logger.info(
+        `ブラウザから音声を受信: ${decoded.durationMs}ms / ${decoded.buffer.length} bytes / ${decoded.sampleRate}Hz`
+      );
+      void this.deps.pipeline.submitAudio(decoded.buffer);
+    } catch (error) {
+      const message =
+        error instanceof AudioPayloadError ? error.message : "音声データを処理できませんでした";
+      this.logger.warn(`音声データの受信に失敗: ${message}`);
+      ws.send(JSON.stringify({ type: "error", message }));
     }
   }
 

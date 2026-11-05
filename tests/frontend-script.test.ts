@@ -92,6 +92,7 @@ const ELEMENT_IDS = [
   "btnClear",
   "btnSend",
   "textInput",
+  "inputDevice",
   "toast",
 ];
 
@@ -126,6 +127,7 @@ function bootApp(
     document: documentStub,
     window: windowStub,
     WebSocket: FakeWebSocket,
+    navigator: { mediaDevices: undefined },
     console,
   });
   assert.ok(domReady, "DOMContentLoaded ハンドラが登録されること");
@@ -142,6 +144,25 @@ const HELLO = {
   user: "You",
   version: "0.2.0",
   services: { llm: true, tts: true, stt: true },
+  audio: {
+    inputMode: "browser",
+    sampleRate: 16000,
+    noSpeechTimeoutMs: 3000,
+    followup: { enabled: true, maxTurns: 3, timeoutMs: 6000, guardMs: 250 },
+    bargeIn: { enabled: true, minScore: 0.08 },
+    silenceThreshold: 0.02,
+    maxRecordMs: 12000,
+    vad: {
+      frameMs: 20,
+      preRollMs: 300,
+      silenceDurationMs: 1000,
+      smoothingAlpha: 0.1,
+      relativeThresholdMultiplier: 3,
+      calibrationMs: 500,
+      debounceFrames: 2,
+      inputGain: 1,
+    },
+  },
 };
 
 test("app.js は classic script として構文エラーなく実行できる（export 構文を含まない）", () => {
@@ -167,6 +188,7 @@ test("読み込み直後に WebSocket へ接続し、hello でサービス状態
   assert.match(services, /TTS/);
   assert.match(services, /STT/);
   assert.match(services, /🟢/);
+  assert.match(services, /マイク: ブラウザ/);
   assert.equal(elements.get("version")!.textContent, "v0.2.0");
   assert.equal(elements.get("status")!.textContent, "待機中");
 });

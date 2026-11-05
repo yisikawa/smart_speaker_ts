@@ -20,7 +20,8 @@
 | Ollama | LLM 推論サーバー（既定 `http://127.0.0.1:11434`） |
 | VOICEVOX ENGINE | 音声合成サーバー（既定 `http://127.0.0.1:50021`） |
 | whisper.cpp + ggml モデル | `whisper.cpp/main.exe`（CUDA 版推奨）と `models/ggml-large-v3-turbo*.bin` |
-| ffmpeg / ffplay | 録音・再生（PATH 上、または `audio.ffmpeg_path` で指定） |
+| ffmpeg / ffplay | `audio.input_mode = "server"` のときの録音・再生（既定はブラウザ入力なので ffmpeg 不要） |
+| マイク | ブラウザから利用（`getUserMedia`。localhost または https で開くこと） |
 | NVIDIA GPU（任意） | CUDA 版 whisper.cpp を使う場合のみ（VRAM 4GB 以上推奨） |
 
 ## セットアップ
@@ -103,6 +104,9 @@ npm start              # node dist/backend/index.js
 ## 主な機能
 
 - VAD（無音検出）による発話区間の自動切り出し（`execSync` を使わないストリーム録音）
+- **ブラウザのマイク入力**（既定）: `getUserMedia` で録音し、発話単位の WAV を WebSocket で送信。
+  VAD はサーバーと同一実装を共有。ffmpeg は `input_mode = "server"` のフォールバックとして残置
+- マイク選択（ブラウザのデバイス一覧）とレベルメーター表示
 - ストリーミング応答（差分を逐次表示）と `AbortController` による中断
 - バージイン（発話で再生を停止し、その発話を次のターンとして処理）
 - フォローアップ（連続会話）
@@ -120,7 +124,7 @@ npm start              # node dist/backend/index.js
 
 | テーブル | 主なキー |
 |----------|----------|
-| `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `input_device`, `output_volume`, `player` |
+| `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
 | `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `barge_in_enabled`, `barge_in_min_score` |
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads` |
 | `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns` |
@@ -142,8 +146,9 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 
 ```powershell
 npm run typecheck      # 型チェック
-npm test               # ユニット/結合テスト（node:test, 37 ケース）
+npm test               # ユニット/結合テスト（node:test, 62 ケース）
 npm run smoke          # 起動中サーバーの疎通確認
+npm run check-audio    # マイク入力の診断（3 秒録音してピーク/dBFS を表示）
 npm run dev            # ts-node で直接起動
 npm run clean          # dist / dist-test の削除
 ```
@@ -159,13 +164,17 @@ npm run clean          # dist / dist-test の削除
 | `character-prompt.test.ts` | キャラクター TOML の読み込み・システムプロンプト生成 |
 | `ollama-stream.test.ts` | NDJSON のチャンク境界処理・モデル一覧 |
 | `voicevox-binary.test.ts` | 音声バイナリの非破損・パラメータ反映 |
-| `pipeline.test.ts` | 無音 / 1 ターン / テキスト入力 / フォローアップ / バージイン / 中断 |
+| `pipeline.test.ts` | 無音 / 1 ターン / テキスト入力 / フォローアップ / バージイン / 中断 / ブラウザ音声 1 ターン |
+| `shared-pcm.test.ts` | WAV 生成・Base64・リサンプル・ゲイン（ブラウザと共通） |
+| `audio-payload.test.ts` | `submit_audio` の検証（Base64/WAV/サイズ/形式） |
+| `frontend-script.test.ts` | ビルド済み `app.js` を擬似 DOM で実行（WS 接続・hello 描画・ボタン送信） |
 
 ## 構成
 
 ```text
 src/
 ├── shared/protocol.ts          # フロント・バックエンド共有の型（イベント/コマンド）
+├── shared/audio/               # PCM/WAV/Base64/VAD（ブラウザとサーバーで共有）
 ├── backend/
 │   ├── index.ts               # コンポジションルート（DI 配線・起動・終了処理）
 │   ├── config/                # 設定スキーマ・読込・検証・保存
@@ -186,8 +195,11 @@ logs/                          # app.log（実行ログ）
 
 | 症状 | 確認ポイント |
 |------|--------------|
-| マイクが開かない | `ffmpeg` が PATH にあるか、`audio.input_device`、`GET /api/audio-devices` |
-| 発話を検出しない | `audio.silence_threshold`（RMS 0..1）を上げる。UI のレベルメーターを確認 |
+| 「マイクの使用が許可されていません」 | ブラウザのアドレスバー横のマイク許可。`http://localhost`（または https）で開く |
+| マイクが一覧に出ない | 画面の「マイク」で「既定のマイク」以外を選択。Windows のサウンド設定も確認 |
+| マイクが開かない（ffmpeg モード） | `audio.input_mode = "server"` の場合。`ffmpeg` の PATH、`audio.input_device`、`GET /api/audio-devices` |
+| 入力レベルが 0.000 のまま／途中から認識しない | `npm run check-audio` で実測。Windows のサウンド設定（ミュート・入力レベル 0）、キーボードのマイクミュートキー、Realtek ドライバの状態を確認 |
+| 発話を検出しない | `audio.silence_threshold`（RMS 0..1）を上げる、`audio.input_gain` を上げる。UI のレベルメーターを確認 |
 | LLM が 404 | `llm.model` が未取得（起動時に警告が出ます） |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |
 | バージインしない | `conversation.barge_in_enabled`, `barge_in_min_score`（既定 0.08） |

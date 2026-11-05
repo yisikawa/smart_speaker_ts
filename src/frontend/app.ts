@@ -6,6 +6,8 @@ import type {
   PipelineEvent,
   ServerMessage,
 } from "../shared/protocol";
+import { BrowserMic, BrowserMicError } from "./mic";
+import type { ListenResult } from "./mic";
 
 const STATE_LABELS: Record<AssistantState, string> = {
   idle: "待機中",
@@ -27,6 +29,13 @@ class SumikaApp {
   private assistantName = "さくら";
   private userName = "あなた";
   private streaming: { element: HTMLElement; text: string } | null = null;
+  private audioConfig: HelloPayload["audio"] | null = null;
+  private mic: BrowserMic | null = null;
+  private micLoopRunning = false;
+  private micLoopActive = false;
+  private bargeMonitorActive = false;
+  private pendingBarge: string | null = null;
+  private turnWaiter: ((completed: boolean) => void) | null = null;
 
   private readonly conversationEl = must<HTMLElement>("conversation");
   private readonly statusEl = must<HTMLElement>("status");
@@ -42,6 +51,7 @@ class SumikaApp {
   private readonly btnClear = must<HTMLButtonElement>("btnClear");
   private readonly btnSend = must<HTMLButtonElement>("btnSend");
   private readonly inputEl = must<HTMLTextAreaElement>("textInput");
+  private readonly deviceSelect = must<HTMLSelectElement>("inputDevice");
   private readonly toastEl = must<HTMLElement>("toast");
 
   start(): void {
@@ -52,14 +62,29 @@ class SumikaApp {
   }
 
   private bindEvents(): void {
-    this.btnListen.addEventListener("click", () => this.send({ type: "start_listening" }));
-    this.btnStop.addEventListener("click", () => this.send({ type: "stop_listening" }));
+    this.btnListen.addEventListener("click", () => {
+      // ブラウザ入力モードでは、この画面がマイクを開いて発話単位で送信する
+      if (this.isBrowserMode()) {
+        void this.startMicLoop();
+        return;
+      }
+      this.send({ type: "start_listening" });
+    });
+    this.btnStop.addEventListener("click", () => {
+      this.stopMicLoop();
+      this.send({ type: "stop_listening" });
+    });
     this.btnClear.addEventListener("click", () => this.send({ type: "clear_history" }));
     this.btnSend.addEventListener("click", () => this.submitText());
     this.inputEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         this.submitText();
+      }
+    });
+    this.deviceSelect.addEventListener("change", () => {
+      if (this.isBrowserMode()) {
+        void this.switchDevice();
       }
     });
   }
@@ -185,6 +210,13 @@ class SumikaApp {
     this.nameEl.textContent = hello.character.name;
     this.labelEl.textContent = hello.character.label;
     this.versionEl.textContent = `v${hello.version}`;
+    this.audioConfig = hello.audio;
+    this.mic = new BrowserMic(hello.audio);
+    if (hello.audio.inputMode === "browser") {
+      void this.refreshDevices();
+    } else {
+      this.deviceSelect.disabled = true;
+    }
     this.renderHistory(hello.history);
     this.renderServices(hello.services);
     this.setState(hello.state);
@@ -192,9 +224,10 @@ class SumikaApp {
 
   private renderServices(services: { llm: boolean; tts: boolean; stt: boolean }): void {
     const mark = (ok: boolean): string => (ok ? "🟢" : "🔴");
+    const mode = this.audioConfig?.inputMode === "browser" ? "マイク: ブラウザ" : "マイク: サーバー";
     this.servicesEl.textContent = `LLM ${mark(services.llm)}  TTS ${mark(services.tts)}  STT ${mark(
       services.stt
-    )}`;
+    )}  /  ${mode}`;
   }
 
   private handleEvent(event: PipelineEvent): void {
@@ -205,12 +238,9 @@ class SumikaApp {
       case "wakeword_detected":
         this.addSystemNote(`「${event.phrase}」で起動しました`);
         break;
-      case "level": {
-        const ratio = event.threshold > 0 ? Math.min(1, event.level / (event.threshold * 4)) : 0;
-        this.levelFill.style.width = `${Math.round(Math.sqrt(ratio) * 100)}%`;
-        this.levelHint.textContent = `レベル ${event.level.toFixed(3)} / しきい値 ${event.threshold.toFixed(3)}`;
+      case "level":
+        this.updateLevel(event.level, event.threshold);
         break;
-      }
       case "recording_started":
         this.faceEl.textContent = "🎤";
         break;
@@ -230,6 +260,8 @@ class SumikaApp {
         break;
       case "speaking_started":
         this.faceEl.textContent = "🗣️";
+        // ブラウザ入力モードでは、再生中の割り込み（バージイン）をブラウザ側で監視する
+        this.startBargeMonitor();
         break;
       case "speaking_finished":
         this.faceEl.textContent = "🌸";
@@ -247,12 +279,222 @@ class SumikaApp {
       case "history_updated":
         this.renderHistory(event.messages);
         break;
+      case "turn_complete":
+        this.resolveTurn(true);
+        break;
       case "error":
+        this.resolveTurn(false);
         this.showToast(event.message, "error");
         break;
       default:
         break;
     }
+  }
+
+  private isBrowserMode(): boolean {
+    return this.audioConfig?.inputMode === "browser";
+  }
+
+  private async refreshDevices(): Promise<void> {
+    if (!this.mic || !this.isBrowserMode()) {
+      return;
+    }
+    try {
+      const devices = await this.mic.listDevices();
+      const current = this.deviceSelect.value;
+      this.deviceSelect.innerHTML = "";
+      const auto = document.createElement("option");
+      auto.value = "";
+      auto.textContent = "既定のマイク";
+      this.deviceSelect.appendChild(auto);
+      for (const device of devices) {
+        const option = document.createElement("option");
+        option.value = device.id;
+        option.textContent = device.label;
+        this.deviceSelect.appendChild(option);
+      }
+      if (current) {
+        this.deviceSelect.value = current;
+      }
+    } catch {
+      // 一覧が取れなくても既定デバイスで録音は可能
+    }
+  }
+
+  private async switchDevice(): Promise<void> {
+    if (!this.mic) {
+      return;
+    }
+    try {
+      await this.mic.start(this.deviceSelect.value || undefined);
+      this.showToast("マイクを切り替えました", "info");
+      await this.refreshDevices();
+    } catch (error) {
+      this.showToast(
+        error instanceof BrowserMicError ? error.message : String((error as Error)?.message ?? error),
+        "error"
+      );
+    }
+  }
+
+  /** ブラウザ録音のターンループ（聞き取り → 送信 → 応答待ち → フォローアップ） */
+  private async startMicLoop(): Promise<void> {
+    const cfg = this.audioConfig;
+    if (!cfg || cfg.inputMode !== "browser" || this.micLoopRunning) {
+      return;
+    }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.showToast("サーバーに接続されていません", "error");
+      return;
+    }
+
+    this.micLoopRunning = true;
+    this.micLoopActive = true;
+    try {
+      if (!this.mic) {
+        this.mic = new BrowserMic(cfg);
+      }
+      await this.mic.start(this.deviceSelect.value || undefined);
+      await this.refreshDevices();
+
+      let followup = 0;
+      while (this.micLoopActive) {
+        let wav = this.pendingBarge;
+        this.pendingBarge = null;
+
+        if (!wav) {
+          if (followup > 0) {
+            await delay(cfg.followup.guardMs);
+            if (!this.micLoopActive) {
+              break;
+            }
+          }
+          this.setState("recording");
+          const result = await this.mic.listen({
+            startTimeoutMs: followup > 0 ? cfg.followup.timeoutMs : cfg.noSpeechTimeoutMs,
+            maxDurationMs: cfg.maxRecordMs,
+            onLevel: (level, threshold) => this.updateLevel(level, threshold),
+          });
+          this.levelFill.style.width = "0%";
+          if (!this.micLoopActive) {
+            break;
+          }
+          if (!result.wavBase64) {
+            this.reportEmptyCapture(result);
+            break;
+          }
+          wav = result.wavBase64;
+        }
+
+        this.send({ type: "submit_audio", format: "wav", sampleRate: cfg.sampleRate, data: wav });
+        this.setState("transcribing");
+        const completed = await this.waitForTurn();
+        if (!this.micLoopActive || !completed) {
+          break;
+        }
+
+        if (this.pendingBarge) {
+          // バージインで取得した発話をそのまま次のターンへ
+          followup = 0;
+          continue;
+        }
+        if (!cfg.followup.enabled || followup >= cfg.followup.maxTurns) {
+          break;
+        }
+        followup += 1;
+        this.addSystemNote(
+          `続けて話しかけてください（${followup}/${cfg.followup.maxTurns}・${Math.round(
+            cfg.followup.timeoutMs / 1000
+          )} 秒）`
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof BrowserMicError ? error.message : String((error as Error)?.message ?? error);
+      this.showToast(message, "error");
+      this.servicesEl.className = "services offline";
+    } finally {
+      this.micLoopRunning = false;
+      this.micLoopActive = false;
+      this.mic?.stop("aborted");
+      this.setState("idle");
+    }
+  }
+
+  private stopMicLoop(): void {
+    this.micLoopActive = false;
+    this.mic?.stop("aborted");
+    this.resolveTurn(false);
+  }
+
+  /** 発話が取れなかった原因をユーザーへ伝える */
+  private reportEmptyCapture(result: ListenResult): void {
+    const cfg = this.audioConfig;
+    if (!cfg) {
+      return;
+    }
+    if (result.frames === 0) {
+      this.showToast(
+        "マイクから音声データが届きませんでした（マイクの許可・接続を確認してください）",
+        "error"
+      );
+    } else if (result.peakLevel < cfg.silenceThreshold * 0.5) {
+      this.showToast(
+        "マイクの入力レベルがほぼ 0 です（ミュート／Windows の入力レベルを確認してください）",
+        "error"
+      );
+    }
+  }
+
+  /** 再生中の割り込みを監視し、発話があれば再生停止＋次ターンの入力にする */
+  private startBargeMonitor(): void {
+    const cfg = this.audioConfig;
+    if (!cfg || cfg.inputMode !== "browser" || !cfg.bargeIn.enabled) {
+      return;
+    }
+    if (!this.mic?.isRunning || !this.micLoopActive || this.bargeMonitorActive) {
+      return;
+    }
+    this.bargeMonitorActive = true;
+    void this.mic
+      .listen({
+        startTimeoutMs: cfg.maxRecordMs,
+        maxDurationMs: cfg.maxRecordMs,
+        threshold: Math.max(cfg.silenceThreshold, cfg.bargeIn.minScore),
+        onSpeechStart: () => this.send({ type: "stop_speaking" }),
+      })
+      .then((result) => {
+        if (result.wavBase64) {
+          this.pendingBarge = result.wavBase64;
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        this.bargeMonitorActive = false;
+      });
+  }
+
+  private waitForTurn(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const finish = (completed: boolean): void => {
+        if (this.turnWaiter === finish) {
+          this.turnWaiter = null;
+          resolve(completed);
+        }
+      };
+      this.turnWaiter = finish;
+      window.setTimeout(() => finish(false), 180000);
+    });
+  }
+
+  private resolveTurn(completed: boolean): void {
+    this.turnWaiter?.(completed);
+  }
+
+  private updateLevel(level: number, threshold: number): void {
+    const ratio = threshold > 0 ? Math.min(1, level / (threshold * 4)) : 0;
+    this.levelFill.style.width = `${Math.round(Math.sqrt(ratio) * 100)}%`;
+    this.levelHint.textContent = `レベル ${level.toFixed(3)} / しきい値 ${threshold.toFixed(3)}`;
   }
 
   private setState(state: AssistantState): void {
@@ -350,6 +592,10 @@ function must<T extends HTMLElement>(id: string): T {
     throw new Error(`要素が見つかりません: #${id}`);
   }
   return element as T;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 document.addEventListener("DOMContentLoaded", () => {

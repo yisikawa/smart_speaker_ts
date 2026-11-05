@@ -1,14 +1,19 @@
 /**
- * src/frontend の静的ファイル（html / css など）を dist/frontend へコピーする。
- * tsc は .ts しか出力しないため、ビルドの最終段で実行する。
+ * フロントエンドのビルド。
+ * 1) src/frontend の html / css を dist/frontend へコピー
+ * 2) app.ts（と src/shared の共有モジュール）を esbuild で 1 ファイルに束ねる
+ *
+ * tsc を CommonJS で出力すると `exports`、ES2020 で出力すると `export {}` や
+ * 拡張子なし import がブラウザで問題になるため、配信物は esbuild の IIFE バンドルとする。
  */
 const fs = require("fs");
 const path = require("path");
+const esbuild = require("esbuild");
 
 const root = path.resolve(__dirname, "..");
 const srcDir = path.join(root, "src", "frontend");
 const outDir = path.join(root, "dist", "frontend");
-const STATIC_EXTENSIONS = new Set([".html", ".css", ".js.map"]);
+const STATIC_EXTENSIONS = new Set([".html", ".css"]);
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -25,17 +30,17 @@ for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
   copied += 1;
 }
 
-console.log(`[build] 静的ファイルをコピーしました: ${copied} 件 -> ${path.relative(root, outDir)}`);
+esbuild.buildSync({
+  entryPoints: [path.join(srcDir, "app.ts")],
+  outfile: path.join(outDir, "app.js"),
+  bundle: true,
+  format: "iife",
+  target: ["es2020"],
+  platform: "browser",
+  sourcemap: true,
+  logLevel: "warning",
+});
 
-// tsc はファイルがモジュール扱いのとき `export {};` を出力する。
-// index.html は classic script（type="module" なし）で読み込むため、
-// そのままでは "Unexpected token 'export'" で全体が実行されなくなる。
-const appJs = path.join(outDir, "app.js");
-if (fs.existsSync(appJs)) {
-  const code = fs.readFileSync(appJs, "utf-8");
-  const cleaned = code.replace(/^export\s*\{\s*\};?\s*$/gm, "");
-  if (cleaned !== code) {
-    fs.writeFileSync(appJs, cleaned, "utf-8");
-    console.log("[build] app.js からモジュールマーカー (export {}) を除去しました");
-  }
-}
+console.log(
+  `[build] 静的ファイル ${copied} 件をコピーし、app.js をバンドルしました -> ${path.relative(root, outDir)}`
+);

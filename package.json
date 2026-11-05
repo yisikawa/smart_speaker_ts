@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "pretest": "tsc -p tsconfig.frontend.json && node scripts/build.js",
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/tests/*.test.js\"",
+    "check-audio": "node scripts/check-audio.js",
     "smoke": "node scripts/smoke.js"
   },
   "keywords": [
@@ -31,6 +32,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^20.10.0",
     "@types/ws": "^8.5.10",
+    "esbuild": "^0.28.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.0"
   }
