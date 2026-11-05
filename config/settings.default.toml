@@ -1,0 +1,166 @@
+# Sumika TypeScript 既定設定ファイル
+# このファイルは「既定値の一覧」です。ユーザー設定は config/settings.toml に書き、
+# 指定しなかった項目はここ（および schema.ts の DEFAULT_CONFIG）の値が使われます。
+
+[audio]
+# STT / VAD が前提とするサンプリングレート（Whisper は 16kHz 必須）
+sample_rate = 16000
+# VAD のフレーム長（ms）
+frame_ms = 20
+# 発話検出時に遡って取り込むプリロール（ms）
+pre_roll_ms = 300
+# 1 発話の最大長（秒）
+max_record_seconds = 12
+# 無音とみなす RMS しきい値（0..1）
+silence_threshold = 0.02
+# この秒数だけ無音が続いたら発話終了
+silence_duration = 1.0
+# 発話開始までの待ち時間（秒）
+no_speech_timeout = 4.0
+# 入力ゲイン（レベル計算に適用）
+input_gain = 1.0
+# 出力音量（0..1）
+output_volume = 1.0
+# 入力デバイス名（空なら ffmpeg で自動検出）
+input_device = ""
+# 出力デバイス名（予約）
+output_device = ""
+# レベルの指数移動平均係数
+smoothing_alpha = 0.1
+# 暗騒音に対する相対しきい値の倍率
+relative_threshold_multiplier = 3.0
+# 起動時キャリブレーション時間（秒）
+calibration_duration = 0.5
+# 連続何フレームで発話開始と判定するか
+debounce_frames = 2
+# ffmpeg 実行パス（PATH で解決できない場合に指定）
+ffmpeg_path = ""
+# 再生バックエンド: auto | ffplay | soundplayer
+player = "auto"
+
+[wakeword]
+# ウェイクワードモデル（将来のエンジン用・現在は未使用）
+wakeword_path = []
+threshold = 0.55
+avg_threshold = 0.4
+min_scores = 3
+
+[conversation]
+# 起動直後に自動で聞き取りを開始するか
+auto_start = false
+followup_enabled = true
+max_followup_turns = 2
+followup_timeout_seconds = 6.0
+# 応答直後にマイクを開くまでの待ち（エコー防止, ms）
+followup_guard_ms = 400
+barge_in_enabled = true
+# バージイン判定の RMS しきい値（0..1）
+barge_in_min_score = 0.08
+
+[stt]
+# 既定は f16（高精度・1.5GB）。GPU の VRAM が少ない場合は q5_0（約 550MB）を推奨。
+# q5_0 は `whisper.cpp/whisper-quantize.exe models/ggml-large-v3-turbo.bin models/ggml-large-v3-turbo-q5_0.bin q5_0` で生成できます。
+model_path = "models/ggml-large-v3-turbo.bin"
+# CUDA 版では main.exe が廃止され whisper-cli.exe に統合されています。
+# scripts/setup-whisper-cuda.ps1 は互換のため whisper-cli.exe を main.exe としても配置します。
+binary_path = "whisper.cpp/main.exe"
+language = "ja"
+use_gpu = true
+flash_attn = true
+beam_size = 1
+threads = 4
+timeout_seconds = 60
+initial_prompt = ""
+
+[llm]
+endpoint = "http://127.0.0.1:11434"
+model = "gemma4:e2b-it-qat"
+character_file = "config/characters/sakura.toml"
+temperature = 0.7
+max_tokens = 512
+response_timeout_seconds = 60
+# プロンプトに含める直近ターン数
+history_turns = 6
+
+[tts]
+engine = "voicevox"
+endpoint = "http://127.0.0.1:50021"
+speaker_id = 2
+speed = 1.0
+pitch = 0.0
+volume = 1.0
+timeout_seconds = 30
+
+[rag]
+# 未実装（設定のみ・拡張ポイント）
+enabled = true
+data_dir = "data"
+embedding_model = "nomic-embed-text"
+top_k = 3
+similarity_threshold = 0.3
+
+[recipe_db]
+# 未実装（設定のみ・拡張ポイント）
+enabled = true
+db_path = "data/recipedb/recipes.sqlite"
+master_dir = "data/recipedb"
+
+[music]
+# 未実装（設定のみ・拡張ポイント）
+spotify_client_id = ""
+spotify_redirect_uri = "http://localhost:8765/callback"
+local_music_dir = "music"
+default_volume = 0.7
+volume_step = 0.1
+duck_on_wakeword = true
+duck_volume = 0.15
+
+[gui]
+user_name = "You"
+debug_mode = false
+trace_turns = false
+outfit = "home"
+
+[apps.proactive_speech.categories.briefing]
+enabled = true
+voice = true
+ui = true
+
+[apps.proactive_speech.categories.reminder]
+enabled = true
+voice = true
+ui = true
+
+[apps.proactive_speech.categories.alert]
+enabled = true
+voice = true
+ui = true
+
+[apps.proactive_speech.categories.family_memo]
+enabled = true
+voice = false
+ui = true
+
+[apps.proactive_speech.categories.system]
+enabled = true
+voice = false
+ui = true
+
+[apps.proactive_speech.triggers.demo]
+enabled = false
+fire_time = "07:00"
+text = "プロアクティブ発話デモ: 設定通りに発火しました"
+
+[apps.proactive_speech.triggers.morning_briefing]
+enabled = false
+fire_time = "07:00"
+include_weather = true
+include_calendar = true
+include_shopping = true
+include_news = false
+news_url = "http://127.0.0.1:5000"
+news_new_only = true
+
+[apps.home_assistant]
+base_url = ""
+token = ""

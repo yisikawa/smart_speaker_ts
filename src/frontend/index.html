@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sumika TypeScript</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="title-row">
+        <h1>🎙️ <span id="characterName">Sumika</span></h1>
+        <div id="status" class="status idle">待機中</div>
+      </div>
+      <div class="level-row">
+        <div class="level-bar"><span id="levelFill" class="level-fill"></span></div>
+        <span id="levelHint" class="level-hint">マイクレベル</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="character">
+        <div id="characterFace" class="character-face">🌸</div>
+        <div class="character-info">
+          <div id="characterLabel" class="character-name">さくら</div>
+          <div id="services" class="services">接続確認中…</div>
+        </div>
+      </section>
+
+      <section id="conversation" class="conversation" aria-live="polite"></section>
+
+      <section class="composer">
+        <textarea id="textInput" rows="1" placeholder="テキストでも話しかけられます（Enter で送信 / Shift+Enter で改行）"></textarea>
+        <button id="btnSend" class="btn btn-primary">送信</button>
+      </section>
+
+      <section class="controls">
+        <button id="btnListen" class="btn btn-primary">聞き取り開始</button>
+        <button id="btnStop" class="btn btn-danger" disabled>停止</button>
+        <button id="btnClear" class="btn btn-secondary">履歴クリア</button>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="version">v-</span>
+      <span class="footer-note">ローカル完結（音声・テキストは外部送信されません）</span>
+    </footer>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

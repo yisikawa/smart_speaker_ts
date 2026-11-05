@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-test/
+logs/*.log
+logs/*.wav
+models/*.bin
+whisper.cpp/*.dll
+whisper.cpp/*.exe
+whisper.cpp/_cpu-backup/
+*.tsbuildinfo
+.DS_Store

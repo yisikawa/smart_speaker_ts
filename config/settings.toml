@@ -1,0 +1,78 @@
+# Sumika TypeScript ユーザー設定
+# ここに書いた項目だけが既定値を上書きします（未指定は settings.default.toml の値）。
+# 注意: PATCH /api/config を使うとこのファイルは正規化されて再生成され、コメントは失われます。
+
+[audio]
+sample_rate = 16000
+frame_ms = 20
+pre_roll_ms = 300
+max_record_seconds = 12
+silence_threshold = 0.02
+silence_duration = 1.0
+no_speech_timeout = 4.0
+input_gain = 1.0
+output_volume = 1.0
+# 空なら ffmpeg の dshow デバイス一覧から自動選択します
+input_device = ""
+output_device = ""
+smoothing_alpha = 0.1
+relative_threshold_multiplier = 3.0
+calibration_duration = 0.5
+debounce_frames = 2
+ffmpeg_path = ""
+player = "auto"
+
+[wakeword]
+wakeword_path = []
+threshold = 0.55
+avg_threshold = 0.4
+min_scores = 3
+
+[conversation]
+auto_start = false
+followup_enabled = true
+max_followup_turns = 2
+followup_timeout_seconds = 6.0
+followup_guard_ms = 400
+barge_in_enabled = true
+barge_in_min_score = 0.08
+
+[stt]
+# CUDA 版 whisper.cpp で実測: q5_0 1 発話あたり約 3.5 秒（f16 は約 8.8 秒）
+# f16 の models/ggml-large-v3-turbo.bin に戻す場合は下の行を差し替えてください
+model_path = "models/ggml-large-v3-turbo-q5_0.bin"
+# CUDA 版では main.exe が廃止され whisper-cli.exe に統合されています。
+# scripts/setup-whisper-cuda.ps1 が whisper-cli.exe を main.exe としても配置します。
+binary_path = "whisper.cpp/main.exe"
+language = "ja"
+# false にすると CPU 実行（-ng）になります
+use_gpu = true
+flash_attn = true
+beam_size = 1
+threads = 4
+timeout_seconds = 60
+initial_prompt = ""
+
+[llm]
+endpoint = "http://127.0.0.1:11434"
+model = "llama3.2:1b"
+character_file = "config/characters/sakura.toml"
+temperature = 0.7
+max_tokens = 512
+response_timeout_seconds = 60
+history_turns = 6
+
+[tts]
+engine = "voicevox"
+endpoint = "http://127.0.0.1:50021"
+speaker_id = 2
+speed = 1.0
+pitch = 0.0
+volume = 1.0
+timeout_seconds = 30
+
+[gui]
+user_name = "You"
+debug_mode = false
+trace_turns = false
+outfit = "home"
