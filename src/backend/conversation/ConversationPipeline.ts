@@ -1,4 +1,10 @@
-import type { AssistantState, ChatMessage, PipelineEvent } from "../../shared/protocol";
+import type {
+  AssistantState,
+  CaptureStats,
+  ChatMessage,
+  PipelineEvent,
+  SkipStats,
+} from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import {
   AudioIO,
@@ -103,6 +109,23 @@ export class ConversationPipeline {
 
   getHistory(): ChatMessage[] {
     return this.deps.history.all();
+  }
+
+  /** 障害切り分け用のスナップショット（`/api/diagnostics` が使う） */
+  getDiagnostics(): {
+    state: AssistantState;
+    busy: boolean;
+    skips: SkipStats;
+    lastSkip: { reason: string; text: string; at: number } | null;
+    capture: CaptureStats | null;
+  } {
+    return {
+      state: this.state,
+      busy: this.busy,
+      skips: this.gate.stats,
+      lastSkip: this.gate.lastSkip,
+      capture: this.listening.captureStats,
+    };
   }
 
   get isBusy(): boolean {

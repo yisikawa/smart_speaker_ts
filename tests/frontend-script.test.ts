@@ -92,6 +92,8 @@ const ELEMENT_IDS = [
   "btnClear",
   "btnSend",
   "btnMicTest",
+  "btnDiagnostics",
+  "diagnostics",
   "textInput",
   "inputDevice",
   "toast",

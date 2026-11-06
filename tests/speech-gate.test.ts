@@ -28,6 +28,21 @@ test("SpeechGate は読み上げた応答のエコーを破棄する", () => {
   assert.equal(gate.evaluate("明日の予定を教えて").kind, "accept");
 });
 
+test("SpeechGate は破棄理由ごとの回数と直近の破棄を記録する", () => {
+  const gate = new SpeechGate();
+  gate.evaluate("ご視聴ありがとうございました。"); // 幻聴
+  gate.evaluate("ただ"); // 短断片
+  gate.evaluate("今日はいい天気ですね"); // 受理
+
+  assert.deepEqual(gate.stats, { hallucination: 1, short: 1, echo: 0, repeat: 0 });
+  assert.equal(gate.lastSkip?.reason, "short");
+  assert.match(gate.lastSkip?.text ?? "", /ただ/);
+
+  gate.rememberReply("今日はいい天気だよ、散歩でもどう？");
+  gate.evaluate("今日はいい天気だよ");
+  assert.equal(gate.stats.echo, 1, "エコーも数える");
+});
+
 test("SpeechGate は同じ発話が 3 回続くと破棄し、resetRepeat で解除される", () => {
   const gate = new SpeechGate();
 

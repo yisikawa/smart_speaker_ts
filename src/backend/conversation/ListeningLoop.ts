@@ -1,4 +1,4 @@
-import type { AssistantState, PipelineEvent } from "../../shared/protocol";
+import type { AssistantState, CaptureStats, PipelineEvent } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { AudioIO, CaptureHandle, CaptureResult } from "../core/ports";
 
@@ -22,7 +22,15 @@ export interface ListeningOptions {
  * 「録音 → 判定 → 案内」を 1 箇所にまとめ、パイプライン（状態機械）から録音の詳細を追い出す。
  */
 export class ListeningLoop {
+  private captureCount = 0;
+  private lastResult: CaptureStats | null = null;
+
   constructor(private readonly deps: { config: ConfigManager; audio: AudioIO }) {}
+
+  /** 直近の録音結果（まだ録音していなければ null） */
+  get captureStats(): CaptureStats | null {
+    return this.lastResult;
+  }
 
   /** 発話 WAV を返す。発話が無い・デバイス異常なら null（理由はイベントで通知済み） */
   async capture(hooks: ListeningHooks, options: ListeningOptions): Promise<Buffer | null> {
@@ -68,6 +76,15 @@ export class ListeningLoop {
       durationMs: result.durationMs,
       reason: result.reason,
     });
+
+    this.captureCount += 1;
+    this.lastResult = {
+      count: this.captureCount,
+      lastFrames: result.frames ?? 0,
+      lastPeakLevel: result.peakLevel ?? 0,
+      lastReason: result.reason,
+      lastAt: Date.now(),
+    };
 
     if (!hooks.isActive()) {
       return null;

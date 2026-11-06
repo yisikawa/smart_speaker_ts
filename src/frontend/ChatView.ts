@@ -38,6 +38,8 @@ export class ChatView {
   readonly btnClear = must<HTMLButtonElement>("btnClear");
   readonly btnSend = must<HTMLButtonElement>("btnSend");
   readonly btnMicTest = must<HTMLButtonElement>("btnMicTest");
+  readonly btnDiagnostics = must<HTMLButtonElement>("btnDiagnostics");
+  readonly diagnosticsEl = must<HTMLElement>("diagnostics");
   readonly inputEl = must<HTMLTextAreaElement>("textInput");
   readonly deviceSelect = must<HTMLSelectElement>("inputDevice");
   readonly toastEl = must<HTMLElement>("toast");
@@ -154,6 +156,12 @@ export class ChatView {
     window.setTimeout(() => {
       this.toastEl.className = "toast hidden";
     }, 3500);
+  }
+
+  /** 診断情報を表示する（null なら非表示） */
+  renderDiagnostics(text: string | null): void {
+    this.diagnosticsEl.textContent = text ?? "";
+    this.diagnosticsEl.className = text ? "diagnostics" : "diagnostics hidden";
   }
 
   /** マイク一覧をセレクトへ反映する */

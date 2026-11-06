@@ -124,7 +124,9 @@ npm start              # node dist/backend/index.js
 - フォローアップ（連続会話）
 - キャラクター定義（`config/characters/*.toml`）の人格・応答ルール・口癖をプロンプトへ反映
 - Web GUI（レベルメーター、履歴同期、自動再接続）
-- REST API（設定の参照・部分更新・保存、履歴、ヘルスチェック、デバイス一覧）
+- REST API（設定の参照・部分更新・保存、履歴、ヘルスチェック、デバイス一覧、診断）
+- **診断パネル（「診断」ボタン / `GET /api/diagnostics`）**: 状態・サービス疎通・破棄の内訳（幻聴/短断片/エコー/繰り返し）・
+  直近の破棄理由・録音結果・VAD しきい値を 1 箇所で確認できる
 - レベル付きロガー（コンソール + `logs/app.log`）
 
 ## 設定
@@ -188,7 +190,7 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 ```powershell
 npm run verify         # typecheck → test → build をまとめて実行（作業後はこれ 1 本）
 npm run typecheck      # 型チェック（backend）
-npm test               # ユニット/結合テスト（node:test, 117 ケース）
+npm test               # ユニット/結合テスト（node:test, 119 ケース）
 npm run clean:tests    # dist-test の削除（pretest から自動実行）
 npm run config:default # schema.ts の既定値を settings.default.toml へ同期（コメントは保持）
 npm run smoke          # 起動中サーバーの疎通確認
@@ -239,6 +241,7 @@ logs/                          # app.log（実行ログ）
 
 | 症状 | 確認ポイント |
 |------|--------------|
+| 何が起きているか分からない | 「診断」ボタン（または `GET /api/diagnostics`）で、状態・サービス疎通・破棄の内訳・直近の破棄理由・VAD しきい値をまとめて確認できます |
 | マイクが使えない／許可が出ない | `http://localhost` か `http://127.0.0.1`（または https）で開く。LAN の IP では使えません |
 | 「マイクの使用が許可されていません」 | ブラウザのアドレスバー横のマイク許可。`http://localhost`（または https）で開く |
 | 「音声データが届きません（ctx=suspended …）」 | 自動再生ポリシーで音声処理が停止しています。**画面をもう一度クリック**して再試行（「マイク確認」は自動で再初期化も試します） |

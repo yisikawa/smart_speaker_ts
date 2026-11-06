@@ -458,6 +458,25 @@ test("ブラウザ入力モードではテキスト送信後にサーバー録�
   }
 });
 
+test("getDiagnostics は破棄回数と直近の録音結果を返す", async () => {
+  const harness = setup({
+    specs: [{ hasSpeech: true, reason: "silence" }],
+    sttTexts: ["ただ"],
+  });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    const diagnostics = harness.pipeline.getDiagnostics();
+    assert.ok(diagnostics.skips.short >= 1, `skips=${JSON.stringify(diagnostics.skips)}`);
+    assert.equal(diagnostics.lastSkip?.reason, "short");
+    assert.ok(diagnostics.capture, "録音結果が入ること");
+    assert.equal(diagnostics.capture?.lastReason, "silence");
+    assert.ok((diagnostics.capture?.count ?? 0) >= 1);
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("フォローアップが有効なら連続ターンを録音し続ける", async () => {
   const harness = setup({
     specs: [

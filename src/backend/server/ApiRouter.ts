@@ -1,5 +1,5 @@
 import { Router, Request, RequestHandler, Response } from "express";
-import type { HealthReport } from "../../shared/protocol";
+import type { DiagnosticsReport, HealthReport } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { AppConfig, DeepPartial } from "../config/schema";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
@@ -59,6 +59,28 @@ export function createApiRouter(deps: ApiDeps): Router {
 
   router.get("/state", (_req, res) => {
     res.json({ state: deps.pipeline.getState(), busy: deps.pipeline.isBusy });
+  });
+
+  /**
+   * 診断用のスナップショット（障害切り分け用）。
+   * 破棄の内訳は `SpeechGate` のカウンタを唯一の真実源とし、ログと同じ数字を返す。
+   */
+  router.get("/diagnostics", (_req, res) => {
+    const audio = deps.config.getAudio();
+    const report: DiagnosticsReport = {
+      ...deps.pipeline.getDiagnostics(),
+      services: deps.serviceMonitor.current,
+      warnings: deps.config.getWarnings(),
+      audio: {
+        input_mode: audio.input_mode,
+        silence_threshold: audio.silence_threshold,
+        silence_threshold_max: audio.silence_threshold_max,
+        silence_duration: audio.silence_duration,
+        max_record_seconds: audio.max_record_seconds,
+        barge_in_enabled: deps.config.getConversation().barge_in_enabled,
+      },
+    };
+    res.json(report);
   });
 
   router.get("/character", (_req, res) => {

@@ -128,6 +128,46 @@ export type ServerMessage =
   | { type: "error"; message: string }
   | { type: "pong" };
 
+/** 認識結果の破棄理由ごとの回数（SpeechGate が数える） */
+export interface SkipStats {
+  hallucination: number;
+  short: number;
+  echo: number;
+  repeat: number;
+}
+
+/** 直近の録音結果（サーバー録音モードのときのみ） */
+export interface CaptureStats {
+  count: number;
+  lastFrames: number;
+  lastPeakLevel: number;
+  lastReason: CaptureEndReason;
+  lastAt: number;
+}
+
+/** GET /api/diagnostics のレスポンス（障害切り分け用のスナップショット） */
+export interface DiagnosticsReport {
+  state: AssistantState;
+  busy: boolean;
+  /** 破棄の内訳（幻聴・短断片・エコー・繰り返し） */
+  skips: SkipStats;
+  /** 直近に破棄した認識結果 */
+  lastSkip: { reason: string; text: string; at: number } | null;
+  /** サーバー録音モードの直近の録音結果（ブラウザモードでは null） */
+  capture: CaptureStats | null;
+  services: ServiceStatus;
+  warnings: string[];
+  /** 音声まわりの主要設定（現在値） */
+  audio: {
+    input_mode: string;
+    silence_threshold: number;
+    silence_threshold_max: number;
+    silence_duration: number;
+    max_record_seconds: number;
+    barge_in_enabled: boolean;
+  };
+}
+
 /** GET /api/health のレスポンス */
 export interface HealthReport {
   ok: boolean;

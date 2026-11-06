@@ -1,4 +1,10 @@
-import type { ClientCommand, HelloPayload, PipelineEvent, ServerMessage } from "../shared/protocol";
+import type {
+  ClientCommand,
+  DiagnosticsReport,
+  HelloPayload,
+  PipelineEvent,
+  ServerMessage,
+} from "../shared/protocol";
 import { ChatView } from "./ChatView";
 import { MicLoop } from "./MicLoop";
 import { WsClient } from "./WsClient";
@@ -16,6 +22,8 @@ class SumikaApp {
   private readonly view = new ChatView();
   private readonly ws: WsClient;
   private readonly micLoop: MicLoop;
+  /** 診断パネルを開いているか */
+  private diagnosticsOpen = false;
 
   constructor() {
     this.ws = new WsClient({
@@ -79,6 +87,9 @@ class SumikaApp {
     view.btnMicTest.addEventListener("click", () => {
       void this.micLoop.checkMic();
     });
+    view.btnDiagnostics.addEventListener("click", () => {
+      void this.showDiagnostics();
+    });
     view.inputEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -104,6 +115,26 @@ class SumikaApp {
   private send(command: ClientCommand): void {
     if (!this.ws.send(command)) {
       this.view.showToast("サーバーに接続されていません", "error");
+    }
+  }
+
+  /** 診断情報（/api/diagnostics）を取得して表示する。もう一度押すと閉じる */
+  private async showDiagnostics(): Promise<void> {
+    if (this.diagnosticsOpen) {
+      this.diagnosticsOpen = false;
+      this.view.renderDiagnostics(null);
+      return;
+    }
+    try {
+      const res = await fetch("/api/diagnostics");
+      if (!res.ok) {
+        throw new Error(`/api/diagnostics が ${res.status} を返しました`);
+      }
+      const report = (await res.json()) as DiagnosticsReport;
+      this.diagnosticsOpen = true;
+      this.view.renderDiagnostics(formatDiagnostics(report));
+    } catch (error) {
+      this.view.showToast(`診断情報を取得できませんでした: ${errorText(error)}`, "error");
     }
   }
 
@@ -216,3 +247,28 @@ class SumikaApp {
 document.addEventListener("DOMContentLoaded", () => {
   new SumikaApp().start();
 });
+
+/** 診断レポートを 1 つのテキストへ整形する */
+function formatDiagnostics(report: DiagnosticsReport): string {
+  const skip = report.skips;
+  const capture = report.capture
+    ? `録音: ${report.capture.count} 回 / 直近 frames=${report.capture.lastFrames} peak=${report.capture.lastPeakLevel} reason=${report.capture.lastReason}`
+    : "録音: サーバー録音モードでは未計測（ブラウザ入力では録音はクライアント側）";
+  const lastSkip = report.lastSkip
+    ? `直近の破棄: ${report.lastSkip.reason}「${report.lastSkip.text}」`
+    : "直近の破棄: なし";
+  const services = report.services;
+  return [
+    `状態: ${report.state}${report.busy ? "（応答中）" : ""}`,
+    `サービス: LLM=${services.llm} TTS=${services.tts} STT=${services.stt}`,
+    `破棄: 幻聴=${skip.hallucination} 短断片=${skip.short} エコー=${skip.echo} 繰り返し=${skip.repeat}`,
+    lastSkip,
+    capture,
+    `音声: ${report.audio.input_mode} / しきい値=${report.audio.silence_threshold}（上限 ${report.audio.silence_threshold_max}） / 無音=${report.audio.silence_duration}s / 最大=${report.audio.max_record_seconds}s / バージイン=${report.audio.barge_in_enabled}`,
+    report.warnings.length > 0 ? `設定の警告: ${report.warnings.join(" / ")}` : "設定の警告: なし",
+  ].join("\n");
+}
+
+function errorText(error: unknown): string {
+  return String((error as Error)?.message ?? error);
+}

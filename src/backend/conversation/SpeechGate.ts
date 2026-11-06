@@ -1,3 +1,4 @@
+import type { SkipStats } from "../../shared/protocol";
 import {
   isEchoOfReply,
   isHallucination,
@@ -32,6 +33,19 @@ export class SpeechGate {
   private repeatCount = 0;
   /** 直近に読み上げた応答（新しい順） */
   private readonly recentReplies: string[] = [];
+  /** 破棄理由ごとの回数（診断用） */
+  private readonly skipCounts: SkipStats = { hallucination: 0, short: 0, echo: 0, repeat: 0 };
+  /** 直近に破棄した内容 */
+  private lastSkipped: { reason: SkipReason; text: string; at: number } | null = null;
+
+  /** 破棄の内訳（`/api/diagnostics` とログで同じ数字を使う） */
+  get stats(): SkipStats {
+    return { ...this.skipCounts };
+  }
+
+  get lastSkip(): { reason: SkipReason; text: string; at: number } | null {
+    return this.lastSkipped;
+  }
 
   /** 読み上げた応答を記憶する（自分の声のエコー判定に使う） */
   rememberReply(reply: string): void {
@@ -50,8 +64,18 @@ export class SpeechGate {
     this.repeatCount = 0;
   }
 
-  /** 判定する（`skip` のときはログ用のメッセージも返す） */
+  /** 判定する（`skip` のときはログ用のメッセージも返す）。破棄は回数と直近内容を記録する */
   evaluate(text: string): GateDecision {
+    const decision = this.judge(text);
+    if (decision.kind === "skip") {
+      this.skipCounts[decision.reason] += 1;
+      this.lastSkipped = { reason: decision.reason, text, at: Date.now() };
+    }
+    return decision;
+  }
+
+  /** 実際の判定（破棄理由を返す） */
+  private judge(text: string): GateDecision {
     // 定型句の幻聴（STT 実装に依存しない二重の保険）
     if (isHallucination(text)) {
       return { kind: "skip", reason: "hallucination", message: `幻聴と判定したため破棄します: ${text}` };
