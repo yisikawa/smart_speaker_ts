@@ -18,7 +18,7 @@ export class VoicevoxTtsService implements TextToSpeech {
   private readonly logger: Logger;
 
   constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
-    this.logger = deps.logger ? deps.logger.child("TTS") : new Logger("TTS");
+    this.logger = deps.logger ?? new Logger("TTS");
   }
 
   private request(

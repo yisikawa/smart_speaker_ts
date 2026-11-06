@@ -1,12 +1,10 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { ConfigManager } from "../config/ConfigManager";
 import { runProcess } from "../core/childProcess";
 import { abortError } from "../core/errors";
-import { Logger } from "../core/logger";
-import { SpeechToText, Transcript } from "../core/ports";
-import { isHallucination, joinSegments, WhisperSegment } from "./transcriptFilter";
+import { BaseSttService, RecognizeResult } from "./BaseSttService";
+import { joinSegments, WhisperSegment } from "./transcriptFilter";
 
 /** whisper.cpp の `-ojf`（JSON full）出力のうち、こちらで使う部分 */
 interface WhisperJson {
@@ -24,15 +22,9 @@ interface WhisperJson {
  * - `-mc 0`（文脈を引き継がない）
  * - `-nth`（無音判定しきい値）
  * - `-ojf` の no_speech_prob / avg_logprob による区間フィルタ
- * を併用する。
+ * を併用する（テキスト側の幻聴判定は `BaseSttService` が行う）。
  */
-export class WhisperSttService implements SpeechToText {
-  private readonly logger: Logger;
-
-  constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
-    this.logger = deps.logger ? deps.logger.child("STT") : new Logger("STT");
-  }
-
+export class WhisperSttService extends BaseSttService {
   private binaryPath(): string {
     return this.deps.config.resolvePath(this.deps.config.getSTT().binary_path);
   }
@@ -92,7 +84,10 @@ export class WhisperSttService implements SpeechToText {
     }
   }
 
-  async transcribe(wav: Buffer, options: { signal?: AbortSignal } = {}): Promise<Transcript> {
+  protected async recognize(
+    wav: Buffer,
+    options: { signal?: AbortSignal }
+  ): Promise<RecognizeResult> {
     const stt = this.deps.config.getSTT();
     const binary = this.binaryPath();
     const model = this.modelPath();
@@ -107,7 +102,6 @@ export class WhisperSttService implements SpeechToText {
     const workDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sumika-stt-"));
     const inputPath = path.join(workDir, "input.wav");
     const outputBase = path.join(workDir, "output");
-    const started = Date.now();
 
     try {
       await fs.promises.writeFile(inputPath, wav);
@@ -128,7 +122,6 @@ export class WhisperSttService implements SpeechToText {
 
       const textPath = `${outputBase}.txt`;
       const jsonPath = `${outputBase}.json`;
-      const sttConfig = this.deps.config.getSTT();
       let text = "";
       let droppedSegments = 0;
 
@@ -136,8 +129,8 @@ export class WhisperSttService implements SpeechToText {
       const segments = Array.isArray(json?.transcription) ? json.transcription : [];
       if (segments.length > 0) {
         const joined = joinSegments(segments, {
-          noSpeechProb: sttConfig.drop_no_speech_prob,
-          avgLogprob: sttConfig.drop_avg_logprob,
+          noSpeechProb: stt.drop_no_speech_prob,
+          avgLogprob: stt.drop_avg_logprob,
         });
         text = joined.text;
         droppedSegments = joined.dropped;
@@ -145,15 +138,10 @@ export class WhisperSttService implements SpeechToText {
         text = (await fs.promises.readFile(textPath, "utf-8")).trim();
       }
 
-      if (text && sttConfig.filter_hallucinations && isHallucination(text)) {
-        this.logger.warn(`幻聴と判定したため破棄します: ${text}`);
-        text = "";
-      }
-
-      const elapsedMs = Date.now() - started;
-      const droppedNote = droppedSegments > 0 ? `, 低信頼の区間 ${droppedSegments} 件を破棄` : "";
-      this.logger.info(`認識完了 (${elapsedMs}ms${droppedNote}): ${text || "(空)"}`);
-      return { text, language: stt.language, elapsedMs };
+      return {
+        text,
+        note: droppedSegments > 0 ? `低信頼の区間 ${droppedSegments} 件を破棄` : undefined,
+      };
     } finally {
       await fs.promises.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
     }

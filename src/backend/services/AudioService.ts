@@ -34,7 +34,7 @@ export class AudioService implements AudioIO {
   private deviceLock: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
-    this.logger = deps.logger ? deps.logger.child("Audio") : new Logger("Audio");
+    this.logger = deps.logger ?? new Logger("Audio");
   }
 
   /** ffmpeg 実行パス（設定で上書き可能） */

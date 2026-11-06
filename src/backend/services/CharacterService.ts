@@ -37,7 +37,7 @@ export class CharacterService {
   private profile: CharacterProfile = FALLBACK;
 
   constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
-    this.logger = deps.logger ? deps.logger.child("Character") : new Logger("Character");
+    this.logger = deps.logger ?? new Logger("Character");
     this.reload();
   }
 

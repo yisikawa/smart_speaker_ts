@@ -41,7 +41,7 @@ export class AppServer {
   private serviceTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly deps: AppServerDeps) {
-    this.logger = deps.logger.child("Server");
+    this.logger = deps.logger ?? new Logger("Server");
     this.app = express();
     this.app.disable("x-powered-by");
     this.app.use(cors());

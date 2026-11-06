@@ -1,11 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
-import { ConfigManager } from "../config/ConfigManager";
 import { abortError } from "../core/errors";
-import { Logger } from "../core/logger";
-import { SpeechToText, Transcript } from "../core/ports";
 import { bytesToInt16, int16ToFloat32, isWav, resample, wavToFloat32 } from "../../shared/audio/pcm";
-import { isHallucination } from "./transcriptFilter";
+import { BaseSttService, RecognizeResult } from "./BaseSttService";
 
 /* ------------------------------------------------------------------ */
 /* sherpa-onnx-node（node-addon-api）の最小型定義                        */
@@ -56,15 +53,10 @@ function rmsOfFloat32(samples: Float32Array): number {
  *   （未インストールでもアプリ起動・他エンジンの利用に影響しない）
  * - モデルのロードは初回の transcribe まで遅延する（起動を速く保つ）
  */
-export class SherpaSttService implements SpeechToText {
-  private readonly logger: Logger;
+export class SherpaSttService extends BaseSttService {
   private recognizer: SherpaRecognizer | null = null;
   private module: SherpaModule | null = null;
   private loadError: Error | null = null;
-
-  constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
-    this.logger = deps.logger ? deps.logger.child("STT") : new Logger("STT");
-  }
 
   private modelDir(): string {
     return this.deps.config.resolvePath(this.deps.config.getSTT().sherpa_model_dir);
@@ -234,27 +226,29 @@ export class SherpaSttService implements SpeechToText {
     return this.resampleIfNeeded(int16ToFloat32(bytesToInt16(bytes)), SHERPA_SAMPLE_RATE);
   }
 
-  async transcribe(wav: Buffer, options: { signal?: AbortSignal } = {}): Promise<Transcript> {
+  /** 言語は SenseVoice などの指定（未指定なら stt.language） */
+  protected override language(): string {
     const stt = this.deps.config.getSTT();
-    if (options.signal?.aborted) {
-      throw abortError("STT が中断されました");
-    }
+    return stt.sherpa_language || stt.language;
+  }
 
-    const started = Date.now();
+  protected async recognize(
+    wav: Buffer,
+    options: { signal?: AbortSignal }
+  ): Promise<RecognizeResult> {
+    const stt = this.deps.config.getSTT();
     const input = this.toInput(wav);
 
     // ほぼ無音の入力は認識させない（CTC 系でも短い誤認識が出るため）
     if (stt.min_input_rms > 0) {
       const rms = rmsOfFloat32(input.samples);
       if (rms < stt.min_input_rms) {
-        const elapsedMs = Date.now() - started;
-        this.logger.info(`入力がほぼ無音のため認識をスキップしました (rms=${rms.toFixed(4)}, ${elapsedMs}ms)`);
-        return { text: "", language: stt.sherpa_language || stt.language, elapsedMs };
+        this.logger.info(`入力がほぼ無音のため認識をスキップしました (rms=${rms.toFixed(4)})`);
+        return { text: "" };
       }
     }
 
     const recognizer = this.ensureRecognizer();
-
     const stream = recognizer.createStream();
     stream.acceptWaveform({ sampleRate: input.sampleRate, samples: input.samples });
     recognizer.decode(stream);
@@ -264,14 +258,6 @@ export class SherpaSttService implements SpeechToText {
     }
 
     const result = recognizer.getResult(stream);
-    let text = (result?.text ?? "").trim();
-    if (text && stt.filter_hallucinations && isHallucination(text)) {
-      this.logger.warn(`幻聴と判定したため破棄します: ${text}`);
-      text = "";
-    }
-
-    const elapsedMs = Date.now() - started;
-    this.logger.info(`認識完了 (${elapsedMs}ms): ${text || "(空)"}`);
-    return { text, language: stt.sherpa_language || stt.language, elapsedMs };
+    return { text: result?.text ?? "" };
   }
 }

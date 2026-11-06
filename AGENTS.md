@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 99 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 103 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -64,6 +64,11 @@ src/backend/index.ts                                ← Composition Root（DI �
 10. **フォローアップ上限で勝手に止めない**（`conversation.keep_listening = true`）。
 11. テストは**ハング防止**のため `--test-timeout` 必須。無限ループしうる設定（keep_listening）に注意。
 12. 設定の既定値は `src/backend/config/schema.ts` が単一の真実源。`settings.default.toml` と同期させる。
+12-1. **音声ユーティリティの実装は `src/shared/audio/pcm.ts` だけ**。`src/backend/services/wav.ts` は
+    Buffer ⇔ Uint8Array の境界変換のみ（新しい処理は pcm.ts に追加してブラウザと共有する）。
+12-2. **STT 実装は `BaseSttService` を継承する**（幻聴フィルタ・中断判定・`認識完了` ログを共通化）。
+    具象クラスは `recognize()` と `isAvailable()` だけを実装する。
+12-3. **Logger は `deps.logger ?? new Logger("Scope")`**。`child()` を使うと `[STT:STT]` のように二重表示になる。
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする

@@ -21,7 +21,7 @@ export class OllamaLlmService implements LanguageModel {
   private readonly logger: Logger;
 
   constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
-    this.logger = deps.logger ? deps.logger.child("LLM") : new Logger("LLM");
+    this.logger = deps.logger ?? new Logger("LLM");
   }
 
   private endpoint(): URL {
