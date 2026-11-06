@@ -1,6 +1,6 @@
 {
   "name": "smart_speaker_ts",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local AI voice assistant (TypeScript backend + frontend), inspired by Sumika/Smart Speaker",
   "main": "dist/backend/index.js",
   "scripts": {

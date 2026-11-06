@@ -145,7 +145,7 @@ const HELLO = {
   history: [],
   character: { name: "さくら", label: "明るい" },
   user: "You",
-  version: "0.2.0",
+  version: "0.3.0",
   services: { llm: true, tts: true, stt: true },
   audio: {
     inputMode: "browser",
@@ -193,7 +193,7 @@ test("読み込み直後に WebSocket へ接続し、hello でサービス状態
   assert.match(services, /STT/);
   assert.match(services, /🟢/);
   assert.match(services, /マイク: ブラウザ/);
-  assert.equal(elements.get("version")!.textContent, "v0.2.0");
+  assert.equal(elements.get("version")!.textContent, "v0.3.0");
   assert.equal(elements.get("status")!.textContent, "待機中");
 });
 

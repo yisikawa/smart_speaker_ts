@@ -1,7 +1,7 @@
 # Sumika TypeScript — 再設計書（To-Be）
 
 > 現状設計書 [DESIGN.md](./DESIGN.md) の課題分析に基づく再設計。
-> 実装は `src/shared` / `src/backend/{config,core,services,conversation,server}` / `src/frontend` に再編済み（v0.2.0）。
+> 実装は `src/shared` / `src/backend/{config,core,services,conversation,server}` / `src/frontend` に再編済み（v0.3.0）。
 
 ---
 
