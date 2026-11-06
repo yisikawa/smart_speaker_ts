@@ -124,11 +124,13 @@ src/backend/index.ts                                ← Composition Root（DI �
 
 ## 7. 現在の状態 / TODO
 
-- 動作確認済み: ブラウザ録音 → STT → LLM → TTS → 再生、連続会話、バージイン、履歴、設定 API
+- 動作確認済み: ブラウザ録音 → STT → LLM → TTS → 再生、連続会話、バージイン（既定 OFF）、履歴、設定 API、診断
 - バージョン表記は `0.3.0`（`package.json`）。リファクタリング（P0〜P6）完了に伴い 0.2.0 から更新。
 - 未実装（設定のみ）: `[rag]` / `[recipe_db]` / `[music]` / `[apps.proactive_speech]` / `[apps.home_assistant]` / ウェイクワード
-- 改善候補: `whisper-server` 常駐化（毎回のモデルロード削減）、LLM モデルの品質向上、話者/音量の設定 UI
+  （真実源は `ConfigManager.UNSUPPORTED_SECTIONS`）
 - STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は whisper）
+- **残作業のバックログは `docs/TODO.md` に集約**（優先度・受け入れ条件・見積つき）。作業を終えたら同ファイルから削除し、
+  この節と README を更新する。
 
 ## 8. ブランチ運用
 

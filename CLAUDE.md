@@ -4,6 +4,7 @@
 作業前に必ず読んでください。
 
 - 仕様書: `docs/DESIGN.md`（As-Is） / `docs/REDESIGN.md`（To-Be）
+- 残作業: `docs/TODO.md`（優先度つきバックログ。完了したら同ファイルから削除する）
 - ビルド: `npm run build`（フロントは **esbuild バンドル**。`tsc` 出力はブラウザで動きません）
 - 検証: `npm run verify`（typecheck → test → build を一括。作業後はこれ 1 本）
 - テスト: `npm test`（`node:test`, 119 件, `--test-timeout=30000`）

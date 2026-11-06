@@ -215,4 +215,14 @@ src/backend/services/wav.ts                        87   ← P1 で統合対象
 src/shared/protocol.ts                            129
 ```
 
+---
+
+## 9. 完了後の扱い
+
+P0〜P6 はすべて完了し、`v0.3.0` として `main` にマージ済み。本書は**経緯の記録**として残す。
+
+- 完了条件の充足状況（2026-11-06）: `src/` 最大 400 行（`ConversationPipeline.ts`）/ WAV・中断判定・破棄判定・破棄通知が各 1 箇所 /
+  `settings.default.toml` は `npm run config:default` で同期可能（ドリフト検出テストあり）/ `npm run verify` で一括検証（119 テスト）
+- **今後の残作業（優先度・受け入れ条件つき）は `docs/TODO.md` に移した。** 新しい作業は本書ではなく `docs/TODO.md` に追記する。
+
 
