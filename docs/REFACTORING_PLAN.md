@@ -11,7 +11,7 @@
 | **P0 足場固め** | ✅ 完了 | `pretest` で `dist-test` を掃除 / `npm run verify` 追加 / `tests/helpers/project.ts` に共通化（6 ファイルの重複を解消） |
 | P1 重複排除 | ✅ 完了 | `core/errors.ts`（中断/通信エラー）・`services/wav.ts` を Buffer 境界アダプタへ縮小（実装は `shared/audio/pcm.ts` に一本化）・`BaseSttService`（幻聴フィルタ/中断/ログ）・ログ scope の二重表示を解消 |
 | P2 パイプライン分割 | ✅ 完了 | `SpeechGate`（破棄判定）/ `TurnRunner`（LLM→TTS）/ `TranscriptionRunner`（STT＋採否）/ `ListeningLoop`（録音）/ `PlaybackLoop`（再生・バージイン）に分割。Pipeline 604 → 395 行。破棄→`turn_skipped` は `TranscriptionRunner` の戻り値 1 経路。ブラウザモードでテキスト送信後にサーバー録音を開く不具合も修正 |
-| P3 フロントエンド分割 | ⬜ 未着手 | |
+| P3 フロントエンド分割 | ✅ 完了 | `app.ts` 684 → 207 行。`WsClient`（接続・再接続・hello 待ち）/ `ChatView`（描画）/ `MicLoop`（録音ループ・マイク確認・バージイン）/ `dom`（ヘルパ）に分割。esbuild の IIFE バンドルは維持（`tests/frontend-script.test.ts` は無変更で通過） |
 | P4 設定整理 | ⬜ 未着手 | |
 | P5 サーバ層整理 | ⬜ 未着手 | |
 | P6 診断・運用 | ⬜ 未着手 | |

@@ -223,7 +223,7 @@ src/
 │   ├── services/              # Audio / VAD / STT / LLM / TTS / Character
 │   ├── conversation/          # パイプライン・履歴・プロンプト生成
 │   └── server/                # Express + WebSocket
-└── frontend/                  # index.html / style.css / app.ts
+└── frontend/                  # index.html / style.css / app.ts（組立）・WsClient・ChatView・MicLoop・mic
 config/                        # settings.toml, settings.default.toml, characters/
 scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js, setup-whisper-cuda.ps1
 start.bat                      # Windows 用ランチャー（依存/ビルド/外部サービス確認 → 起動）

@@ -37,6 +37,8 @@ src/backend/services/*                              ← 具体実装（ffmpeg / 
 src/backend/conversation/*                          ← 状態機械・履歴・プロンプト
 src/backend/server/*                                ← Express + WebSocket
 src/frontend/{app,mic}.ts                           ← UI・ブラウザ録音（esbuild でバンドル）
+src/frontend/app.ts                                 ← 組み立て（Composition Root）
+src/frontend/{WsClient,ChatView,MicLoop,dom}.ts     ← 通信・描画・録音ループ・DOM ヘルパ
 src/backend/index.ts                                ← Composition Root（DI 配線）
 ```
 
