@@ -17,3 +17,5 @@ whisper.cpp/_cpu-backup/
 
 # ユーザー設定（既定値は config/settings.default.toml）
 config/settings.toml
+# PATCH /api/config で保存する前の退避ファイル
+config/settings.toml.bak

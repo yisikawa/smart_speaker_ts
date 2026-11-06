@@ -34,6 +34,19 @@ export interface ConfigManagerOptions {
 
 export type ConfigListener = (config: AppConfig) => void;
 
+/**
+ * 設定だけがあり実装が無いセクション。
+ * README / docs/DESIGN.md の「未実装」一覧と一致させる（`getUnsupportedSections()` が返す）。
+ */
+export const UNSUPPORTED_SECTIONS = [
+  "wakeword",
+  "rag",
+  "recipe_db",
+  "music",
+  "apps.proactive_speech",
+  "apps.home_assistant",
+] as const;
+
 const CONFIG_HEADER = [
   "# Sumika TypeScript 設定ファイル",
   "# このファイルはアプリ（PATCH /api/config）から自動生成・更新される場合があります。",
@@ -108,9 +121,13 @@ export class ConfigManager {
     return this.config;
   }
 
-  /** 現在の設定を settings.toml へ書き出す */
+  /** 現在の設定を settings.toml へ書き出す（上書き前の内容は .bak に残す） */
   save(): void {
     ensureDir(path.dirname(this.configPath));
+    if (fs.existsSync(this.configPath)) {
+      // 書き出すと手書きコメントは失われるため、直前の内容を退避する
+      fs.copyFileSync(this.configPath, `${this.configPath}.bak`);
+    }
     const body = stringifyToml(this.config as unknown as Record<string, unknown>);
     fs.writeFileSync(this.configPath, `${CONFIG_HEADER}${body}`, "utf-8");
     this.logger.info(`設定を保存しました: ${path.relative(this.rootDir, this.configPath)}`);
@@ -127,10 +144,19 @@ export class ConfigManager {
     return [...this.warnings];
   }
 
+  /**
+   * 設定だけがあり実装が無いセクション（README / docs/DESIGN.md と一致させる）。
+   * これらの getter は将来の機能用に用意してある。
+   */
+  getUnsupportedSections(): string[] {
+    return [...UNSUPPORTED_SECTIONS];
+  }
+
   getAudio(): AudioConfig {
     return this.config.audio;
   }
 
+  /** 設定のみ（実装なし）: ウェイクワード検出 */
   getWakeword(): WakewordConfig {
     return this.config.wakeword;
   }
@@ -151,14 +177,17 @@ export class ConfigManager {
     return this.config.tts;
   }
 
+  /** 設定のみ（実装なし）: RAG */
   getRAG(): RAGConfig {
     return this.config.rag;
   }
 
+  /** 設定のみ（実装なし）: レシピDB */
   getRecipeDB(): RecipeDBConfig {
     return this.config.recipe_db;
   }
 
+  /** 設定のみ（実装なし）: 音楽再生 */
   getMusic(): MusicConfig {
     return this.config.music;
   }
@@ -167,10 +196,12 @@ export class ConfigManager {
     return this.config.gui;
   }
 
+  /** 設定のみ（実装なし）: プロアクティブ発話 */
   getProactiveSpeech(): ProactiveSpeechConfig {
     return this.config.apps.proactive_speech;
   }
 
+  /** 設定のみ（実装なし）: Home Assistant 連携 */
   getHomeAssistant(): HomeAssistantConfig {
     return this.config.apps.home_assistant;
   }

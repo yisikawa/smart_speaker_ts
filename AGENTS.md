@@ -18,10 +18,11 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 111 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 114 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
+| 既定設定の同期 | `npm run config:default`（`schema.ts` の既定値を `settings.default.toml` へ反映。コメントは保持） |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
@@ -65,7 +66,11 @@ src/backend/index.ts                                ← Composition Root（DI �
 9. **`PATCH /api/config` は `settings.toml` を正規化**して保存する（コメントは失われる）。
 10. **フォローアップ上限で勝手に止めない**（`conversation.keep_listening = true`）。
 11. テストは**ハング防止**のため `--test-timeout` 必須。無限ループしうる設定（keep_listening）に注意。
-12. 設定の既定値は `src/backend/config/schema.ts` が単一の真実源。`settings.default.toml` と同期させる。
+12. 設定の既定値は `src/backend/config/schema.ts` が単一の真実源。`settings.default.toml` は
+    `npm run config:default` で同期する（コメントは保持される）。同期漏れは
+    `tests/config-defaults.test.ts` が検出する（実際に `silence_threshold_max` 追加時に陳腐化した）。
+12-0. 未実装（設定のみ）のセクションは `UNSUPPORTED_SECTIONS` / `getUnsupportedSections()` が真実源。
+    追加したら README / docs/DESIGN.md の「未実装」一覧も更新する。
 12-1. **音声ユーティリティの実装は `src/shared/audio/pcm.ts` だけ**。`src/backend/services/wav.ts` は
     Buffer ⇔ Uint8Array の境界変換のみ（新しい処理は pcm.ts に追加してブラウザと共有する）。
 12-2. **STT 実装は `BaseSttService` を継承する**（幻聴フィルタ・中断判定・`認識完了` ログを共通化）。

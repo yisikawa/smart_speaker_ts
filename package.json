@@ -6,6 +6,7 @@
   "scripts": {
     "clean": "node scripts/clean.js",
     "clean:tests": "node scripts/clean.js --tests",
+    "config:default": "tsc -p tsconfig.json && node scripts/sync-default-config.js",
     "build": "npm run clean && tsc -p tsconfig.frontend.json && tsc -p tsconfig.json && node scripts/build.js",
     "start": "node dist/backend/index.js",
     "dev": "ts-node src/backend/index.ts",

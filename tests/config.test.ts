@@ -101,6 +101,26 @@ test("update は settings.toml へ保存し、再読み込みで復元できる"
   }
 });
 
+test("update は上書き前の settings.toml を .bak に退避する", () => {
+  const dir = tempDir();
+  try {
+    const manager = new ConfigManager({ rootDir: dir });
+    manager.update({ tts: { speaker_id: 8 } });
+    const first = fs.readFileSync(path.join(dir, "config", "settings.toml"), "utf-8");
+
+    // 2 回目の保存で、直前の内容が .bak に残る
+    manager.update({ tts: { speaker_id: 14 } });
+    const backupPath = path.join(dir, "config", "settings.toml.bak");
+    assert.equal(fs.existsSync(backupPath), true, ".bak が作られること");
+    assert.equal(fs.readFileSync(backupPath, "utf-8"), first);
+
+    const saved = fs.readFileSync(path.join(dir, "config", "settings.toml"), "utf-8");
+    assert.match(saved, /speaker_id = 14/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("resolvePath は rootDir 基準の絶対パスを返す", () => {
   const dir = tempDir();
   try {
