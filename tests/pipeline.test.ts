@@ -281,6 +281,58 @@ test("ハングルが混入した応答は日本語で 1 回だけ再生成す�
   }
 });
 
+test("LLM との通信が切れたら無言で終わらずエラーを通知する", async () => {
+  const llm: LanguageModel = {
+    isAvailable: async () => true,
+    listModels: async () => ["fake"],
+    // Node は接続断で `Error: aborted` を投げる（AbortController 由来ではない）
+    chatStream: async () => {
+      throw new Error("aborted");
+    },
+  };
+
+  const harness = setup({ specs: [{ hasSpeech: false, reason: "no_speech" }], llmOverride: llm });
+  try {
+    await harness.pipeline.submitText("テスト");
+    const errors = harness.events.filter(
+      (event): event is Extract<PipelineEvent, { type: "error" }> => event.type === "error"
+    );
+    assert.equal(errors.length, 1, "エラーを 1 件通知する");
+    assert.equal(errors[0].scope, "llm");
+    assert.match(errors[0].message, /aborted/);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("停止操作による中断ではエラーを通知しない", async () => {
+  const llm: LanguageModel = {
+    isAvailable: async () => true,
+    listModels: async () => ["fake"],
+    chatStream: (_messages, _onDelta, options) =>
+      new Promise<string>((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          reject(error);
+        });
+      }),
+  };
+
+  const harness = setup({ specs: [{ hasSpeech: false, reason: "no_speech" }], llmOverride: llm });
+  try {
+    const started = harness.pipeline.submitText("テスト");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    harness.pipeline.stop();
+    await started;
+
+    const errors = harness.events.filter((event) => event.type === "error");
+    assert.equal(errors.length, 0, "ユーザー操作の中断はエラーにしない");
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("幻聴と判定された認識結果は LLM に渡さず、履歴にも残さない", async () => {
   const harness = setup({
     specs: [

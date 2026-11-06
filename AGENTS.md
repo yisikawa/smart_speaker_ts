@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 88 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 91 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
@@ -68,6 +68,9 @@ src/backend/index.ts                                ← Composition Root（DI �
     - 以前は最大値×3 だったため、話し始めてからマイクが開くとしきい値が 0.14 まで跳ね上がり
       「検出しない／途中で切れる」を起こしていた（回帰テストあり）
 14. **`max_record_seconds`（既定 30 秒）を超えると必ず `max_duration` で切れる**。長文の語尾切れはまずここを疑う。
+15. **中断判定は「自分の AbortController が aborted か」で行う**
+    Node は接続断で `Error: aborted` を投げるため、`/abort/i.test(message)` で判定すると
+    Ollama 側の切断まで黙って握りつぶし「回答が返らない（ログも出ない）」になる（回帰テストあり）。
 
 ## 5. 環境前提（この PC）
 

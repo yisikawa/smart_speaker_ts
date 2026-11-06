@@ -11,18 +11,10 @@ import {
 } from "../core/ports";
 import { Logger } from "../core/logger";
 import { wavDurationMs } from "../services/wav";
+import { isEchoOfReply, isHallucination, normalizeTranscript } from "../services/transcriptFilter";
 import { ConversationHistory } from "./ConversationHistory";
 import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
-import { isEchoOfReply, isHallucination, normalizeTranscript } from "../services/transcriptFilter";
-
-/** 中断起因のエラーか（AbortController / socket 由来） */
-function isAbortError(error: unknown): boolean {
-  if (error instanceof Error) {
-    return error.name === "AbortError" || /abort/i.test(error.message);
-  }
-  return false;
-}
 
 /** 直前と同じ認識結果を何回まで許容するか（3 回目以降は幻聴・エコーとみなす） */
 const REPEAT_LIMIT = 3;
@@ -220,7 +212,11 @@ export class ConversationPipeline {
 
     try {
       const outcome = await this.transcribe(wav);
-      if (outcome.kind !== "text" || !this.active) {
+      if (outcome.kind !== "text") {
+        return;
+      }
+      if (!this.active) {
+        this.deps.logger.warn("応答前に停止されたため、このターンは破棄しました");
         return;
       }
       this.turnCounter += 1;
@@ -246,8 +242,8 @@ export class ConversationPipeline {
   private async transcribe(wav: Buffer): Promise<TranscriptionOutcome> {
     this.setState("transcribing");
     this.emit({ type: "stt_started" });
+    const controller = this.newAbort();
     try {
-      const controller = this.newAbort();
       const transcript = await this.deps.stt.transcribe(wav, { signal: controller.signal });
       if (!this.active) {
         return { kind: "empty" };
@@ -294,7 +290,7 @@ export class ConversationPipeline {
       });
       return { kind: "text", text };
     } catch (error) {
-      if (!this.active || isAbortError(error)) {
+      if (controller.signal.aborted) {
         return { kind: "empty" };
       }
       this.emitError("stt", error);
@@ -473,8 +469,8 @@ export class ConversationPipeline {
     this.emit({ type: "llm_started" });
     const llmStartedAt = Date.now();
     let reply = "";
+    const controller = this.newAbort();
     try {
-      const controller = this.newAbort();
       reply = await this.deps.llm.chatStream(
         this.buildMessages(),
         (delta) => {
@@ -497,13 +493,14 @@ export class ConversationPipeline {
         }
       }
     } catch (error) {
-      if (isAbortError(error)) {
+      // 中断は「自分で止めた」場合のみ黙って終了する。
+      // 通信レベルの "aborted"（Ollama 側が接続を切った等）はユーザー操作ではないので通知する。
+      if (controller.signal.aborted) {
         return undefined;
       }
       this.emitError("llm", error);
       return undefined;
     }
-
     reply = reply.trim();
     this.emit({ type: "llm_complete", text: reply, elapsedMs: Date.now() - llmStartedAt });
     if (!reply) {
@@ -518,11 +515,11 @@ export class ConversationPipeline {
     this.emit({ type: "tts_started" });
     const ttsStartedAt = Date.now();
     let wav: Buffer;
+    const ttsController = this.newAbort();
     try {
-      const controller = this.newAbort();
-      wav = await this.deps.tts.synthesize(reply, { signal: controller.signal });
+      wav = await this.deps.tts.synthesize(reply, { signal: ttsController.signal });
     } catch (error) {
-      if (isAbortError(error)) {
+      if (ttsController.signal.aborted) {
         return undefined;
       }
       this.emitError("tts", error);

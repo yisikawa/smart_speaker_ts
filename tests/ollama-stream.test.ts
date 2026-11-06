@@ -92,6 +92,33 @@ test("isAvailable / listModels / hasModel が Ollama の応答を解釈する", 
   }
 });
 
+test("接続を切られた場合は案内付きのエラーになる", async () => {
+  const server = http.createServer((req, res) => {
+    if (req.url === "/api/tags") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ models: [] }));
+      return;
+    }
+    // モデル読み込み失敗などを想定して接続を切る
+    req.socket.destroy();
+  });
+  const port = await new Promise<number>((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+  });
+  const project = withConfig(port);
+
+  try {
+    const service = new OllamaLlmService({ config: project.config });
+    await assert.rejects(
+      () => service.chatStream([{ role: "user", content: "やあ" }], () => {}),
+      /Ollama との接続が中断されました/
+    );
+  } finally {
+    project.cleanup();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
 test("接続できない場合は isAvailable が false を返す", async () => {
   const project = withConfig(1); // 使用されていないポート
   try {

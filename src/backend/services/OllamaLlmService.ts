@@ -11,6 +11,25 @@ interface OllamaChatChunk {
 }
 
 /**
+ * 通信レベルのエラーを、原因が分かるメッセージへ変換する。
+ * Node は接続が切られると `Error: aborted`（メッセージに abort を含む）を投げるため、
+ * そのまま流すと「ユーザー操作による中断」と区別できなくなる。
+ */
+function describeTransportError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = (error as { code?: string }).code ?? "";
+  if (/abort|ECONNRESET|EPIPE|socket hang up/i.test(`${message} ${code}`)) {
+    return new Error(
+      `Ollama との接続が中断されました（モデルの読み込み失敗・VRAM 不足・ollama の再起動などが考えられます）: ${message}`
+    );
+  }
+  if (/ECONNREFUSED/i.test(`${message} ${code}`)) {
+    return new Error(`Ollama に接続できません（\`ollama serve\` が起動しているか確認してください）: ${message}`);
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
+/**
  * Ollama の /api/chat を利用する LLM 実装。
  *
  * ストリーミングは NDJSON なので、チャンク境界をまたぐ行を取りこぼさないよう
@@ -240,7 +259,7 @@ export class OllamaLlmService implements LanguageModel {
         req.destroy();
       }, cfg.response_timeout_seconds * 1000);
 
-      req.on("error", (error) => fail(error));
+      req.on("error", (error) => fail(describeTransportError(error)));
       req.on("timeout", () => {
         fail(new Error(`LLM がタイムアウトしました（${cfg.response_timeout_seconds} 秒）`));
         req.destroy();
