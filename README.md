@@ -11,6 +11,7 @@
 
 - [docs/DESIGN.md](docs/DESIGN.md) — 再設計前の現状設計書（As-Is）
 - [docs/REDESIGN.md](docs/REDESIGN.md) — 再設計書（To-Be / アーキテクチャ・プロトコル・VAD・移行手順）
+- [docs/REFACTORING_PLAN.md](docs/REFACTORING_PLAN.md) — リファクタリング計画（フェーズ・優先度・完了条件）
 - [AGENTS.md](AGENTS.md) — 作業メモリー（コマンド・規約・ハマりどころ・現状の TODO）
 
 ## 必要なもの
