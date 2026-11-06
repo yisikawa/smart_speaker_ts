@@ -56,15 +56,75 @@ export function isHallucination(text: string): boolean {
  * 直前に自分（アシスタント）が読み上げた内容のエコーか。
  *
  * スピーカー出力をマイクが拾うと「自分の声をユーザーの発話として認識」してしまい、
- * 1 人で会話し続けるループになる。短い相槌は誤判定しやすいので一定長以上のみ判定する。
+ * 1 人で会話し続けるループになる。直近の複数の応答と比較し、
+ * 完全一致（部分文字列）に加えて文字バイグラムの一致率でも判定する。
  */
-export function isEchoOfReply(text: string, lastReply: string): boolean {
+export function isEchoOfReply(text: string, lastReplies: string | string[]): boolean {
+  const replies = Array.isArray(lastReplies) ? lastReplies : [lastReplies];
   const target = normalizeTranscript(text);
-  if (target.length < 6) {
+  if (target.length < 4) {
     return false;
   }
-  const reply = normalizeTranscript(lastReply);
-  return reply.length > 0 && reply.includes(target);
+  for (const reply of replies) {
+    const normalized = normalizeTranscript(reply);
+    if (!normalized) {
+      continue;
+    }
+    if (normalized.includes(target)) {
+      return true;
+    }
+    if (bigramCoverage(target, normalized) >= 0.6) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** target の文字バイグラムが reference に含まれる割合（0..1） */
+function bigramCoverage(target: string, reference: string): number {
+  if (target.length < 2) {
+    return 0;
+  }
+  let hit = 0;
+  const total = target.length - 1;
+  for (let i = 0; i < total; i += 1) {
+    if (reference.includes(target.slice(i, i + 2))) {
+      hit += 1;
+    }
+  }
+  return hit / total;
+}
+
+/**
+ * 意味を持たない短すぎる断片か（環境音・自分の声の拾い・息遣いなど）。
+ * 「はい」「うん」のような正当な相槌は許可する。
+ */
+const SHORT_REPLY_ALLOWLIST = new Set([
+  "はい",
+  "うん",
+  "ええ",
+  "そう",
+  "いや",
+  "いいえ",
+  "いえ",
+  "うんうん",
+  "そうだね",
+  "ちがう",
+  "ない",
+  "ある",
+  "ok",
+]);
+
+export function isTooShortFragment(text: string): boolean {
+  const normalized = normalizeTranscript(text);
+  if (!normalized) {
+    return true;
+  }
+  // 2 文字以下は相槌として意味を持つものだけ許可する（3 文字以上は内容があるとみなす）
+  if (normalized.length > 2) {
+    return false;
+  }
+  return !SHORT_REPLY_ALLOWLIST.has(normalized);
 }
 
 /** 同じ発話の繰り返しか（連続して同一結果が返る幻聴・エコーの抑制） */

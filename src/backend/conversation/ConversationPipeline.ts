@@ -11,7 +11,7 @@ import {
 } from "../core/ports";
 import { Logger } from "../core/logger";
 import { wavDurationMs } from "../services/wav";
-import { isEchoOfReply, isHallucination, normalizeTranscript } from "../services/transcriptFilter";
+import { isEchoOfReply, isHallucination, isTooShortFragment, normalizeTranscript } from "../services/transcriptFilter";
 import { ConversationHistory } from "./ConversationHistory";
 import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
@@ -66,6 +66,8 @@ export class ConversationPipeline {
   private repeatCount = 0;
   /** 直前に読み上げた応答（マイクが拾った自分の声を弾く） */
   private lastSpokenReply = "";
+  /** 直近に読み上げた応答（最大 3 件。断片エコーの判定に使う） */
+  private recentReplies: string[] = [];
 
   constructor(private readonly deps: PipelineDeps) {}
 
@@ -264,8 +266,13 @@ export class ConversationPipeline {
         this.deps.logger.warn(`幻聴と判定したため破棄します: ${text}`);
         return { kind: "ignored", reason: "hallucination" };
       }
+      // 意味のない短い断片（環境音・自分の声の拾い）は会話に載せない
+      if (isTooShortFragment(text)) {
+        this.deps.logger.warn(`短すぎる認識結果のため破棄します: ${text}`);
+        return { kind: "ignored", reason: "short" };
+      }
       // 自分の声（スピーカー出力）を拾った場合は会話に載せない
-      if (isEchoOfReply(text, this.lastSpokenReply)) {
+      if (isEchoOfReply(text, this.recentReplies.length > 0 ? this.recentReplies : this.lastSpokenReply)) {
         this.deps.logger.warn(`自分の発話のエコーと判定したため破棄します: ${text}`);
         return { kind: "ignored", reason: "echo" };
       }
@@ -509,6 +516,10 @@ export class ConversationPipeline {
     }
     this.deps.history.add("assistant", reply);
     this.lastSpokenReply = reply;
+    this.recentReplies.unshift(reply);
+    if (this.recentReplies.length > 3) {
+      this.recentReplies.pop();
+    }
     // 応答が成立したので「同じ発話の連続」カウントをリセットする
     // （幻聴ループ対策の判定が、正当な聞き返しまで落とさないようにする）
     this.lastAcceptedTranscript = "";

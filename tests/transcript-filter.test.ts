@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isEchoOfReply,
   isHallucination,
+  isTooShortFragment,
   joinSegments,
   normalizeTranscript,
 } from "../src/backend/services/transcriptFilter";
@@ -41,13 +42,28 @@ test("isHallucination は通常の日本語を幻聴と判定しない", () => {
   }
 });
 
-test("isEchoOfReply は自分が読み上げた内容のエコーだけを検出する", () => {
-  const reply = "今日はいい天気だよ、散歩でもどう？";
-  assert.equal(isEchoOfReply("今日はいい天気だよ、散歩でもどう", reply), true);
-  assert.equal(isEchoOfReply("散歩でもどう", reply), true);
-  // 短い相槌は誤判定しやすいので対象外
-  assert.equal(isEchoOfReply("はい", reply), false);
-  assert.equal(isEchoOfReply("今日の天気は？", reply), false);
+test("isEchoOfReply は自分が読み上げた内容のエコーを検出する（直近の複数応答・断片も）", () => {
+  const replies = ["今日はいい天気だよ、散歩でもどう？", "そうなんだ、見つかるのもワクワクするんだ！"];
+  assert.equal(isEchoOfReply("今日はいい天気だよ、散歩でもどう", replies), true);
+  assert.equal(isEchoOfReply("散歩でもどう", replies), true);
+  // 断片（4 文字）でもバイグラムの一致率が高ければエコーとみなす
+  assert.equal(isEchoOfReply("ワクワクする", replies), true);
+  // 短すぎる相槌・無関係な発話は対象外
+  assert.equal(isEchoOfReply("はい", replies), false);
+  assert.equal(isEchoOfReply("明日の予定を教えて", replies), false);
+  // 1 件だけ渡す従来の使い方も維持する
+  assert.equal(isEchoOfReply("散歩でもどう", replies[0]), true);
+});
+
+test("isTooShortFragment は意味のない断片だけを弾く", () => {
+  // 環境音・自分の声の拾いで出やすい断片
+  for (const text of ["ただ", "し込", "あっ", "ん", "。。。", ""]) {
+    assert.equal(isTooShortFragment(text), true, `破棄すべき: ${text}`);
+  }
+  // 正当な相槌は許可
+  for (const text of ["はい", "うん", "そう", "いいえ", "そうだね", "明日の予定を教えて"]) {
+    assert.equal(isTooShortFragment(text), false, `許可すべき: ${text}`);
+  }
 });
 
 test("joinSegments は no_speech_prob / avg_logprob で低信頼の区間を落とす", () => {

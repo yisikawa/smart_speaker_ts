@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 91 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 94 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
@@ -71,6 +71,10 @@ src/backend/index.ts                                ← Composition Root（DI �
 15. **中断判定は「自分の AbortController が aborted か」で行う**
     Node は接続断で `Error: aborted` を投げるため、`/abort/i.test(message)` で判定すると
     Ollama 側の切断まで黙って握りつぶし「回答が返らない（ログも出ない）」になる（回帰テストあり）。
+16. **エコーは必ず起きる前提で設計する**
+    TTS は ffplay（ブラウザ外）で再生するため、ブラウザの `echoCancellation` では自分の声を消せない。
+    - バージインは既定で無効（`conversation.barge_in_enabled = false`）。有効化はヘッドホン前提
+    - 直近 3 件の応答と一致する断片（バイグラム一致率 0.6 以上を含む）と 2 文字以下の断片は破棄する
 
 ## 5. 環境前提（この PC）
 

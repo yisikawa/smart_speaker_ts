@@ -271,7 +271,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     followup_timeout_seconds: 6.0,
     followup_guard_ms: 250,
     keep_listening: true,
-    barge_in_enabled: true,
+    barge_in_enabled: false,
     barge_in_min_score: 0.08,
   },
   stt: {

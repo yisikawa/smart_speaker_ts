@@ -117,7 +117,8 @@ npm start              # node dist/backend/index.js
 - **応答言語ガード**: ハングル（韓国語）が混入した応答は 1 回だけ日本語で再生成（小規模モデルの言語混入対策）
 - **幻聴（hallucination）対策**: whisper.cpp の非音声トークン抑制・文脈抑制・信頼度フィルタで、
   無音や雑音に対する「ご視聴ありがとうございました。」等の誤認識を破棄（[docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md)）
-- **自分の声のエコー対策**: 直前の読み上げ内容と一致する認識結果は会話に載せない（1 人で会話し続けるループ防止）
+- **自分の声のエコー対策**: 直前の読み上げ内容と一致する認識結果・意味のない短い断片は会話に載せない（1 人で会話し続けるループ防止）。
+  バージインは既定で無効（ブラウザのエコーキャンセルは ffplay の再生音には効かないため。有効化はヘッドホン推奨）
 - バージイン（発話で再生を停止し、その発話を次のターンとして処理）
 - フォローアップ（連続会話）
 - キャラクター定義（`config/characters/*.toml`）の人格・応答ルール・口癖をプロンプトへ反映
@@ -242,7 +243,7 @@ logs/                          # app.log（実行ログ）
 | 話している途中で切れる | ① `audio.max_record_seconds`（既定 30 秒）に達していないか ② `audio.silence_duration`（既定 1.5 秒）より長く黙っていないか ③ `audio.silence_threshold_max`（既定 0.06）でしきい値が上がりすぎていないか。`logs/app.log` の「ブラウザから音声を受信: 1234ms」で実際に送られた長さを確認できる |
 | タイピング音や物音で聞き取りが始まる | `audio.debounce_frames`（既定 3 = 60ms 連続）を増やす、`audio.silence_threshold` を上げる、`audio.silence_threshold_max` を下げる |
 | 言っていない発話が勝手に入力される（「ご視聴ありがとうございました。」等） | Whisper の幻聴。`stt.suppress_non_speech` / `stt.drop_no_speech_prob` / `stt.filter_hallucinations`（既定で有効）と `audio.silence_threshold`（0.03〜0.05 に上げる）を確認。詳細は [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) |
-| 自分で会話が続いてしまう（エコー） | スピーカーの音をマイクが拾っています。ヘッドホンを使う、`conversation.barge_in_enabled = false`、`audio.output_volume` を下げる |
+| 自分で会話が続いてしまう（エコー） | スピーカーの音をマイクが拾っています。ヘッドホンを使う、`conversation.barge_in_enabled = false`（既定）、`audio.output_volume` を下げる。直近の応答と一致する断片・2 文字以下の断片は自動で破棄されます（`logs/app.log` に「エコーと判定」「短すぎる認識結果」） |
 | LLM が 404（`model 'xxx' not found`） | `llm.model` が Ollama に無い。`ollama list` で確認し `ollama pull <model>` を実行。**`settings.toml` を書き換えただけでは反映されない**ので `POST /api/config/reload` か再起動も行う（起動時にも警告が出ます） |
 | 返答が返ってこない | `logs/app.log` に `ERROR [LLM]` が出ていないか確認。接続断は「Ollama との接続が中断されました（モデルの読み込み失敗・VRAM 不足など）」として通知されます。タイムアウトは `llm.response_timeout_seconds` |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |

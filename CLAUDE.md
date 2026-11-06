@@ -5,6 +5,6 @@
 
 - 仕様書: `docs/DESIGN.md`（As-Is） / `docs/REDESIGN.md`（To-Be）
 - ビルド: `npm run build`（フロントは **esbuild バンドル**。`tsc` 出力はブラウザで動きません）
-- テスト: `npm test`（`node:test`, 91 件, `--test-timeout=30000`）
+- テスト: `npm test`（`node:test`, 94 件, `--test-timeout=30000`）
 - 起動: `.\start.bat`
 - ブランチ: 作業は `develop`（`main` は動作確認済みの状態）
