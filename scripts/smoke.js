@@ -28,6 +28,42 @@ function getJson(pathname) {
   });
 }
 
+function requestJson(method, pathname, body) {
+  const payload = body === undefined ? null : JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const url = new URL(`${BASE}${pathname}`);
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method,
+        headers: payload
+          ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
+          : {},
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => {
+          raw += chunk;
+        });
+        res.on("end", () => {
+          try {
+            resolve({ status: res.statusCode, body: raw ? JSON.parse(raw) : null });
+          } catch (error) {
+            reject(new Error(`${pathname} の応答を解析できません: ${raw.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    if (payload) {
+      req.write(payload);
+    }
+    req.end();
+  });
+}
+
 function waitForWebSocket() {
   return new Promise((resolve) => {
     const url = `${BASE.replace(/^http/, "ws")}/ws`;
@@ -73,6 +109,23 @@ function waitForWebSocket() {
 
   const history = await getJson("/api/history");
   console.log("[smoke] history messages:", history.messages?.length ?? 0);
+
+  // 設定の往復（PATCH は現在値と同じ値を書き戻すだけで、挙動は変えない）
+  const patched = await requestJson("PATCH", "/api/config", {
+    llm: { temperature: config.llm?.temperature },
+  });
+  if (patched.status !== 200) {
+    throw new Error(`PATCH /api/config が ${patched.status} を返しました`);
+  }
+  console.log(
+    "[smoke] config patch:",
+    JSON.stringify({ temperature: patched.body?.llm?.temperature, warnings: patched.body?.warnings?.length ?? 0 })
+  );
+  const reloaded = await requestJson("POST", "/api/config/reload");
+  if (reloaded.status !== 200) {
+    throw new Error(`POST /api/config/reload が ${reloaded.status} を返しました`);
+  }
+  console.log("[smoke] config reload: OK");
 
   const devices = await getJson("/api/audio-devices");
   console.log("[smoke] audio devices:", devices.devices?.map((d) => d.name).join(", ") || "(なし)");

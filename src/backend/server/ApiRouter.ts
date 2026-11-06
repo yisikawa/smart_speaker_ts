@@ -1,20 +1,20 @@
 import { Router, Request, RequestHandler, Response } from "express";
-import type { HealthReport, ServiceStatus } from "../../shared/protocol";
+import type { HealthReport } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { AppConfig, DeepPartial } from "../config/schema";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
-import { AudioIO, LanguageModel, SpeechToText, TextToSpeech } from "../core/ports";
+import { AudioIO } from "../core/ports";
 import { CharacterService } from "../services/CharacterService";
+import { ServiceMonitor } from "./ServiceMonitor";
 
 export interface ApiDeps {
   config: ConfigManager;
   pipeline: ConversationPipeline;
   audio: AudioIO;
-  llm: LanguageModel;
-  stt: SpeechToText;
-  tts: TextToSpeech;
   character: CharacterService;
+  /** 依存サービスの疎通（WebSocket の hello と同じ判定を共有する） */
+  serviceMonitor: ServiceMonitor;
   version: string;
   startedAt: number;
 }
@@ -33,14 +33,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   const router = Router();
   const logger = new Logger("API");
 
-  const serviceStatus = async (): Promise<ServiceStatus> => {
-    const [llm, tts, stt] = await Promise.all([
-      deps.llm.isAvailable(),
-      deps.tts.isAvailable(),
-      deps.stt.isAvailable(),
-    ]);
-    return { llm, tts, stt };
-  };
+  const serviceStatus = async (): Promise<HealthReport["services"]> => deps.serviceMonitor.refresh();
 
   router.get(
     "/health",
@@ -72,8 +65,17 @@ export function createApiRouter(deps: ApiDeps): Router {
     res.json(deps.character.get());
   });
 
+  /**
+   * 設定レスポンス（マスク済みの現在値＋検証で補正された内容）。
+   * `sanitize` の結果は `/api/health` と同じ `getWarnings()` を使う。
+   */
+  const configPayload = (): AppConfig & { warnings: string[] } => ({
+    ...deps.config.getMasked(),
+    warnings: deps.config.getWarnings(),
+  });
+
   router.get("/config", (_req, res) => {
-    res.json(deps.config.getMasked());
+    res.json(configPayload());
   });
 
   router.patch("/config", (req, res) => {
@@ -85,7 +87,7 @@ export function createApiRouter(deps: ApiDeps): Router {
     try {
       deps.config.update(patch);
       deps.character.reload();
-      res.json(deps.config.getMasked());
+      res.json(configPayload());
     } catch (error) {
       logger.error("設定の更新に失敗しました", error);
       res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -95,7 +97,7 @@ export function createApiRouter(deps: ApiDeps): Router {
   router.post("/config/reload", (_req, res) => {
     deps.config.reload();
     deps.character.reload();
-    res.json(deps.config.getMasked());
+    res.json(configPayload());
   });
 
   router.get("/history", (_req, res) => {

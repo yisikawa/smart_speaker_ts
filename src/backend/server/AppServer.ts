@@ -9,6 +9,7 @@ import { Logger } from "../core/logger";
 import { AudioIO, LanguageModel, SpeechToText, TextToSpeech } from "../core/ports";
 import { CharacterService } from "../services/CharacterService";
 import { createApiRouter } from "./ApiRouter";
+import { ServiceMonitor } from "./ServiceMonitor";
 import { WsHub } from "./WsHub";
 
 // 型定義パッケージ（@types/cors）への依存を避けるため require で読み込む
@@ -37,11 +38,17 @@ export class AppServer {
   private readonly logger: Logger;
   private readonly startedAt = Date.now();
   private hub: WsHub | null = null;
-  private services: ServiceStatus = { llm: false, tts: false, stt: false };
-  private serviceTimer: NodeJS.Timeout | null = null;
+  /** 依存サービスの疎通（定期更新） */
+  private readonly services: ServiceMonitor;
 
   constructor(private readonly deps: AppServerDeps) {
     this.logger = deps.logger ?? new Logger("Server");
+    this.services = new ServiceMonitor({
+      llm: deps.llm,
+      tts: deps.tts,
+      stt: deps.stt,
+      logger: this.logger,
+    });
     this.app = express();
     this.app.disable("x-powered-by");
     this.app.use(cors());
@@ -54,10 +61,8 @@ export class AppServer {
         config: deps.config,
         pipeline: deps.pipeline,
         audio: deps.audio,
-        llm: deps.llm,
-        stt: deps.stt,
-        tts: deps.tts,
         character: deps.character,
+        serviceMonitor: this.services,
         version: deps.version,
         startedAt: this.startedAt,
       })
@@ -108,26 +113,13 @@ export class AppServer {
     }
   }
 
-  /** WsHub の hello で使うサービス疎通状態 */
+  /** WsHub の hello で使うサービス疎通状態（直近の定期確認結果） */
   serviceStatus(): ServiceStatus {
-    return this.services;
-  }
-
-  private async refreshServices(): Promise<void> {
-    const [llm, tts, stt] = await Promise.all([
-      depsSafe(() => this.deps.llm.isAvailable()),
-      depsSafe(() => this.deps.tts.isAvailable()),
-      depsSafe(() => this.deps.stt.isAvailable()),
-    ]);
-    this.services = { llm, tts, stt };
+    return this.services.current;
   }
 
   async start(): Promise<void> {
-    await this.refreshServices();
-    this.serviceTimer = setInterval(() => {
-      void this.refreshServices();
-    }, 30000);
-    this.serviceTimer.unref?.();
+    this.services.start();
 
     this.hub = new WsHub({
       server: this.server,
@@ -135,7 +127,7 @@ export class AppServer {
       config: this.deps.config,
       character: this.deps.character,
       version: this.deps.version,
-      serviceStatus: () => this.services,
+      serviceStatus: () => this.services.current,
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -156,10 +148,7 @@ export class AppServer {
   }
 
   async stop(): Promise<void> {
-    if (this.serviceTimer) {
-      clearInterval(this.serviceTimer);
-      this.serviceTimer = null;
-    }
+    this.services.stop();
     if (this.hub) {
       await this.hub.dispose();
       this.hub = null;
@@ -168,13 +157,5 @@ export class AppServer {
       this.server.close(() => resolve());
     });
     this.logger.info("サーバーを停止しました");
-  }
-}
-
-async function depsSafe(check: () => Promise<boolean>): Promise<boolean> {
-  try {
-    return await check();
-  } catch {
-    return false;
   }
 }

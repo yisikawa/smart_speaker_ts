@@ -13,7 +13,7 @@
 | P2 パイプライン分割 | ✅ 完了 | `SpeechGate`（破棄判定）/ `TurnRunner`（LLM→TTS）/ `TranscriptionRunner`（STT＋採否）/ `ListeningLoop`（録音）/ `PlaybackLoop`（再生・バージイン）に分割。Pipeline 604 → 395 行。破棄→`turn_skipped` は `TranscriptionRunner` の戻り値 1 経路。ブラウザモードでテキスト送信後にサーバー録音を開く不具合も修正 |
 | P3 フロントエンド分割 | ✅ 完了 | `app.ts` 684 → 207 行。`WsClient`（接続・再接続・hello 待ち）/ `ChatView`（描画）/ `MicLoop`（録音ループ・マイク確認・バージイン）/ `dom`（ヘルパ）に分割。esbuild の IIFE バンドルは維持（`tests/frontend-script.test.ts` は無変更で通過） |
 | P4 設定整理 | ✅ 完了 | `sanitize` を宣言的テーブル（`CLAMP_RULES`）へ / `npm run config:default` で `settings.default.toml` を schema から同期（コメント保持）/ ドリフト検出テスト / 未実装セクションを `UNSUPPORTED_SECTIONS` と `getUnsupportedSections()` で明示 / 保存前に `settings.toml.bak` を退避 |
-| P5 サーバ層整理 | ⬜ 未着手 | |
+| P5 サーバ層整理 | ✅ 完了 | `ServiceMonitor`（疎通の定期確認を 1 箇所へ。`/api/health` と hello が同じ判定を共有）/ `WsHub` のコマンド振り分けを判別共用体の完全マップへ（`CLIENT_COMMANDS` の二重管理を廃止・追加漏れはコンパイルエラー）/ `/api/config` 応答に `warnings` を追加 / `npm run smoke` に config の往復テストを追加 |
 | P6 診断・運用 | ⬜ 未着手 | |
 
 

@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 114 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 117 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -83,6 +83,10 @@ src/backend/index.ts                                ← Composition Root（DI �
     - `ListeningLoop` / `PlaybackLoop` … 録音と再生（バージイン）
     - ブラウザ入力モードでは**録音はクライアントが駆動**する。サーバー側で ffmpeg を開くとマイクを奪うため、
       `runLoop` は応答後にループを終える。
+12-3. **Logger は `deps.logger ?? new Logger("Scope")`**。`child()` を使うと `[STT:STT]` のように二重表示になる。
+12-5. **WebSocket のコマンドは `WsHub.commandHandlers` の完全マップで受ける**
+    `ClientCommand` に追加したらマップにも実装する（未実装はコンパイルエラー）。`CLIENT_COMMANDS` のような Set を併設しない。
+12-6. **サービスの疎通確認は `ServiceMonitor` に集約**（`/api/health` は `refresh()`、hello は `current`）。
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする

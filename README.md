@@ -181,13 +181,14 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 
 > `PATCH /api/config` は `settings.toml` を正規化して書き出すため、手書きコメントは失われます。
 > 上書き前の内容は `config/settings.toml.bak` に退避されます。
+> `GET/PATCH /api/config` の応答には、検証で補正された内容が `warnings` として含まれます（`/api/health` と同じ内容）。
 
 ## 開発
 
 ```powershell
 npm run verify         # typecheck → test → build をまとめて実行（作業後はこれ 1 本）
 npm run typecheck      # 型チェック（backend）
-npm test               # ユニット/結合テスト（node:test, 114 ケース）
+npm test               # ユニット/結合テスト（node:test, 117 ケース）
 npm run clean:tests    # dist-test の削除（pretest から自動実行）
 npm run config:default # schema.ts の既定値を settings.default.toml へ同期（コメントは保持）
 npm run smoke          # 起動中サーバーの疎通確認

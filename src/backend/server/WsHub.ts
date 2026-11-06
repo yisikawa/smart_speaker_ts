@@ -18,19 +18,6 @@ export interface WsHubDeps {
   heartbeatMs?: number;
 }
 
-const CLIENT_COMMANDS = new Set([
-  "start_listening",
-  "stop_listening",
-  "submit_text",
-  "submit_audio",
-  "speak",
-  "stop_speaking",
-  "simulate_wakeword",
-  "clear_history",
-  "get_state",
-  "ping",
-]);
-
 /**
  * WebSocket ハブ。
  * パイプラインイベントの配信と、クライアントコマンドの検証・振り分けを担当する。
@@ -122,7 +109,7 @@ export class WsHub {
         return;
       }
       const command = parsed as ClientCommand;
-      if (!command || typeof command.type !== "string" || !CLIENT_COMMANDS.has(command.type)) {
+      if (!command || typeof command.type !== "string" || !this.commandHandlers[command.type]) {
         ws.send(JSON.stringify({ type: "error", message: `不明なコマンドです: ${String((parsed as { type?: string })?.type)}` }));
         return;
       }
@@ -141,41 +128,61 @@ export class WsHub {
   }
 
   private handleCommand(ws: WebSocket, command: ClientCommand): void {
-    switch (command.type) {
-      case "start_listening":
-        void this.deps.pipeline.handleWakeWord("UI");
-        break;
-      case "stop_listening":
-        this.deps.pipeline.stop();
-        break;
-      case "submit_text":
-        void this.deps.pipeline.submitText(String(command.text ?? ""));
-        break;
-      case "submit_audio":
-        this.handleSubmitAudio(ws, command);
-        break;
-      case "stop_speaking":
-        this.deps.pipeline.stopSpeaking();
-        break;
-      case "speak":
-        void this.deps.pipeline.speak(String(command.text ?? ""));
-        break;
-      case "simulate_wakeword":
-        void this.deps.pipeline.handleWakeWord(command.phrase ?? "さくら");
-        break;
-      case "clear_history":
-        this.deps.pipeline.clearHistory();
-        ws.send(JSON.stringify({ type: "history", messages: [] }));
-        break;
-      case "get_state":
-        ws.send(JSON.stringify({ type: "state", state: this.deps.pipeline.getState() }));
-        ws.send(JSON.stringify({ type: "history", messages: this.deps.pipeline.getHistory() }));
-        break;
-      case "ping":
-        ws.send(JSON.stringify({ type: "pong" }));
-        break;
+    const handler = this.commandHandlers[command.type] as
+      | ((cmd: ClientCommand, socket: WebSocket) => void)
+      | undefined;
+    if (!handler) {
+      ws.send(JSON.stringify({ type: "error", message: `不明なコマンドです: ${String(command.type)}` }));
+      return;
     }
+    handler(command, ws);
   }
+
+  /**
+   * コマンドの振り分け表。
+   *
+   * `ClientCommand` の判別共用体をキーにした完全なマップなので、
+   * コマンドを追加すると **ここに実装しない限りコンパイルエラー**になる（検証漏れが起きない）。
+   */
+  private readonly commandHandlers: {
+    [K in ClientCommand["type"]]: (
+      command: Extract<ClientCommand, { type: K }>,
+      ws: WebSocket
+    ) => void;
+  } = {
+    start_listening: () => {
+      void this.deps.pipeline.handleWakeWord("UI");
+    },
+    stop_listening: () => {
+      this.deps.pipeline.stop();
+    },
+    submit_text: (command) => {
+      void this.deps.pipeline.submitText(String(command.text ?? ""));
+    },
+    submit_audio: (command, ws) => {
+      this.handleSubmitAudio(ws, command);
+    },
+    stop_speaking: () => {
+      this.deps.pipeline.stopSpeaking();
+    },
+    speak: (command) => {
+      void this.deps.pipeline.speak(String(command.text ?? ""));
+    },
+    simulate_wakeword: (command) => {
+      void this.deps.pipeline.handleWakeWord(command.phrase ?? "さくら");
+    },
+    clear_history: (_command, ws) => {
+      this.deps.pipeline.clearHistory();
+      ws.send(JSON.stringify({ type: "history", messages: [] }));
+    },
+    get_state: (_command, ws) => {
+      ws.send(JSON.stringify({ type: "state", state: this.deps.pipeline.getState() }));
+      ws.send(JSON.stringify({ type: "history", messages: this.deps.pipeline.getHistory() }));
+    },
+    ping: (_command, ws) => {
+      ws.send(JSON.stringify({ type: "pong" }));
+    },
+  };
 
   private handleSubmitAudio(
     ws: WebSocket,
