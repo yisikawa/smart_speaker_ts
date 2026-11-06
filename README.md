@@ -125,6 +125,10 @@ npm start              # node dist/backend/index.js
 `config/settings.toml` に**変更したい項目だけ**を書きます。未指定は `config/settings.default.toml`
 （および `src/backend/config/schema.ts` の `DEFAULT_CONFIG`）で補完されます。
 
+> `config/settings.toml` は **`.gitignore` 対象（各自のローカル設定）** です。
+> ファイルが無い場合は `config/settings.default.toml` の値だけで起動するため、変更したい項目があるときだけ作成してください
+> （`config/settings.default.toml` をコピーして必要な行だけ残すのが簡単です）。
+
 主な項目:
 
 | テーブル | 主なキー |

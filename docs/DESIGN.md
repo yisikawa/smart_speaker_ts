@@ -54,7 +54,7 @@ smart_speaker_ts/
 ├── tsconfig.json              # target ES2022, module commonjs, outDir ./dist
 ├── README.md
 ├── config/
-│   ├── settings.toml          # ユーザー設定
+│   ├── settings.toml          # ユーザー設定（.gitignore 対象）
 │   ├── settings.default.toml  # 既定設定（未使用の項目も含む）
 │   └── characters/sakura.toml # キャラクター定義
 ├── scripts/

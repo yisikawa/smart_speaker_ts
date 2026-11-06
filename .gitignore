@@ -11,3 +11,6 @@ whisper.cpp/*.exe
 whisper.cpp/_cpu-backup/
 *.tsbuildinfo
 .DS_Store
+
+# ユーザー設定（既定値は config/settings.default.toml）
+config/settings.toml
