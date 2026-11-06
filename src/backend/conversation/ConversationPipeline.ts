@@ -509,6 +509,10 @@ export class ConversationPipeline {
     }
     this.deps.history.add("assistant", reply);
     this.lastSpokenReply = reply;
+    // 応答が成立したので「同じ発話の連続」カウントをリセットする
+    // （幻聴ループ対策の判定が、正当な聞き返しまで落とさないようにする）
+    this.lastAcceptedTranscript = "";
+    this.repeatCount = 0;
     this.emitHistory();
 
     this.setState("speaking");

@@ -397,6 +397,29 @@ test("自分の声（直前の応答のエコー）は会話に載せない", as
   }
 });
 
+test("応答が成立した後の同じ発話は破棄しない（連続同一判定をリセットする）", async () => {
+  const harness = setup({
+    specs: [
+      { hasSpeech: false, reason: "no_speech" },
+      { hasSpeech: false, reason: "no_speech" },
+    ],
+    sttTexts: ["もう一度お願いします"],
+  });
+  try {
+    const wav = encodeWav(Buffer.alloc(3200, 1), 16000);
+    await harness.pipeline.submitAudio(wav);
+    await harness.pipeline.submitAudio(wav);
+
+    assert.equal(harness.llmCalls(), 2, "応答後は同じ発話でも処理する");
+    assert.deepEqual(
+      harness.history.all().map((message) => message.role),
+      ["user", "assistant", "user", "assistant"]
+    );
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("フォローアップが有効なら連続ターンを録音し続ける", async () => {
   const harness = setup({
     specs: [

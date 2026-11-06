@@ -238,6 +238,11 @@ class SumikaApp {
     switch (event.type) {
       case "state":
         this.setState(event.state);
+        // 中断（停止ボタン等）で llm_complete が来なかった場合、途中までの吹き出しが残る。
+        // そのままにすると次の応答が古い吹き出しへ追記されるため、ここで切り離す。
+        if (!BUSY_STATES.includes(event.state) && this.streaming) {
+          this.streaming = null;
+        }
         break;
       case "wakeword_detected":
         this.addSystemNote(`「${event.phrase}」で起動しました`);

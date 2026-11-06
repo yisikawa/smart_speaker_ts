@@ -213,6 +213,27 @@ test("テキスト入力の送信で submit_text が送られる", () => {
   assert.equal(elements.get("textInput")!.value, "");
 });
 
+test("中断で llm_complete が来なくても、次の応答は新しい吹き出しになる", () => {
+  const { elements, ws } = bootApp();
+  ws?.onopen?.();
+  ws?.onmessage?.({ data: JSON.stringify(HELLO) });
+  const conversation = elements.get("conversation")!;
+  const send = (event: unknown): void => {
+    ws?.onmessage?.({ data: JSON.stringify({ type: "event", event }) });
+  };
+
+  send({ type: "state", state: "thinking" });
+  send({ type: "llm_delta", content: "途中まで" });
+  // 停止 → idle（llm_complete は届かない）
+  send({ type: "state", state: "idle" });
+  // 次のターンの応答
+  send({ type: "state", state: "thinking" });
+  send({ type: "llm_delta", content: "新しい応答" });
+
+  const bubbles = conversation.children.filter((child) => child.className === "message assistant");
+  assert.equal(bubbles.length, 2, "中断した吹き出しと新しい吹き出しが分かれること");
+});
+
 test("file:// で開いた場合は WebSocket を作らず、起動方法を案内する", () => {
   const { elements, ws } = bootApp({ protocol: "file:", host: "" });
 
