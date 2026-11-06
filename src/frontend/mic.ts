@@ -248,6 +248,7 @@ export class BrowserMic {
         silenceDurationMs: vad.silenceDurationMs,
         smoothingAlpha: vad.smoothingAlpha,
         relativeThresholdMultiplier: vad.relativeThresholdMultiplier,
+        maxSilenceThreshold: vad.maxSilenceThreshold,
         calibrationMs: vad.calibrationMs,
         debounceFrames: vad.debounceFrames,
         inputGain: vad.inputGain,

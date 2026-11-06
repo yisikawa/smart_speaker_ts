@@ -108,6 +108,8 @@ export interface HelloPayload {
       silenceDurationMs: number;
       smoothingAlpha: number;
       relativeThresholdMultiplier: number;
+      /** 相対しきい値の上限（環境音でしきい値が跳ね上がらないようにする） */
+      maxSilenceThreshold: number;
       calibrationMs: number;
       debounceFrames: number;
       inputGain: number;

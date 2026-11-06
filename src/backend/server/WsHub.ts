@@ -104,6 +104,7 @@ export class WsHub {
             silenceDurationMs: audioConfig.silence_duration * 1000,
             smoothingAlpha: audioConfig.smoothing_alpha,
             relativeThresholdMultiplier: audioConfig.relative_threshold_multiplier,
+            maxSilenceThreshold: audioConfig.silence_threshold_max,
             calibrationMs: audioConfig.calibration_duration * 1000,
             debounceFrames: audioConfig.debounce_frames,
             inputGain: audioConfig.input_gain,

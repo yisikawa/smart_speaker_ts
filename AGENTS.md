@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 84 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 88 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
@@ -62,6 +62,12 @@ src/backend/index.ts                                ← Composition Root（DI �
 10. **フォローアップ上限で勝手に止めない**（`conversation.keep_listening = true`）。
 11. テストは**ハング防止**のため `--test-timeout` 必須。無限ループしうる設定（keep_listening）に注意。
 12. 設定の既定値は `src/backend/config/schema.ts` が単一の真実源。`settings.default.toml` と同期させる。
+13. **VAD のしきい値は「較正」で決まる**
+    - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
+    - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする
+    - 以前は最大値×3 だったため、話し始めてからマイクが開くとしきい値が 0.14 まで跳ね上がり
+      「検出しない／途中で切れる」を起こしていた（回帰テストあり）
+14. **`max_record_seconds`（既定 30 秒）を超えると必ず `max_duration` で切れる**。長文の語尾切れはまずここを疑う。
 
 ## 5. 環境前提（この PC）
 

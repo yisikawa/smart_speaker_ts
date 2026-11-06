@@ -9,12 +9,12 @@ sample_rate = 16000
 frame_ms = 20
 # 発話検出時に遡って取り込むプリロール（ms）
 pre_roll_ms = 300
-# 1 発話の最大長（秒）
-max_record_seconds = 12
-# 無音とみなす RMS しきい値（0..1）
+# 1 発話の最大長（秒）。長めの文でも語尾が切れないよう 30 秒
+max_record_seconds = 30
+# 無音とみなす RMS しきい値（0..1）。タイピング音などの環境音を拾わない下限
 silence_threshold = 0.02
-# この秒数だけ無音が続いたら発話終了
-silence_duration = 1.0
+# この秒数だけ無音が続いたら発話終了（考えながら話す間で切れないよう 1.5 秒）
+silence_duration = 1.5
 # 発話開始までの待ち時間（秒）
 no_speech_timeout = 3.0
 # 入力ゲイン（レベル計算に適用）
@@ -28,11 +28,13 @@ output_device = ""
 # レベルの指数移動平均係数
 smoothing_alpha = 0.1
 # 暗騒音に対する相対しきい値の倍率
-relative_threshold_multiplier = 3.0
+relative_threshold_multiplier = 2.0
+# 相対しきい値の上限（環境音でしきい値が跳ね上がらないようにする）
+silence_threshold_max = 0.06
 # 起動時キャリブレーション時間（秒）
 calibration_duration = 0.5
-# 連続何フレームで発話開始と判定するか
-debounce_frames = 2
+# 連続何フレームで発話開始と判定するか（3 = 60ms。タイピング等の一発音を弾く）
+debounce_frames = 3
 # ffmpeg 実行パス（PATH で解決できない場合に指定）
 ffmpeg_path = ""
 # 再生バックエンド: auto | ffplay | soundplayer

@@ -200,7 +200,7 @@ smart_speaker_ts/
 
 | テーブル | 主なキー | 実際にコードが参照しているか |
 |----------|----------|------------------------------|
-| `[audio]` | sample_rate, max_record_seconds, silence_threshold, silence_duration, no_speech_timeout, input_gain, output_device, input_device, smoothing_alpha, relative_threshold_multiplier, calibration_duration, debounce_frames | `sample_rate`, `max_record_seconds`, `input_device` のみ |
+| `[audio]` | sample_rate, max_record_seconds, silence_threshold, silence_threshold_max, silence_duration, no_speech_timeout, input_gain, output_device, input_device, smoothing_alpha, relative_threshold_multiplier, calibration_duration, debounce_frames | `sample_rate`, `max_record_seconds`, `input_device` のみ |
 | `[wakeword]` | wakeword_path, threshold, avg_threshold, min_scores | 未参照（ウェイクワードエンジン未実装） |
 | `[conversation]` | followup_enabled, max_followup_turns, followup_timeout_seconds, followup_guard_ms, barge_in_enabled, barge_in_min_score | `followup_*` をログに使用するのみ。`barge_in_*`, `followup_guard_ms` は未使用 |
 | `[stt]` | model_path, language, use_gpu, flash_attn, beam_size | `model_path`, `language`, `use_gpu` のみ（`-ng` の意味が逆） |

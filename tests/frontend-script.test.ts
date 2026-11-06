@@ -159,6 +159,7 @@ const HELLO = {
       silenceDurationMs: 1000,
       smoothingAlpha: 0.1,
       relativeThresholdMultiplier: 3,
+    maxSilenceThreshold: 0.06,
       calibrationMs: 500,
       debounceFrames: 2,
       inputGain: 1,

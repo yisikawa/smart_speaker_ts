@@ -32,6 +32,11 @@ export interface AudioConfig {
   smoothing_alpha: number;
   /** 暗騒音に対する相対しきい値の倍率 */
   relative_threshold_multiplier: number;
+  /**
+   * 相対しきい値の上限（0..1）。
+   * タイピング・物音・空調などの環境音で暗騒音が膨らんでも、これ以上は上げない。
+   */
+  silence_threshold_max: number;
   /** 起動時キャリブレーション時間（秒） */
   calibration_duration: number;
   /** 連続何フレームで発話開始と判定するか */
@@ -235,18 +240,19 @@ export const DEFAULT_CONFIG: AppConfig = {
     sample_rate: 16000,
     frame_ms: 20,
     pre_roll_ms: 300,
-    max_record_seconds: 12,
+    max_record_seconds: 30,
     silence_threshold: 0.02,
-    silence_duration: 1.0,
+    silence_duration: 1.5,
     no_speech_timeout: 3.0,
     input_gain: 1.0,
     output_volume: 1.0,
     input_device: "",
     output_device: "",
     smoothing_alpha: 0.1,
-    relative_threshold_multiplier: 3.0,
+    relative_threshold_multiplier: 2.0,
+    silence_threshold_max: 0.06,
     calibration_duration: 0.5,
-    debounce_frames: 2,
+    debounce_frames: 3,
     ffmpeg_path: "",
     player: "auto",
     device_settle_ms: 250,

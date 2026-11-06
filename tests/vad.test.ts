@@ -89,21 +89,21 @@ test("最大録音時間を超えると max_duration で終了する", () => {
 
 test("キャリブレーション中の暗騒音より下の音は発話と判定しない", () => {
   const engine = new VadEngine(
-    { ...SETTINGS, calibrationMs: 100, silenceThreshold: 0.001, relativeThresholdMultiplier: 4 },
+    { ...SETTINGS, calibrationMs: 100, silenceThreshold: 0.02, relativeThresholdMultiplier: 4, maxSilenceThreshold: 0.1 },
     { maxDurationMs: 1000, startTimeoutMs: 400 }
   );
 
-  // 暗騒音（RMS 約 0.061）
+  // 暗騒音（RMS 約 0.024）: 環境音として学習され、しきい値は 0.024 × 4 = 0.096 になる
   for (let i = 0; i < 5; i++) {
-    engine.push(loudFrame(2000));
+    engine.push(loudFrame(800));
   }
 
-  // 暗騒音より小さい音（RMS 約 0.031）はしきい値を超えない
+  // 暗騒音より大きいが、しきい値より小さい音（RMS 約 0.031）は発話と判定しない
   for (let i = 0; i < 10; i++) {
     engine.push(loudFrame(1000));
   }
   assert.equal(engine.hasSpeech, false);
-  assert.ok(engine.threshold > 0.061, `threshold=${engine.threshold}`);
+  assert.ok(engine.threshold > 0.031, `threshold=${engine.threshold}`);
 });
 
 test("frames / peakLevel を集計する", () => {
@@ -137,6 +137,91 @@ test("128 サンプルずつ届いても VAD が発話を検出する（AudioWor
 
   assert.equal(speech, true, "128 サンプル単位でも 20ms フレームを組み立てて検出できること");
   assert.ok(engine.frames > 0);
+});
+
+test("較正は中央値を使うため、一発の物音ではしきい値が跳ね上がらない", () => {
+  const engine = new VadEngine(
+    {
+      ...SETTINGS,
+      calibrationMs: 100, // 5 フレーム
+      silenceThreshold: 0.02,
+      relativeThresholdMultiplier: 2,
+      maxSilenceThreshold: 0.06,
+    },
+    { maxDurationMs: 1000, startTimeoutMs: 500 }
+  );
+
+  // 4 フレーム無音 + 1 フレームだけ大きな物音（タイピング等を想定）
+  for (let i = 0; i < 4; i++) {
+    engine.push(silentFrame());
+  }
+  engine.push(loudFrame(16000));
+
+  // 中央値は 0 なので、しきい値は絶対値の 0.02 に留まる（最大値を使うと 0.06 まで跳ね上がる）
+  assert.ok(engine.threshold <= 0.021, `threshold=${engine.threshold}`);
+});
+
+test("暗騒音が大きい環境でもしきい値は上限（silence_threshold_max）を超えない", () => {
+  const engine = new VadEngine(
+    {
+      ...SETTINGS,
+      calibrationMs: 100,
+      silenceThreshold: 0.02,
+      relativeThresholdMultiplier: 4,
+      maxSilenceThreshold: 0.06,
+    },
+    { maxDurationMs: 1000, startTimeoutMs: 500 }
+  );
+
+  // 環境音として妥当な範囲（RMS 約 0.024）→ 0.024 × 4 = 0.096 だが上限 0.06 でクランプされる
+  for (let i = 0; i < 8; i++) {
+    engine.push(loudFrame(800));
+  }
+
+  assert.ok(engine.threshold <= 0.0601, `threshold=${engine.threshold}`);
+  assert.ok(engine.threshold > 0.02, `threshold=${engine.threshold}`);
+});
+
+test("較正中に発話（大きな音）が入っても、しきい値は発話レベルまで跳ね上がらない", () => {
+  const engine = new VadEngine(
+    {
+      ...SETTINGS,
+      calibrationMs: 100,
+      silenceThreshold: 0.02,
+      relativeThresholdMultiplier: 2,
+      maxSilenceThreshold: 0.06,
+    },
+    { maxDurationMs: 2000, startTimeoutMs: 1000 }
+  );
+
+  // マイクを開いた瞬間から話している状態（較正がすべて発話レベル）
+  for (let i = 0; i < 5; i++) {
+    engine.push(loudFrame(4000)); // RMS 約 0.12
+  }
+
+  // 環境音として学習しないため、しきい値は絶対値のまま（= 発話を検出できる）
+  assert.ok(engine.threshold <= 0.021, `threshold=${engine.threshold}`);
+});
+
+test("タイピングのような単発音では発話を開始しない（debounce 3 フレーム）", () => {
+  const engine = new VadEngine(
+    { ...SETTINGS, debounceFrames: 3, calibrationMs: 0 },
+    { maxDurationMs: 2000, startTimeoutMs: 1000 }
+  );
+
+  // 単発の物音（1 フレーム = 20ms）→ 発話開始しない
+  engine.push(loudFrame());
+  engine.push(silentFrame());
+  assert.equal(engine.hasSpeech, false);
+
+  // 連続 3 フレーム（60ms）続けば発話と判定する
+  let started = false;
+  for (let i = 0; i < 5; i++) {
+    if (engine.push(loudFrame()).kind === "speech_start") {
+      started = true;
+    }
+  }
+  assert.equal(started, true);
 });
 
 test("finish は中断理由を返し、以降のフレームを無視する", () => {

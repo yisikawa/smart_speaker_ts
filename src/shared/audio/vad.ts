@@ -6,6 +6,16 @@ export type VadDecision =
   | { kind: "speech_start" }
   | { kind: "finish"; reason: CaptureEndReason };
 
+/** 数値配列の中央値（空なら 0） */
+function median(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+}
+
 export interface VadSettings {
   sampleRate: number;
   frameMs: number;
@@ -17,6 +27,12 @@ export interface VadSettings {
   calibrationMs: number;
   debounceFrames: number;
   inputGain: number;
+  /**
+   * 相対しきい値の上限（0..1）。
+   * タイピング・物音・空調などの環境音で暗騒音が膨らんでも、
+   * しきい値がこれを超えて跳ね上がらないようにする（未指定なら上限なし）。
+   */
+  maxSilenceThreshold?: number;
 }
 
 export interface VadOptions {
@@ -48,6 +64,8 @@ export class VadEngine {
   private noiseFloor = 0;
   private smoothed = 0;
   private calibrationFrame = 0;
+  /** 較正期間のレベル（中央値で暗騒音を見積もる） */
+  private readonly calibrationLevels: number[] = [];
   private speechFrames = 0;
   private silenceFrames = 0;
   private elapsed = 0;
@@ -127,10 +145,16 @@ export class VadEngine {
     this.receivedFrames += 1;
     this.maxLevel = Math.max(this.maxLevel, level);
 
-    // 起動直後は暗騒音を測定し、相対しきい値を決める（この間は発話判定しない）
+    // 起動直後は暗騒音を測定し、相対しきい値を決める（この間は発話判定しない）。
+    // - 中央値を使い、タイピング等の一発ノイズに引きずられないようにする
+    // - しきい値より十分大きい音は「環境音ではなく発話・物音」とみなして学習から除外する
+    //   （話し始めてからマイクが開いても、しきい値が発話レベルまで跳ね上がらない）
     if (this.calibrationFrame < this.calibrationFrames) {
       this.calibrationFrame += 1;
-      this.noiseFloor = Math.max(this.noiseFloor, this.smoothed);
+      if (this.smoothed <= this.baseThreshold * 1.5) {
+        this.calibrationLevels.push(this.smoothed);
+      }
+      this.noiseFloor = median(this.calibrationLevels);
       this.updateThreshold();
       this.pushPreRoll(frame);
       return this.checkTimeout();
@@ -179,10 +203,11 @@ export class VadEngine {
   }
 
   private updateThreshold(): void {
-    this.thresholdValue = Math.max(
-      this.baseThreshold,
-      this.noiseFloor * this.settings.relativeThresholdMultiplier
-    );
+    // 相対しきい値（暗騒音 × 倍率）には上限を設ける。
+    // 環境音で暗騒音が大きい場合でも、しきい値が発話レベルを超えて跳ね上がらないようにする。
+    const cap = this.settings.maxSilenceThreshold ?? Number.POSITIVE_INFINITY;
+    const relative = this.noiseFloor * this.settings.relativeThresholdMultiplier;
+    this.thresholdValue = Math.max(this.baseThreshold, Math.min(cap, relative));
   }
 
   private checkTimeout(): VadDecision {

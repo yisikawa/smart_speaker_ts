@@ -44,6 +44,13 @@ export function sanitizeConfig(config: AppConfig): string[] {
     warnings
   );
   clampField(config.audio, "calibration_duration", 0, 5, "audio.calibration_duration", warnings);
+  clampField(config.audio, "silence_threshold_max", 0.001, 0.5, "audio.silence_threshold_max", warnings);
+  if (config.audio.silence_threshold_max < config.audio.silence_threshold) {
+    warnings.push(
+      `audio.silence_threshold_max (${config.audio.silence_threshold_max}) が silence_threshold (${config.audio.silence_threshold}) より小さいため、しきい値の下限に合わせます`
+    );
+    config.audio.silence_threshold_max = config.audio.silence_threshold;
+  }
   clampField(config.audio, "debounce_frames", 1, 50, "audio.debounce_frames", warnings);
   clampField(config.audio, "input_gain", 0.1, 10, "audio.input_gain", warnings);
   clampField(config.audio, "output_volume", 0, 1, "audio.output_volume", warnings);

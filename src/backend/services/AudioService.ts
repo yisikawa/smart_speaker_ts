@@ -96,6 +96,7 @@ export class AudioService implements AudioIO {
       silenceDurationMs: cfg.silence_duration * 1000,
       smoothingAlpha: cfg.smoothing_alpha,
       relativeThresholdMultiplier: cfg.relative_threshold_multiplier,
+      maxSilenceThreshold: cfg.silence_threshold_max,
       calibrationMs: cfg.calibration_duration * 1000,
       debounceFrames: cfg.debounce_frames,
       inputGain: cfg.input_gain,

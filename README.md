@@ -161,7 +161,7 @@ sherpa_provider = "cpu"
 
 | テーブル | 主なキー |
 |----------|----------|
-| `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
+| `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_threshold_max`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `relative_threshold_multiplier`, `calibration_duration`, `debounce_frames`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
 | `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language` |
 | `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns` |
@@ -239,6 +239,8 @@ logs/                          # app.log（実行ログ）
 | マイクが開かない（ffmpeg モード） | `audio.input_mode = "server"` の場合。`ffmpeg` の PATH、`audio.input_device`、`GET /api/audio-devices` |
 | 入力レベルが動かない（マイクが拾っていない） | 「マイク確認」を押して 5 秒話す。peak が 0.02 未満なら「マイク」セレクトで別デバイスを選択 |
 | 発話を検出しない | `audio.silence_threshold`（RMS 0..1）を上げる、`audio.input_gain` を上げる。UI のレベルメーターを確認 |
+| 話している途中で切れる | ① `audio.max_record_seconds`（既定 30 秒）に達していないか ② `audio.silence_duration`（既定 1.5 秒）より長く黙っていないか ③ `audio.silence_threshold_max`（既定 0.06）でしきい値が上がりすぎていないか。`logs/app.log` の「ブラウザから音声を受信: 1234ms」で実際に送られた長さを確認できる |
+| タイピング音や物音で聞き取りが始まる | `audio.debounce_frames`（既定 3 = 60ms 連続）を増やす、`audio.silence_threshold` を上げる、`audio.silence_threshold_max` を下げる |
 | 言っていない発話が勝手に入力される（「ご視聴ありがとうございました。」等） | Whisper の幻聴。`stt.suppress_non_speech` / `stt.drop_no_speech_prob` / `stt.filter_hallucinations`（既定で有効）と `audio.silence_threshold`（0.03〜0.05 に上げる）を確認。詳細は [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) |
 | 自分で会話が続いてしまう（エコー） | スピーカーの音をマイクが拾っています。ヘッドホンを使う、`conversation.barge_in_enabled = false`、`audio.output_volume` を下げる |
 | LLM が 404（`model 'xxx' not found`） | `llm.model` が Ollama に無い。`ollama list` で確認し `ollama pull <model>` を実行。**`settings.toml` を書き換えただけでは反映されない**ので `POST /api/config/reload` か再起動も行う（起動時にも警告が出ます） |
