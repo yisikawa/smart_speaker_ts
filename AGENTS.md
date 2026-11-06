@@ -9,7 +9,7 @@
 
 ローカル完結型の AI 音声アシスタント（TypeScript。バックエンド Node.js + ブラウザ GUI）。
 
-- STT: whisper.cpp（CUDA 版に差し替え済み） / LLM: Ollama / TTS: VOICEVOX
+- STT: whisper.cpp（CUDA 版に差し替え済み）または sherpa-onnx（`stt.engine` で切替） / LLM: Ollama / TTS: VOICEVOX
 - 音声入力: **既定はブラウザのマイク**（`getUserMedia`）。`audio.input_mode = "server"` で ffmpeg 録音に切替
 - すべて localhost 完結。音声・テキストは外部送信しない
 
@@ -18,12 +18,13 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 65 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 84 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
 | CUDA 版 whisper.cpp | `powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1`（`-Restore` で CPU 版へ） |
+| sherpa-onnx の日本語モデル | `powershell -ExecutionPolicy Bypass -File scripts\setup-sherpa.ps1`（要 `npm install sherpa-onnx-node`） |
 
 ## 3. アーキテクチャ（依存方向は内向き）
 
@@ -85,6 +86,7 @@ src/backend/index.ts                                ← Composition Root（DI �
 - バージョン表記は `0.2.0`（`package.json`）。次回 0.3.0 へ更新予定。
 - 未実装（設定のみ）: `[rag]` / `[recipe_db]` / `[music]` / `[apps.proactive_speech]` / `[apps.home_assistant]` / ウェイクワード
 - 改善候補: `whisper-server` 常駐化（毎回のモデルロード削減）、LLM モデルの品質向上、話者/音量の設定 UI
+- STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は whisper）
 
 ## 8. ブランチ運用
 

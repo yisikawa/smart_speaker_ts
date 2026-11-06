@@ -61,8 +61,8 @@ whisper.cpp 公式の README でも、非音声入力への幻聴対策として
 
 | エンジン | 日本語 | 方式 | 幻聴 | 速度 | Windows/Node からの利用 | ライセンス |
 |----------|--------|------|------|------|--------------------------|-----------|
-| **whisper.cpp（現行）** | ○ | 自己回帰デコーダ | **あり**（対策必須） | 3.5 秒/発話（CUDA, q5_0） | 子プロセス（現行） | MIT（モデルは別） |
-| **sherpa-onnx + NVIDIA Parakeet TDT-CTC 0.6B JA** | ◎ | CTC/transducer（非自己回帰） | **なし** | 高速（CPU で RTF 0.02〜0.03 級、GPU 不要） | `sherpa-onnx-node`（Node 16+、Windows x64 は DLL 自動解決） | Apache-2.0（sherpa-onnx）/ モデルは CC-BY-4.0 |
+| **whisper.cpp（既定）** | ○ | 自己回帰デコーダ | **あり**（対策必須） | 3.5 秒/発話（CUDA, q5_0） | 子プロセス（現行） | MIT（モデルは別） |
+| **sherpa-onnx + NVIDIA Parakeet TDT-CTC 0.6B JA（実装済み）** | ◎ | CTC/transducer（非自己回帰） | **なし** | 高速（CPU で 0.2〜0.4 秒/発話、GPU 不要） | `sherpa-onnx-node`（Node 16+、Windows x64 は DLL 自動解決） | Apache-2.0（sherpa-onnx）/ モデルは CC-BY-4.0 |
 | **sherpa-onnx + SenseVoice（zh/en/ja/ko/yue）** | ○ | CTC（非自己回帰） | **なし** | 高速（int8, 数十 MB） | 同上 | Apache-2.0（モデルは FunAudioLLM） |
 | **ReazonSpeech v2.1**（NeMo / k2 / ESPnet） | ◎ | Conformer/Transducer | なし | 高速（wav2vec2-base 系は特に速い） | Python 前提（Node バインディングなし） | Apache-2.0 |
 | **Vosk** | △（日本語モデルは旧世代） | Kaldi（ストリーミング） | なし | 軽量 | `vosk` npm（ネイティブ） | Apache-2.0 |
@@ -76,43 +76,53 @@ ReazonSpeech wav2vec2-base **CER 0.1496 / 13.7 s**、Gemma 4 E2B **CER 0.1230 / 
 
 ### 2.1 推奨: sherpa-onnx + Parakeet 0.6B JA（幻聴ゼロ・高速・GPU 不要）
 
+> **本リポジトリでは実装済み**（`stt.engine = "sherpa"`）。
+> 手順は README の「認識エンジンの切り替え」、実装は
+> `src/backend/services/SherpaSttService.ts` / `sttFactory.ts` を参照。
+
 - **非自己回帰（CTC/TDT）なので「無音に定型句を出す」現象が構造的に起きない**
-- モデルは `sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8`（日本語 / int8）
+- モデルは `sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8`（日本語 / int8 / 625MB）
 - `sherpa-onnx-node` は `npm install` だけで Windows x64 の DLL も入る（CMake・Python 不要）
 - ただし**非ストリーミング**なので、現行と同じ「VAD で区切ってから 1 発話ずつ認識」で使う
   （Silero VAD も同リリースに同梱）
 
-導入スケッチ（`SpeechToText` 実装を差し替えるだけで済む設計）:
+**実測（この PC / GTX 1650 Max-Q / VOICEVOX の日本語音声）**
+
+| エンジン | 1 発話の認識時間 | 精度 | 備考 |
+|---|---|---|---|
+| sherpa-onnx（Parakeet 0.6B JA, int8, CPU） | **222〜420ms**（初回 3.0 秒はモデルロード） | `今日はいい天気ですね、散歩にでも行きましょう` 正しく認識 | GPU 未使用（VRAM 0MB） |
+| whisper.cpp（large-v3-turbo q5_0, CUDA） | 1.5〜3.5 秒 | 同等 | VRAM 約 550MB |
+
+実装は既存の `SpeechToText` インターフェース（`transcribe(wav, { signal })`）に合わせてあるため、
+`stt.engine` を切り替えるだけで UI・パイプライン・幻聴フィルタ（`transcriptFilter.ts`）はそのまま動きます。
+
+実装（`src/backend/services/SherpaSttService.ts` の要点）:
 
 ```ts
-// src/backend/services/SherpaSttService.ts（案）
-import * as sherpa from "sherpa-onnx-node";
+// ネイティブモジュールは遅延読み込み（未インストールでも起動に影響しない）
+const sherpa = require("sherpa-onnx-node");
 
 const recognizer = new sherpa.OfflineRecognizer({
   featConfig: { sampleRate: 16000, featureDim: 80 },
   modelConfig: {
-    transducer: {
-      encoder: "models/sherpa-parakeet-ja/encoder.int8.onnx",
-      decoder: "models/sherpa-parakeet-ja/decoder.int8.onnx",
-      joiner: "models/sherpa-parakeet-ja/joiner.int8.onnx",
-    },
-    tokens: "models/sherpa-parakeet-ja/tokens.txt",
-    modelType: "nemo_transducer",
+    tokens: "models/<model>/tokens.txt",
+    model: "models/<model>/model.int8.onnx", // ← nemo_ctc は単一ファイル
+    modelType: "nemo_ctc",
     numThreads: 4,
     provider: "cpu",
   },
 });
 
-// WAV(PCM16LE) → Float32 [-1,1] に変換して渡す
+// WAV(PCM16LE) → Float32 [-1,1]（16kHz 以外は内部でリサンプリング）
 const stream = recognizer.createStream();
-stream.acceptWaveform({ sampleRate: 16000, samples: toFloat32(pcm) });
+stream.acceptWaveform({ sampleRate: 16000, samples: wavToFloat32(wav).samples });
 recognizer.decode(stream);
 const text = recognizer.getResult(stream).text;
 ```
 
 現行インターフェース（`src/backend/core/ports.ts` の `SpeechToText`）は
-`transcribe(wav, { signal })` だけなので、**設定 `stt.engine`（whisper / sherpa）で切り替える**形にすれば
-UI・パイプライン・幻聴フィルタ（`transcriptFilter.ts`）はそのまま流用できます。
+`transcribe(wav, { signal })` だけなので、**設定 `stt.engine`（whisper / sherpa）で切り替える**形にしてあり、
+UI・パイプライン・幻聴フィルタ（`transcriptFilter.ts`）はそのまま流用しています。
 
 ### 2.2 ストリーミング（発話途中の逐次表示）にしたい場合
 

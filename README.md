@@ -134,13 +134,36 @@ npm start              # node dist/backend/index.js
 > ファイルが無い場合は `config/settings.default.toml` の値だけで起動するため、変更したい項目があるときだけ作成してください
 > （`config/settings.default.toml` をコピーして必要な行だけ残すのが簡単です）。
 
+### 認識エンジンの切り替え（whisper / sherpa-onnx）
+
+既定は whisper.cpp です。**幻聴が構造的に起きない CTC 系モデル**を使いたい場合は sherpa-onnx に切り替えられます
+（CPU のみで動作し、GPU を LLM に空けられます）。
+
+```powershell
+npm install sherpa-onnx-node                              # Windows x64 は DLL 同梱（追加設定不要）
+powershell -ExecutionPolicy Bypass -File scripts\setup-sherpa.ps1   # 日本語 Parakeet 0.6B int8（約 467MB）
+```
+
+`config/settings.toml`:
+
+```toml
+[stt]
+engine = "sherpa"
+sherpa_model_dir = "models/sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8"
+sherpa_model_type = "nemo_ctc"      # 単一 model.onnx 構成
+sherpa_provider = "cpu"
+```
+
+実測（この PC / VOICEVOX の日本語音声）: sherpa-onnx は **222〜420ms / 発話**（whisper.cpp + CUDA q5_0 は約 1.5〜3.5 秒）。
+詳細と他エンジンの比較は [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) を参照してください。
+
 主な項目:
 
 | テーブル | 主なキー |
 |----------|----------|
 | `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
 | `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
-| `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations` |
+| `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language` |
 | `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns` |
 | `[tts]` | `endpoint`, `speaker_id`, `speed`, `pitch`, `volume` |
 

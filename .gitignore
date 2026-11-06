@@ -6,6 +6,9 @@ logs/*.wav
 logs/*.out
 logs/*.err
 models/*.bin
+# sherpa-onnx のモデル（scripts/setup-sherpa.ps1 で取得）
+models/sherpa-*/
+models/*.tar.bz2
 whisper.cpp/*.dll
 whisper.cpp/*.exe
 whisper.cpp/_cpu-backup/

@@ -2,7 +2,7 @@
 
 - 作業開始前に `AGENTS.md` を読み、コマンド・アーキテクチャ・ハマりどころに従う
 - フロントエンドは **esbuild で IIFE バンドル**する（`tsc` 出力を配信しない）
-- 変更後は必ず `npm run build` と `npm test`（65 件 / `--test-timeout`）を実行する
+- 変更後は必ず `npm run build` と `npm test`（84 件 / `--test-timeout`）を実行する
 - 設定の既定値・型は `src/backend/config/schema.ts` が単一の真実源。`config/settings.default.toml` と同期させる
 - 共有ロジックは `src/shared` に置き、I/O と分離して `node:test` でテストする
 - 検証用の一時スクリプトは実行後に削除し、`git status` で混入がないか確認する

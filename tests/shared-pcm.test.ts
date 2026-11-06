@@ -8,12 +8,14 @@ import {
   concatInt16,
   encodeWav,
   int16ToBytes,
+  int16ToFloat32,
   isWav,
   readWavInfo,
   resample,
   rmsLevel,
   splitInt16Frames,
   wavDurationMs,
+  wavToFloat32,
 } from "../src/shared/audio/pcm";
 
 function sine(amplitude: number, length: number): Int16Array {
@@ -110,4 +112,28 @@ test("Base64 は DOM/Node どちらでも往路復路が一致する", () => {
   assert.equal(base64, Buffer.from(bytes).toString("base64"));
   assert.deepEqual(Array.from(bytesFromBase64(base64)), Array.from(bytes));
   assert.deepEqual(Array.from(bytesFromBase64("")), []);
+});
+
+test("int16ToFloat32 は -1..1 に正規化する", () => {
+  const samples = new Int16Array([0, 16384, -16384, 32767, -32768]);
+  const floats = int16ToFloat32(samples);
+
+  assert.equal(floats.length, samples.length);
+  assert.equal(floats[0], 0);
+  assert.ok(Math.abs(floats[1] - 0.5) < 1e-6);
+  assert.ok(Math.abs(floats[2] + 0.5) < 1e-6);
+  assert.ok(floats[3] < 1 && floats[3] > 0.99);
+  assert.equal(floats[4], -1);
+});
+
+test("wavToFloat32 は 16bit PCM の WAV を Float32 へ変換し、不正な WAV は null を返す", () => {
+  const wav = encodeWav(new Int16Array([0, 16000, -16000]), 16000);
+  const decoded = wavToFloat32(wav);
+
+  assert.ok(decoded);
+  assert.equal(decoded?.sampleRate, 16000);
+  assert.equal(decoded?.samples.length, 3);
+  assert.ok(Math.abs((decoded?.samples[1] ?? 0) - 16000 / 32768) < 1e-6);
+
+  assert.equal(wavToFloat32(new Uint8Array([1, 2, 3, 4])), null);
 });

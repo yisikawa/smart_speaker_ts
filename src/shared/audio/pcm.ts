@@ -216,6 +216,66 @@ export function bytesFromBase64(base64: string): Uint8Array {
   return out;
 }
 
+/**
+ * Int16 PCM を [-1, 1] の Float32 へ変換する（ONNX 推論の入力用）。
+ * 変換のみで正規化以外の加工はしない。
+ */
+export function int16ToFloat32(samples: Int16Array): Float32Array {
+  const out = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i += 1) {
+    out[i] = samples[i] / 32768;
+  }
+  return out;
+}
+
+/** WAV の data チャンクを探す（LIST などの付加チャンクを許容する） */
+function findDataChunk(bytes: Uint8Array): { offset: number; size: number } | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const id = readAscii(bytes, offset, offset + 4);
+    const size = view.getUint32(offset + 4, true);
+    if (id === "data") {
+      return { offset: offset + 8, size };
+    }
+    offset += 8 + size + (size % 2);
+  }
+  return null;
+}
+
+/**
+ * WAV をモノラルの Float32 サンプルへ変換する。
+ * 16bit PCM 以外・不正なヘッダの場合は null を返す（呼び出し側で PCM 直指定にフォールバック）。
+ */
+export function wavToFloat32(
+  bytes: Uint8Array
+): { samples: Float32Array; sampleRate: number } | null {
+  const info = readWavInfo(bytes);
+  const data = findDataChunk(bytes);
+  if (!info || !data || info.bitsPerSample !== 16) {
+    return null;
+  }
+  const end = Math.min(bytes.length, data.offset + data.size);
+  const interleaved = bytesToInt16(bytes.subarray(data.offset, end));
+  const channels = Math.max(1, info.channels);
+
+  if (channels === 1) {
+    return { samples: int16ToFloat32(interleaved), sampleRate: info.sampleRate };
+  }
+
+  // ステレオ以上はモノラルへダウンミックスする
+  const frames = Math.floor(interleaved.length / channels);
+  const mono = new Float32Array(frames);
+  for (let i = 0; i < frames; i += 1) {
+    let sum = 0;
+    for (let c = 0; c < channels; c += 1) {
+      sum += interleaved[i * channels + c];
+    }
+    mono[i] = sum / channels / 32768;
+  }
+  return { samples: mono, sampleRate: info.sampleRate };
+}
+
 function writeAscii(target: Uint8Array, offset: number, text: string): void {
   for (let i = 0; i < text.length; i++) {
     target[offset + i] = text.charCodeAt(i);

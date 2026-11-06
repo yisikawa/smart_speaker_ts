@@ -92,6 +92,21 @@ drop_no_speech_prob = 0.75
 drop_avg_logprob = -1.0
 # 定型句の幻聴（「ご視聴ありがとうございました」等）を破棄する
 filter_hallucinations = true
+# この RMS（0..1）未満の入力は無音として認識しない（0 で無効）
+min_input_rms = 0.002
+
+# --- 認識エンジン ---
+# whisper: whisper.cpp（model_path / binary_path を使用）
+# sherpa:  sherpa-onnx（下の sherpa_* を使用。GPU 不要・幻聴なしの CTC 系モデル）
+engine = "whisper"
+# モデルディレクトリ（*.onnx と tokens.txt）。scripts/setup-sherpa.ps1 で取得できます
+sherpa_model_dir = "models/sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8"
+# nemo_ctc（単一 model.onnx） / nemo_transducer / sense_voice / zipformer_transducer
+sherpa_model_type = "nemo_ctc"
+# 推論プロバイダ（cpu。GPU 版 onnxruntime を使う場合のみ cuda など）
+sherpa_provider = "cpu"
+# SenseVoice の言語指定（auto / ja / en / zh / ko / yue）
+sherpa_language = "ja"
 
 [llm]
 endpoint = "http://127.0.0.1:11434"

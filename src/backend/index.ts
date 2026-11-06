@@ -10,8 +10,8 @@ import { AppServer } from "./server/AppServer";
 import { AudioService } from "./services/AudioService";
 import { CharacterService } from "./services/CharacterService";
 import { OllamaLlmService } from "./services/OllamaLlmService";
+import { createSttService } from "./services/sttFactory";
 import { VoicevoxTtsService } from "./services/VoicevoxTtsService";
-import { WhisperSttService } from "./services/WhisperSttService";
 
 function readVersion(rootDir: string): string {
   try {
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
 
   // 2. サービス（ポート/アダプタ）
   const audio = new AudioService({ config, logger: new Logger("Audio") });
-  const stt = new WhisperSttService({ config, logger: new Logger("STT") });
+  const stt = createSttService({ config, logger: new Logger("STT") });
   const llm = new OllamaLlmService({ config, logger: new Logger("LLM") });
   const tts = new VoicevoxTtsService({ config, logger: new Logger("TTS") });
 
@@ -92,7 +92,12 @@ async function main(): Promise<void> {
     bootLogger.warn(`VOICEVOX に接続できません (${config.getTTS().endpoint})。VOICEVOX を起動してください。`);
   }
   if (!services.stt) {
-    bootLogger.warn("Whisper（whisper.cpp / ggml モデル）が見つかりません。models/ を確認してください。");
+    const sttConfig = config.getSTT();
+    bootLogger.warn(
+      sttConfig.engine === "sherpa"
+        ? `sherpa-onnx のモデルが見つかりません（${sttConfig.sherpa_model_dir}）。scripts/setup-sherpa.ps1 を実行してください。`
+        : "Whisper（whisper.cpp / ggml モデル）が見つかりません。models/ を確認してください。"
+    );
   }
   if (services.llm) {
     try {

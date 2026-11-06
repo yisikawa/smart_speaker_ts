@@ -1,4 +1,4 @@
-import { AppConfig } from "./schema";
+import { AppConfig, SherpaModelType } from "./schema";
 
 function clampField<T extends object>(
   target: T,
@@ -75,6 +75,7 @@ export function sanitizeConfig(config: AppConfig): string[] {
   clampField(config.stt, "no_speech_thold", 0, 1, "stt.no_speech_thold", warnings);
   clampField(config.stt, "drop_no_speech_prob", 0, 1, "stt.drop_no_speech_prob", warnings);
   clampField(config.stt, "drop_avg_logprob", -5, 0, "stt.drop_avg_logprob", warnings);
+  clampField(config.stt, "min_input_rms", 0, 0.1, "stt.min_input_rms", warnings);
 
   clampField(config.llm, "temperature", 0, 2, "llm.temperature", warnings);
   clampField(config.llm, "max_tokens", 32, 8192, "llm.max_tokens", warnings);
@@ -97,6 +98,27 @@ export function sanitizeConfig(config: AppConfig): string[] {
   if (inputMode !== "browser" && inputMode !== "server") {
     warnings.push(`audio.input_mode=${String(inputMode)} は未対応のため "browser" を使用します`);
     config.audio.input_mode = "browser";
+  }
+
+  const engine = config.stt.engine;
+  if (engine !== "whisper" && engine !== "sherpa") {
+    warnings.push(`stt.engine=${String(engine)} は未対応のため "whisper" を使用します`);
+    config.stt.engine = "whisper";
+  }
+
+  const modelTypes: SherpaModelType[] = ["nemo_transducer", "nemo_ctc", "sense_voice", "zipformer_transducer"];
+  if (!modelTypes.includes(config.stt.sherpa_model_type)) {
+    warnings.push(
+      `stt.sherpa_model_type=${String(config.stt.sherpa_model_type)} は未対応のため "nemo_transducer" を使用します`
+    );
+    config.stt.sherpa_model_type = "nemo_transducer";
+  }
+
+  if (!config.stt.sherpa_provider.trim()) {
+    config.stt.sherpa_provider = "cpu";
+  }
+  if (!config.stt.sherpa_language.trim()) {
+    config.stt.sherpa_language = config.stt.language || "ja";
   }
 
   if (!Array.isArray(config.wakeword.wakeword_path)) {

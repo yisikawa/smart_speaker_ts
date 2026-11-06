@@ -72,7 +72,15 @@ export interface ConversationConfig {
   barge_in_min_score: number;
 }
 
+/** 認識エンジン（whisper: whisper.cpp / sherpa: sherpa-onnx） */
+export type SttEngine = "whisper" | "sherpa";
+
+/** sherpa-onnx のモデル種別（使用する ONNX 一式の構成を決める） */
+export type SherpaModelType = "nemo_transducer" | "nemo_ctc" | "sense_voice" | "zipformer_transducer";
+
 export interface STTConfig {
+  /** 認識エンジン（whisper: whisper.cpp / sherpa: sherpa-onnx） */
+  engine: SttEngine;
   model_path: string;
   /** whisper.cpp 実行ファイル */
   binary_path: string;
@@ -98,6 +106,16 @@ export interface STTConfig {
   drop_avg_logprob: number;
   /** 定型句の幻聴（「ご視聴ありがとうございました」等）を破棄する */
   filter_hallucinations: boolean;
+  /** この RMS（0..1）未満の入力は無音として認識しない（0 で無効） */
+  min_input_rms: number;
+  /** sherpa-onnx のモデルディレクトリ（*.onnx と tokens.txt を置く） */
+  sherpa_model_dir: string;
+  /** sherpa-onnx のモデル種別 */
+  sherpa_model_type: SherpaModelType;
+  /** 推論プロバイダ（cpu / cuda。GPU 版 onnxruntime を使う場合のみ変更） */
+  sherpa_provider: string;
+  /** SenseVoice の言語指定（auto / ja / en / zh / ko / yue） */
+  sherpa_language: string;
 }
 
 export interface LLMConfig {
@@ -251,6 +269,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     barge_in_min_score: 0.08,
   },
   stt: {
+    engine: "whisper",
     model_path: "models/ggml-large-v3-turbo.bin",
     binary_path: "whisper.cpp/main.exe",
     language: "ja",
@@ -266,6 +285,11 @@ export const DEFAULT_CONFIG: AppConfig = {
     drop_no_speech_prob: 0.75,
     drop_avg_logprob: -1.0,
     filter_hallucinations: true,
+    min_input_rms: 0.002,
+    sherpa_model_dir: "models/sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8",
+    sherpa_model_type: "nemo_ctc",
+    sherpa_provider: "cpu",
+    sherpa_language: "ja",
   },
   llm: {
     endpoint: "http://127.0.0.1:11434",
