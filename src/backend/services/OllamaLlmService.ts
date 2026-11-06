@@ -71,6 +71,23 @@ export class OllamaLlmService implements LanguageModel {
     });
   }
 
+  /**
+   * 4xx/5xx の応答本文から、原因と対処が分かるエラーを組み立てる。
+   *
+   * 404 はほぼ「モデル未取得」で、Ollama は `{"error":"model 'xxx' not found"}` を返す。
+   * そのまま流すと原因が分かりにくいため、`ollama pull` を促す文言を添える。
+   */
+  private describeHttpError(statusCode: number | undefined, raw: string, model: string): Error {
+    const body = raw.slice(0, 300);
+    if (statusCode === 404 && /not found/i.test(raw)) {
+      return new Error(
+        `Ollama にモデル '${model}' がありません（404）。\`ollama pull ${model}\` を実行するか、` +
+          `config/settings.toml の llm.model を導入済みのモデルに変更してください: ${body}`
+      );
+    }
+    return new Error(`Ollama が ${statusCode} を返しました: ${body}`);
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       await this.getJson("/api/tags", 5000);
@@ -186,7 +203,7 @@ export class OllamaLlmService implements LanguageModel {
             raw += chunk;
           });
           res.on("end", () => {
-            fail(new Error(`Ollama が ${res.statusCode} を返しました: ${raw.slice(0, 300)}`));
+            fail(this.describeHttpError(res.statusCode, raw, cfg.model));
           });
           return;
         }

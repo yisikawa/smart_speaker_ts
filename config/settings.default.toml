@@ -79,6 +79,20 @@ threads = 4
 timeout_seconds = 60
 initial_prompt = ""
 
+# --- 幻聴（無音・雑音に対して定型句を出力する現象）対策 ---
+# 非音声トークンを抑制する（-sns）
+suppress_non_speech = true
+# 直前の文脈トークン保持数（-mc）。0 で文脈を引き継がない＝同文の繰り返しを防ぐ
+max_context = 0
+# 「無音」と判定する確率しきい値（-nth）。大きいほど幻聴が出にくい
+no_speech_thold = 0.6
+# 区間の no_speech_prob がこの値以上なら破棄（JSON 出力を利用）
+drop_no_speech_prob = 0.75
+# 区間の avg_logprob がこの値未満なら破棄（JSON 出力を利用）
+drop_avg_logprob = -1.0
+# 定型句の幻聴（「ご視聴ありがとうございました」等）を破棄する
+filter_hallucinations = true
+
 [llm]
 endpoint = "http://127.0.0.1:11434"
 model = "gemma4:e2b-it-qat"

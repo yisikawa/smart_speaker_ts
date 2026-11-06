@@ -101,3 +101,48 @@ test("接続できない場合は isAvailable が false を返す", async () => 
     project.cleanup();
   }
 });
+
+/** モデル未取得時に Ollama が返す 404 を再現する擬似サーバー */
+function startFakeOllamaMissingModel(): Promise<{ server: http.Server; port: number }> {
+  const server = http.createServer((req, res) => {
+    if (req.url === "/api/tags") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ models: [] }));
+      return;
+    }
+
+    req.resume();
+    req.on("end", () => {
+      res.statusCode = 404;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "model 'test-model' not found" }));
+    });
+  });
+
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      resolve({ server, port: (server.address() as AddressInfo).port });
+    });
+  });
+}
+
+test("モデル未取得の 404 は ollama pull を促すエラーになる", async () => {
+  const { server, port } = await startFakeOllamaMissingModel();
+  const project = withConfig(port);
+
+  try {
+    const service = new OllamaLlmService({ config: project.config });
+    await assert.rejects(
+      () => service.chatStream([{ role: "user", content: "やあ" }], () => {}),
+      (error: Error) => {
+        assert.match(error.message, /Ollama にモデル 'test-model' がありません（404）/);
+        assert.match(error.message, /ollama pull test-model/);
+        assert.match(error.message, /not found/);
+        return true;
+      }
+    );
+  } finally {
+    project.cleanup();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});

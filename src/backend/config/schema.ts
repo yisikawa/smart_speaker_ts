@@ -86,6 +86,18 @@ export interface STTConfig {
   timeout_seconds: number;
   /** 認識ヒント（専門用語など） */
   initial_prompt: string;
+  /** 非音声トークンを抑制する（whisper.cpp `-sns`）。無音・雑音での幻聴対策 */
+  suppress_non_speech: boolean;
+  /** 直前の文脈トークン保持数（`-mc`）。0 で文脈を引き継がない＝同文の繰り返し幻聴を防ぐ */
+  max_context: number;
+  /** 「無音」と判定する確率しきい値（`-nth`）。大きいほど幻聴が出にくい */
+  no_speech_thold: number;
+  /** 区間の `no_speech_prob` がこの値以上なら破棄（JSON 出力を利用） */
+  drop_no_speech_prob: number;
+  /** 区間の `avg_logprob` がこの値未満なら破棄（JSON 出力を利用） */
+  drop_avg_logprob: number;
+  /** 定型句の幻聴（「ご視聴ありがとうございました」等）を破棄する */
+  filter_hallucinations: boolean;
 }
 
 export interface LLMConfig {
@@ -248,6 +260,12 @@ export const DEFAULT_CONFIG: AppConfig = {
     threads: 4,
     timeout_seconds: 60,
     initial_prompt: "",
+    suppress_non_speech: true,
+    max_context: 0,
+    no_speech_thold: 0.6,
+    drop_no_speech_prob: 0.75,
+    drop_avg_logprob: -1.0,
+    filter_hallucinations: true,
   },
   llm: {
     endpoint: "http://127.0.0.1:11434",

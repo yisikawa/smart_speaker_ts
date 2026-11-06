@@ -12,7 +12,9 @@ import {
 import { Logger } from "../core/logger";
 import { wavDurationMs } from "../services/wav";
 import { ConversationHistory } from "./ConversationHistory";
+import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
+import { isEchoOfReply, isHallucination, normalizeTranscript } from "../services/transcriptFilter";
 
 /** 中断起因のエラーか（AbortController / socket 由来） */
 function isAbortError(error: unknown): boolean {
@@ -21,6 +23,17 @@ function isAbortError(error: unknown): boolean {
   }
   return false;
 }
+
+/** 直前と同じ認識結果を何回まで許容するか（3 回目以降は幻聴・エコーとみなす） */
+const REPEAT_LIMIT = 3;
+
+/** 認識結果の扱い（会話に載せる／破棄する） */
+type TranscriptionOutcome =
+  | { kind: "text"; text: string }
+  /** 認識できなかった（聞き取りを終了する） */
+  | { kind: "empty" }
+  /** 幻聴・エコー・重複として破棄した（聞き取りは続ける） */
+  | { kind: "ignored"; reason: string };
 
 export interface PipelineDeps {
   config: ConfigManager;
@@ -55,6 +68,12 @@ export class ConversationPipeline {
   private capture: CaptureHandle | null = null;
   private playback: PlaybackHandle | null = null;
   private turnCounter = 0;
+  /** 直前に受け付けた認識結果（同じ結果の繰り返し＝幻聴・エコーを弾く） */
+  private lastAcceptedTranscript = "";
+  /** 直前と同じ認識結果が連続した回数 */
+  private repeatCount = 0;
+  /** 直前に読み上げた応答（マイクが拾った自分の声を弾く） */
+  private lastSpokenReply = "";
 
   constructor(private readonly deps: PipelineDeps) {}
 
@@ -200,12 +219,12 @@ export class ConversationPipeline {
     this.deps.history.setMaxTurns(this.deps.config.getLLM().history_turns);
 
     try {
-      const text = await this.transcribe(wav);
-      if (!text || !this.active) {
+      const outcome = await this.transcribe(wav);
+      if (outcome.kind !== "text" || !this.active) {
         return;
       }
       this.turnCounter += 1;
-      await this.respond(text);
+      await this.respond(outcome.text);
       if (this.active) {
         this.emit({ type: "turn_complete", turn: this.turnCounter });
       }
@@ -223,15 +242,15 @@ export class ConversationPipeline {
     this.playback?.stop();
   }
 
-  /** 音声を認識してテキストを返す（失敗時は null。エラーはイベントで通知する） */
-  private async transcribe(wav: Buffer): Promise<string | null> {
+  /** 音声を認識する（失敗・破棄はイベント／ログで通知し、呼び出し側が継続可否を決める） */
+  private async transcribe(wav: Buffer): Promise<TranscriptionOutcome> {
     this.setState("transcribing");
     this.emit({ type: "stt_started" });
     try {
       const controller = this.newAbort();
       const transcript = await this.deps.stt.transcribe(wav, { signal: controller.signal });
       if (!this.active) {
-        return null;
+        return { kind: "empty" };
       }
       const text = transcript.text.trim();
       if (!text) {
@@ -241,21 +260,45 @@ export class ConversationPipeline {
           scope: "stt",
           message: "音声を認識できませんでした。もう一度お話しください。",
         });
-        return null;
+        return { kind: "empty" };
       }
+
+      // 定型句の幻聴（STT 実装に依存しない二重の保険）
+      if (isHallucination(text)) {
+        this.deps.logger.warn(`幻聴と判定したため破棄します: ${text}`);
+        return { kind: "ignored", reason: "hallucination" };
+      }
+      // 自分の声（スピーカー出力）を拾った場合は会話に載せない
+      if (isEchoOfReply(text, this.lastSpokenReply)) {
+        this.deps.logger.warn(`自分の発話のエコーと判定したため破棄します: ${text}`);
+        return { kind: "ignored", reason: "echo" };
+      }
+      // 同じ認識結果が続く場合は幻聴・エコーの可能性が高い（2 回目までは正当な繰り返しとして許容）
+      const normalized = normalizeTranscript(text);
+      if (normalized === this.lastAcceptedTranscript) {
+        this.repeatCount += 1;
+        if (this.repeatCount >= REPEAT_LIMIT) {
+          this.deps.logger.warn(`同じ認識結果が ${this.repeatCount} 回続いたため破棄します: ${text}`);
+          return { kind: "ignored", reason: "repeat" };
+        }
+      } else {
+        this.lastAcceptedTranscript = normalized;
+        this.repeatCount = 1;
+      }
+
       this.emit({
         type: "stt_complete",
         text,
         language: transcript.language,
         elapsedMs: transcript.elapsedMs,
       });
-      return text;
+      return { kind: "text", text };
     } catch (error) {
       if (!this.active || isAbortError(error)) {
-        return null;
+        return { kind: "empty" };
       }
       this.emitError("stt", error);
-      return null;
+      return { kind: "empty" };
     }
   }
 
@@ -272,6 +315,8 @@ export class ConversationPipeline {
     let pendingWav = options.initialWav;
     let pendingText = options.initialText;
     let followup = 0;
+    /** 幻聴・エコーとして破棄した連続回数 */
+    let ignoredCount = 0;
 
     try {
       while (this.active) {
@@ -357,14 +402,25 @@ export class ConversationPipeline {
             wav = result.wav;
           }
 
-          const recognized = await this.transcribe(wav);
-          if (recognized === null) {
+          const outcome = await this.transcribe(wav);
+          if (outcome.kind === "empty") {
             break;
           }
-          text = recognized;
+          if (outcome.kind === "ignored") {
+            // 幻聴・自分の声・同じ結果は会話に載せず、聞き取りを続ける。
+            // ただし連続で破棄され続ける場合はループを抜ける（無限ループ防止）。
+            ignoredCount += 1;
+            if (ignoredCount >= 3) {
+              this.deps.logger.warn("破棄が続くため聞き取りを停止します");
+              break;
+            }
+            continue;
+          }
+          text = outcome.text;
         }
 
         this.turnCounter += 1;
+        ignoredCount = 0;
         const bargeWav = await this.respond(text);
         if (!this.active) {
           break;
@@ -426,6 +482,20 @@ export class ConversationPipeline {
         },
         { signal: controller.signal }
       );
+
+      // 日本語の指示を無視してハングルを混ぜるモデルがあるため、1 回だけ再生成する。
+      // 画面は llm_complete の全文で上書きされるので、再生成中の差分は送出しない。
+      if (containsHangul(reply)) {
+        this.deps.logger.warn("応答にハングルが混入したため日本語で再生成します");
+        reply = await this.deps.llm.chatStream(
+          this.buildMessages({ languageRetry: true }),
+          () => undefined,
+          { signal: controller.signal }
+        );
+        if (containsHangul(reply)) {
+          this.deps.logger.warn("再生成してもハングルが残りました");
+        }
+      }
     } catch (error) {
       if (isAbortError(error)) {
         return undefined;
@@ -441,6 +511,7 @@ export class ConversationPipeline {
       return undefined;
     }
     this.deps.history.add("assistant", reply);
+    this.lastSpokenReply = reply;
     this.emitHistory();
 
     this.setState("speaking");
@@ -546,11 +617,16 @@ export class ConversationPipeline {
     this.emit({ type: "history_updated", messages: this.deps.history.all() });
   }
 
-  private buildMessages(): LlmMessage[] {
-    return [
-      { role: "system", content: this.deps.promptBuilder.build() },
+  private buildMessages(options: { languageRetry?: boolean } = {}): LlmMessage[] {
+    const system = this.deps.promptBuilder.build();
+    const messages: LlmMessage[] = [
+      { role: "system", content: system },
       ...this.deps.history.forPrompt(),
     ];
+    if (options.languageRetry) {
+      messages.push({ role: "system", content: LANGUAGE_RETRY_INSTRUCTION });
+    }
+    return messages;
   }
 
   private sleep(ms: number): Promise<void> {
