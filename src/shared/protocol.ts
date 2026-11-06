@@ -50,6 +50,8 @@ export type PipelineEvent =
   | { type: "barge_in" }
   | { type: "followup_wait"; turn: number; maxTurns: number; timeoutMs: number }
   | { type: "turn_complete"; turn: number }
+  /** 認識結果を破棄した（幻聴・エコー・短すぎる断片など）。ターンは成立していない */
+  | { type: "turn_skipped"; reason: string }
   | { type: "history_updated"; messages: ChatMessage[] }
   | { type: "error"; scope: string; message: string };
 

@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 94 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 95 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
@@ -75,6 +75,8 @@ src/backend/index.ts                                ← Composition Root（DI �
     TTS は ffplay（ブラウザ外）で再生するため、ブラウザの `echoCancellation` では自分の声を消せない。
     - バージインは既定で無効（`conversation.barge_in_enabled = false`）。有効化はヘッドホン前提
     - 直近 3 件の応答と一致する断片（バイグラム一致率 0.6 以上を含む）と 2 文字以下の断片は破棄する
+    - **破棄したら必ず `turn_skipped` を通知する**。通知しないとブラウザの `waitForTurn()` が解けず、
+      画面が「待機中」のまま固まる（回帰テストあり）
 
 ## 5. 環境前提（この PC）
 

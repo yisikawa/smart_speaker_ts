@@ -397,6 +397,26 @@ test("自分の声（直前の応答のエコー）は会話に載せない", as
   }
 });
 
+test("破棄したターンは turn_skipped を通知する（クライアントの待機を解く）", async () => {
+  const harness = setup({
+    specs: [{ hasSpeech: false, reason: "no_speech" }],
+    sttTexts: ["ただ"],
+  });
+  try {
+    await harness.pipeline.submitAudio(encodeWav(Buffer.alloc(3200, 1), 16000));
+
+    const skipped = harness.events.filter(
+      (event): event is Extract<PipelineEvent, { type: "turn_skipped" }> => event.type === "turn_skipped"
+    );
+    assert.equal(skipped.length, 1, "turn_skipped を 1 件通知する");
+    assert.equal(skipped[0].reason, "short");
+    assert.equal(harness.history.all().length, 0, "会話には載せない");
+    assert.equal(harness.llmCalls(), 0, "LLM は呼ばない");
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("応答が成立した後の同じ発話は破棄しない（連続同一判定をリセットする）", async () => {
   const harness = setup({
     specs: [

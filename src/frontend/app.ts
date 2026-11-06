@@ -291,6 +291,11 @@ class SumikaApp {
       case "turn_complete":
         this.resolveTurn(true);
         break;
+      case "turn_skipped":
+        // 幻聴・エコーなどで破棄された。ターンは成立していないので聞き取りを続ける。
+        // （ここで待機を解かないとクライアントが「応答待ち」のまま固まる）
+        this.resolveTurn(true);
+        break;
       case "error":
         this.resolveTurn(false);
         this.showToast(event.message, "error");
@@ -497,7 +502,13 @@ class SumikaApp {
         }
       };
       this.turnWaiter = finish;
-      window.setTimeout(() => finish(false), 180000);
+      // 保険: サーバーから何も来ない場合に永久に待たない（フリーズ防止）
+      window.setTimeout(() => {
+        if (this.turnWaiter === finish) {
+          this.showToast("応答が返りませんでした。サーバーのログを確認してください", "error");
+        }
+        finish(false);
+      }, 60000);
     });
   }
 

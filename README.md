@@ -245,6 +245,7 @@ logs/                          # app.log（実行ログ）
 | 言っていない発話が勝手に入力される（「ご視聴ありがとうございました。」等） | Whisper の幻聴。`stt.suppress_non_speech` / `stt.drop_no_speech_prob` / `stt.filter_hallucinations`（既定で有効）と `audio.silence_threshold`（0.03〜0.05 に上げる）を確認。詳細は [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) |
 | 自分で会話が続いてしまう（エコー） | スピーカーの音をマイクが拾っています。ヘッドホンを使う、`conversation.barge_in_enabled = false`（既定）、`audio.output_volume` を下げる。直近の応答と一致する断片・2 文字以下の断片は自動で破棄されます（`logs/app.log` に「エコーと判定」「短すぎる認識結果」） |
 | LLM が 404（`model 'xxx' not found`） | `llm.model` が Ollama に無い。`ollama list` で確認し `ollama pull <model>` を実行。**`settings.toml` を書き換えただけでは反映されない**ので `POST /api/config/reload` か再起動も行う（起動時にも警告が出ます） |
+| 反応しない／固まったように見える | 「聞き取り開始」を押し直すか、ページを再読み込み。サーバーが幻聴・エコーを破棄した場合は `turn_skipped` を通知して聞き取りを続けます（従来は待機したまま固まる不具合がありました）。`logs/app.log` に「破棄します」が出ていないか確認 |
 | 返答が返ってこない | `logs/app.log` に `ERROR [LLM]` が出ていないか確認。接続断は「Ollama との接続が中断されました（モデルの読み込み失敗・VRAM 不足など）」として通知されます。タイムアウトは `llm.response_timeout_seconds` |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |
 | バージインしない | `conversation.barge_in_enabled`, `barge_in_min_score`（既定 0.08） |

@@ -214,6 +214,11 @@ export class ConversationPipeline {
 
     try {
       const outcome = await this.transcribe(wav);
+      if (outcome.kind === "ignored") {
+        // 破棄したことをクライアントへ伝える（伝えないと「応答待ち」のまま固まる）
+        this.emit({ type: "turn_skipped", reason: outcome.reason });
+        return;
+      }
       if (outcome.kind !== "text") {
         return;
       }
@@ -412,6 +417,7 @@ export class ConversationPipeline {
           if (outcome.kind === "ignored") {
             // 幻聴・自分の声・同じ結果は会話に載せず、聞き取りを続ける。
             // ただし連続で破棄され続ける場合はループを抜ける（無限ループ防止）。
+            this.emit({ type: "turn_skipped", reason: outcome.reason });
             ignoredCount += 1;
             if (ignoredCount >= 3) {
               this.deps.logger.warn("破棄が続くため聞き取りを停止します");
