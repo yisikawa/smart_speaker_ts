@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 103 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 111 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -68,7 +68,14 @@ src/backend/index.ts                                ← Composition Root（DI �
     Buffer ⇔ Uint8Array の境界変換のみ（新しい処理は pcm.ts に追加してブラウザと共有する）。
 12-2. **STT 実装は `BaseSttService` を継承する**（幻聴フィルタ・中断判定・`認識完了` ログを共通化）。
     具象クラスは `recognize()` と `isAvailable()` だけを実装する。
-12-3. **Logger は `deps.logger ?? new Logger("Scope")`**。`child()` を使うと `[STT:STT]` のように二重表示になる。
+12-4. **会話まわりは役割ごとに分かれている**（`src/backend/conversation/`）
+    - `ConversationPipeline` … 状態機械・調停（録音/破棄/フォローアップの方針）
+    - `TurnRunner` … LLM → TTS（言語ガードの再生成を含む）
+    - `TranscriptionRunner` … STT 呼び出し＋`SpeechGate` の採否＋イベント通知
+    - `SpeechGate` … 幻聴・短断片・エコー・繰り返しの判定（**破棄は必ず `ignored` を返し、呼び出し側が `turn_skipped` を出す**）
+    - `ListeningLoop` / `PlaybackLoop` … 録音と再生（バージイン）
+    - ブラウザ入力モードでは**録音はクライアントが駆動**する。サーバー側で ffmpeg を開くとマイクを奪うため、
+      `runLoop` は応答後にループを終える。
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする

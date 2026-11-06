@@ -1,6 +1,5 @@
 import type { AssistantState, ChatMessage, PipelineEvent } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
-import { LlmMessage } from "../core/messages";
 import {
   AudioIO,
   CaptureHandle,
@@ -10,22 +9,16 @@ import {
   TextToSpeech,
 } from "../core/ports";
 import { Logger } from "../core/logger";
-import { wavDurationMs } from "../services/wav";
-import { isEchoOfReply, isHallucination, isTooShortFragment, normalizeTranscript } from "../services/transcriptFilter";
 import { ConversationHistory } from "./ConversationHistory";
-import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
+import { ListeningHooks, ListeningLoop } from "./ListeningLoop";
+import { PlaybackLoop } from "./PlaybackLoop";
 import { PromptBuilder } from "./PromptBuilder";
+import { SpeechGate } from "./SpeechGate";
+import { TurnHooks, TurnRunner } from "./TurnRunner";
+import { TranscriptionOutcome, TranscriptionRunner } from "./TranscriptionRunner";
 
-/** 直前と同じ認識結果を何回まで許容するか（3 回目以降は幻聴・エコーとみなす） */
-const REPEAT_LIMIT = 3;
-
-/** 認識結果の扱い（会話に載せる／破棄する） */
-type TranscriptionOutcome =
-  | { kind: "text"; text: string }
-  /** 認識できなかった（聞き取りを終了する） */
-  | { kind: "empty" }
-  /** 幻聴・エコー・重複として破棄した（聞き取りは続ける） */
-  | { kind: "ignored"; reason: string };
+/** 連続して破棄されたときに聞き取りを諦める回数（無限ループ防止） */
+const MAX_CONSECUTIVE_SKIPS = 3;
 
 export interface PipelineDeps {
   config: ConfigManager;
@@ -60,16 +53,42 @@ export class ConversationPipeline {
   private capture: CaptureHandle | null = null;
   private playback: PlaybackHandle | null = null;
   private turnCounter = 0;
-  /** 直前に受け付けた認識結果（同じ結果の繰り返し＝幻聴・エコーを弾く） */
-  private lastAcceptedTranscript = "";
-  /** 直前と同じ認識結果が連続した回数 */
-  private repeatCount = 0;
-  /** 直前に読み上げた応答（マイクが拾った自分の声を弾く） */
-  private lastSpokenReply = "";
-  /** 直近に読み上げた応答（最大 3 件。断片エコーの判定に使う） */
-  private recentReplies: string[] = [];
+  /** 認識結果の採否（幻聴・エコー・短断片・繰り返し） */
+  private readonly gate = new SpeechGate();
+  /** 1 ターン分の実行（LLM → TTS → 再生） */
+  private readonly turnRunner: TurnRunner;
+  /** 1 回分の録音（VAD・レベル通知・失敗案内） */
+  private readonly listening: ListeningLoop;
+  /** 読み上げとバージイン監視 */
+  private readonly playbackLoop: PlaybackLoop;
+  /** 音声認識と採否判定 */
+  private readonly transcription: TranscriptionRunner;
 
-  constructor(private readonly deps: PipelineDeps) {}
+  constructor(private readonly deps: PipelineDeps) {
+    this.turnRunner = new TurnRunner({
+      config: deps.config,
+      history: deps.history,
+      promptBuilder: deps.promptBuilder,
+      llm: deps.llm,
+      tts: deps.tts,
+      logger: deps.logger,
+    });
+    this.listening = new ListeningLoop({ config: deps.config, audio: deps.audio });
+    this.playbackLoop = new PlaybackLoop({ config: deps.config, audio: deps.audio });
+    this.transcription = new TranscriptionRunner({ stt: deps.stt, gate: this.gate, logger: deps.logger });
+  }
+
+  /** ListeningLoop に渡すコールバック（状態・イベント・録音ハンドルの橋渡し） */
+  private listeningHooks(): ListeningHooks {
+    return {
+      emit: (event) => this.emit(event),
+      setState: (state) => this.setState(state),
+      onCapture: (handle) => {
+        this.capture = handle;
+      },
+      isActive: () => this.active,
+    };
+  }
 
   on(listener: PipelineListener): () => void {
     this.listeners.add(listener);
@@ -116,45 +135,26 @@ export class ConversationPipeline {
       });
       return;
     }
-    if (this.busy) {
-      this.emit({
-        type: "error",
-        scope: "pipeline",
-        message: "現在応答中です。完了してからもう一度お試しください。",
-      });
+    if (this.rejectIfBusy()) {
       return;
     }
     this.emit({ type: "wakeword_detected", phrase });
-    this.deps.history.setMaxTurns(this.deps.config.getLLM().history_turns);
-    await this.runLoop({});
+    await this.startTurn({});
   }
 
   /** テキスト入力（音声認識をスキップして応答する） */
   async submitText(text: string): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed) {
+    if (!trimmed || this.rejectIfBusy()) {
       return;
     }
-    if (this.busy) {
-      this.emit({
-        type: "error",
-        scope: "pipeline",
-        message: "現在応答中です。完了してからもう一度お試しください。",
-      });
-      return;
-    }
-    this.deps.history.setMaxTurns(this.deps.config.getLLM().history_turns);
-    await this.runLoop({ initialText: trimmed });
+    await this.startTurn({ initialText: trimmed });
   }
 
   /** 読み上げのみ（会話履歴には残さない） */
   async speak(text: string): Promise<void> {
     const trimmed = text.trim();
-    if (!trimmed) {
-      return;
-    }
-    if (this.busy) {
-      this.emit({ type: "error", scope: "pipeline", message: "現在応答中です。" });
+    if (!trimmed || this.rejectIfBusy("現在応答中です")) {
       return;
     }
     this.busy = true;
@@ -194,17 +194,9 @@ export class ConversationPipeline {
     await this.deps.audio.dispose();
   }
 
-  /**
-   * ターンループ本体。バージイン発話・フォローアップをまたいで継続する。
-   */
   /** ブラウザから送られた発話（WAV）を 1 ターン処理する */
   async submitAudio(wav: Buffer): Promise<void> {
-    if (this.busy) {
-      this.emit({
-        type: "error",
-        scope: "pipeline",
-        message: "現在応答中です。完了してからもう一度お試しください。",
-      });
+    if (this.rejectIfBusy()) {
       return;
     }
     this.busy = true;
@@ -245,69 +237,33 @@ export class ConversationPipeline {
     this.playback?.stop();
   }
 
-  /** 音声を認識する（失敗・破棄はイベント／ログで通知し、呼び出し側が継続可否を決める） */
-  private async transcribe(wav: Buffer): Promise<TranscriptionOutcome> {
-    this.setState("transcribing");
-    this.emit({ type: "stt_started" });
+  /** 音声を認識する（実装は `TranscriptionRunner`。破棄は `ignored` として返る） */
+  private transcribe(wav: Buffer): Promise<TranscriptionOutcome> {
     const controller = this.newAbort();
-    try {
-      const transcript = await this.deps.stt.transcribe(wav, { signal: controller.signal });
-      if (!this.active) {
-        return { kind: "empty" };
-      }
-      const text = transcript.text.trim();
-      if (!text) {
-        // 認識結果が空のときは UI に空の吹き出しを出さない
-        this.emit({
-          type: "error",
-          scope: "stt",
-          message: "音声を認識できませんでした。もう一度お話しください。",
-        });
-        return { kind: "empty" };
-      }
+    return this.transcription.run(wav, {
+      signal: controller.signal,
+      hooks: {
+        setState: (state) => this.setState(state),
+        emit: (event) => this.emit(event),
+        onError: (scope, error) => this.emitError(scope, error),
+        isActive: () => this.active,
+      },
+    });
+  }
 
-      // 定型句の幻聴（STT 実装に依存しない二重の保険）
-      if (isHallucination(text)) {
-        this.deps.logger.warn(`幻聴と判定したため破棄します: ${text}`);
-        return { kind: "ignored", reason: "hallucination" };
-      }
-      // 意味のない短い断片（環境音・自分の声の拾い）は会話に載せない
-      if (isTooShortFragment(text)) {
-        this.deps.logger.warn(`短すぎる認識結果のため破棄します: ${text}`);
-        return { kind: "ignored", reason: "short" };
-      }
-      // 自分の声（スピーカー出力）を拾った場合は会話に載せない
-      if (isEchoOfReply(text, this.recentReplies.length > 0 ? this.recentReplies : this.lastSpokenReply)) {
-        this.deps.logger.warn(`自分の発話のエコーと判定したため破棄します: ${text}`);
-        return { kind: "ignored", reason: "echo" };
-      }
-      // 同じ認識結果が続く場合は幻聴・エコーの可能性が高い（2 回目までは正当な繰り返しとして許容）
-      const normalized = normalizeTranscript(text);
-      if (normalized === this.lastAcceptedTranscript) {
-        this.repeatCount += 1;
-        if (this.repeatCount >= REPEAT_LIMIT) {
-          this.deps.logger.warn(`同じ認識結果が ${this.repeatCount} 回続いたため破棄します: ${text}`);
-          return { kind: "ignored", reason: "repeat" };
-        }
-      } else {
-        this.lastAcceptedTranscript = normalized;
-        this.repeatCount = 1;
-      }
-
-      this.emit({
-        type: "stt_complete",
-        text,
-        language: transcript.language,
-        elapsedMs: transcript.elapsedMs,
-      });
-      return { kind: "text", text };
-    } catch (error) {
-      if (controller.signal.aborted) {
-        return { kind: "empty" };
-      }
-      this.emitError("stt", error);
-      return { kind: "empty" };
+  /** 応答中ならエラーを通知して true を返す（多重実行の防止） */
+  private rejectIfBusy(message = "現在応答中です。完了してからもう一度お試しください。"): boolean {
+    if (!this.busy) {
+      return false;
     }
+    this.emit({ type: "error", scope: "pipeline", message });
+    return true;
+  }
+
+  /** ターンループを開始する（履歴の上限を設定してから実行） */
+  private startTurn(options: { initialWav?: Buffer; initialText?: string }): Promise<void> {
+    this.deps.history.setMaxTurns(this.deps.config.getLLM().history_turns);
+    return this.runLoop(options);
   }
 
   private async runLoop(options: { initialWav?: Buffer; initialText?: string }): Promise<void> {
@@ -319,7 +275,6 @@ export class ConversationPipeline {
     this.turnCounter = 0;
 
     const conv = this.deps.config.getConversation();
-    const audio = this.deps.config.getAudio();
     let pendingWav = options.initialWav;
     let pendingText = options.initialText;
     let followup = 0;
@@ -337,77 +292,11 @@ export class ConversationPipeline {
           pendingText = undefined;
         } else {
           if (!wav) {
-            // 応答直後は自分の声を拾わないよう少し待つ
-            if (followup > 0) {
-              await this.sleep(conv.followup_guard_ms);
-              if (!this.active) {
-                break;
-              }
-            }
-
-            this.setState("recording");
-            this.emit({ type: "recording_started" });
-            const startTimeoutMs =
-              (followup > 0 ? conv.followup_timeout_seconds : audio.no_speech_timeout) * 1000;
-            let lastLevelAt = 0;
-            const capture = this.deps.audio.capture({
-              maxDurationMs: audio.max_record_seconds * 1000,
-              startTimeoutMs,
-              onLevel: (level, threshold) => {
-                const now = Date.now();
-                if (now - lastLevelAt < 100) {
-                  return; // UI へは 10Hz 程度に間引いて送る
-                }
-                lastLevelAt = now;
-                this.emit({
-                  type: "level",
-                  level: Number(level.toFixed(3)),
-                  threshold: Number(threshold.toFixed(3)),
-                });
-              },
-            });
-            this.capture = capture;
-            const result = await capture.result;
-            this.capture = null;
-            this.emit({
-              type: "recording_stopped",
-              durationMs: result.durationMs,
-              reason: result.reason,
-            });
-
-            if (!this.active) {
+            const captured = await this.listening.capture(this.listeningHooks(), { followup: followup > 0 });
+            if (!captured) {
               break;
             }
-            if (!result.hasSpeech) {
-              if (result.reason === "device_error") {
-                this.emit({
-                  type: "error",
-                  scope: "audio",
-                  message:
-                    "マイク入力を開始できませんでした。音声デバイスの設定（audio.input_device）を確認してください。",
-                });
-              } else if (result.frames === 0 && result.reason !== "aborted") {
-                this.emit({
-                  type: "error",
-                  scope: "audio",
-                  message:
-                    "マイクから音声データが取得できませんでした（他アプリがマイクを使用中／ミュート／デバイス設定を確認してください）。",
-                });
-              } else if (
-                followup === 0 &&
-                result.peakLevel !== undefined &&
-                result.peakLevel < audio.silence_threshold * 0.5
-              ) {
-                // 録音はできているがレベルがほぼ 0（ミュート・入力レベル 0 など）
-                this.emit({
-                  type: "error",
-                  scope: "audio",
-                  message: `マイクの入力レベルがほぼ 0 です（peak=${result.peakLevel}）。Windows のサウンド設定でミュート／入力レベルを確認してください。`,
-                });
-              }
-              break;
-            }
-            wav = result.wav;
+            wav = captured;
           }
 
           const outcome = await this.transcribe(wav);
@@ -419,7 +308,7 @@ export class ConversationPipeline {
             // ただし連続で破棄され続ける場合はループを抜ける（無限ループ防止）。
             this.emit({ type: "turn_skipped", reason: outcome.reason });
             ignoredCount += 1;
-            if (ignoredCount >= 3) {
+            if (ignoredCount >= MAX_CONSECUTIVE_SKIPS) {
               this.deps.logger.warn("破棄が続くため聞き取りを停止します");
               break;
             }
@@ -441,6 +330,12 @@ export class ConversationPipeline {
           pendingWav = bargeWav;
           followup = 0;
           continue;
+        }
+
+        // ブラウザ入力モードでは録音をクライアントが駆動する。
+        // サーバー側で ffmpeg を開くとマイクを奪い、busy も残るため、ここでループを終える。
+        if (this.deps.config.getAudio().input_mode === "browser") {
+          break;
         }
 
         if (!conv.followup_enabled) {
@@ -474,132 +369,39 @@ export class ConversationPipeline {
   }
 
   /** 1 ターン分の応答生成（LLM → TTS → 再生）。バージイン発話があれば WAV を返す */
-  private async respond(userText: string): Promise<Buffer | undefined> {
-    this.deps.history.add("user", userText);
-    this.emitHistory();
-
-    this.setState("thinking");
-    this.emit({ type: "llm_started" });
-    const llmStartedAt = Date.now();
-    let reply = "";
+  private respond(userText: string): Promise<Buffer | undefined> {
     const controller = this.newAbort();
-    try {
-      reply = await this.deps.llm.chatStream(
-        this.buildMessages(),
-        (delta) => {
-          this.emit({ type: "llm_delta", content: delta });
-        },
-        { signal: controller.signal }
-      );
-
-      // 日本語の指示を無視してハングルを混ぜるモデルがあるため、1 回だけ再生成する。
-      // 画面は llm_complete の全文で上書きされるので、再生成中の差分は送出しない。
-      if (containsHangul(reply)) {
-        this.deps.logger.warn("応答にハングルが混入したため日本語で再生成します");
-        reply = await this.deps.llm.chatStream(
-          this.buildMessages({ languageRetry: true }),
-          () => undefined,
-          { signal: controller.signal }
-        );
-        if (containsHangul(reply)) {
-          this.deps.logger.warn("再生成してもハングルが残りました");
-        }
-      }
-    } catch (error) {
-      // 中断は「自分で止めた」場合のみ黙って終了する。
-      // 通信レベルの "aborted"（Ollama 側が接続を切った等）はユーザー操作ではないので通知する。
-      if (controller.signal.aborted) {
-        return undefined;
-      }
-      this.emitError("llm", error);
-      return undefined;
-    }
-    reply = reply.trim();
-    this.emit({ type: "llm_complete", text: reply, elapsedMs: Date.now() - llmStartedAt });
-    if (!reply) {
-      this.emit({ type: "error", scope: "llm", message: "LLM の応答が空でした" });
-      return undefined;
-    }
-    this.deps.history.add("assistant", reply);
-    this.lastSpokenReply = reply;
-    this.recentReplies.unshift(reply);
-    if (this.recentReplies.length > 3) {
-      this.recentReplies.pop();
-    }
-    // 応答が成立したので「同じ発話の連続」カウントをリセットする
-    // （幻聴ループ対策の判定が、正当な聞き返しまで落とさないようにする）
-    this.lastAcceptedTranscript = "";
-    this.repeatCount = 0;
-    this.emitHistory();
-
-    this.setState("speaking");
-    this.emit({ type: "tts_started" });
-    const ttsStartedAt = Date.now();
-    let wav: Buffer;
-    const ttsController = this.newAbort();
-    try {
-      wav = await this.deps.tts.synthesize(reply, { signal: ttsController.signal });
-    } catch (error) {
-      if (ttsController.signal.aborted) {
-        return undefined;
-      }
-      this.emitError("tts", error);
-      return undefined;
-    }
-    this.emit({ type: "tts_complete", elapsedMs: Date.now() - ttsStartedAt });
-
-    return this.playWithBargeIn(wav);
+    const hooks: TurnHooks = {
+      setState: (state) => this.setState(state),
+      emit: (event) => this.emit(event),
+      onError: (scope, error) => this.emitError(scope, error),
+      onHistoryChanged: () => this.emitHistory(),
+      onReply: (reply) => {
+        this.gate.rememberReply(reply);
+        // 応答が成立したので「同じ発話の連続」カウントをリセットする
+        // （幻聴ループ対策の判定が、正当な聞き返しまで落とさないようにする）
+        this.gate.resetRepeat();
+      },
+      play: (wav) => this.playWithBargeIn(wav),
+    };
+    return this.turnRunner.run(userText, hooks, controller.signal);
   }
 
   /**
-   * 再生とバージイン監視。
+   * 再生とバージイン監視（実装は `PlaybackLoop`）。
    * 再生中に発話を検知したら再生を止め、その発話を次ターンの入力として返す。
    */
-  private async playWithBargeIn(wav: Buffer): Promise<Buffer | undefined> {
-    const conv = this.deps.config.getConversation();
-    const audio = this.deps.config.getAudio();
-
-    const playback = this.deps.audio.play(wav);
-    this.playback = playback;
-    this.emit({ type: "speaking_started" });
-
-    if (!conv.barge_in_enabled || audio.input_mode === "browser") {
-      // ブラウザ入力モードでは、クライアントがマイクを監視して stop_speaking を送る
-      await playback.finished;
-      this.playback = null;
-      this.emit({ type: "speaking_finished" });
-      return undefined;
-    }
-
-    let bargedIn = false;
-    const playbackMs = Math.max(1000, wavDurationMs(wav, audio.sample_rate));
-    const capture = this.deps.audio.capture({
-      maxDurationMs: playbackMs + audio.max_record_seconds * 1000,
-      // バージインは応答音声を拾わないよう通常より高めのしきい値を使う
-      threshold: Math.max(audio.silence_threshold, conv.barge_in_min_score),
-      onSpeechStart: () => {
-        bargedIn = true;
-        playback.stop();
+  private playWithBargeIn(wav: Buffer): Promise<Buffer | undefined> {
+    return this.playbackLoop.play(wav, {
+      emit: (event) => this.emit(event),
+      onPlayback: (handle) => {
+        this.playback = handle;
       },
+      onCapture: (handle) => {
+        this.capture = handle;
+      },
+      isActive: () => this.active,
     });
-    this.capture = capture;
-
-    await playback.finished;
-    this.playback = null;
-
-    if (!bargedIn) {
-      capture.stop("aborted");
-      await capture.result.catch(() => undefined);
-      this.capture = null;
-      this.emit({ type: "speaking_finished" });
-      return undefined;
-    }
-
-    this.emit({ type: "barge_in" });
-    this.emit({ type: "speaking_finished" });
-    const result = await capture.result;
-    this.capture = null;
-    return this.active && result.hasSpeech ? result.wav : undefined;
   }
 
   private newAbort(): AbortController {
@@ -633,24 +435,5 @@ export class ConversationPipeline {
 
   private emitHistory(): void {
     this.emit({ type: "history_updated", messages: this.deps.history.all() });
-  }
-
-  private buildMessages(options: { languageRetry?: boolean } = {}): LlmMessage[] {
-    const system = this.deps.promptBuilder.build();
-    const messages: LlmMessage[] = [
-      { role: "system", content: system },
-      ...this.deps.history.forPrompt(),
-    ];
-    if (options.languageRetry) {
-      messages.push({ role: "system", content: LANGUAGE_RETRY_INSTRUCTION });
-    }
-    return messages;
-  }
-
-  private sleep(ms: number): Promise<void> {
-    if (ms <= 0) {
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

@@ -439,6 +439,25 @@ test("応答が成立した後の同じ発話は破棄しない（連続同一�
   }
 });
 
+test("ブラウザ入力モードではテキスト送信後にサーバー録音を開始しない", async () => {
+  const harness = setup({
+    specs: [{ hasSpeech: true, reason: "silence" }],
+    configPatch: {
+      audio: { input_mode: "browser" },
+      conversation: { followup_enabled: true, keep_listening: true },
+    },
+  });
+  try {
+    await harness.pipeline.submitText("こんにちは");
+
+    assert.equal(harness.captureCalls(), 0, "サーバー側で ffmpeg 録音を開かない");
+    assert.equal(harness.pipeline.isBusy, false, "busy が残らない（次の発話を受け付ける）");
+    assert.ok(typesOf(harness.events).includes("turn_complete"));
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("フォローアップが有効なら連続ターンを録音し続ける", async () => {
   const harness = setup({
     specs: [
