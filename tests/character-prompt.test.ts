@@ -69,6 +69,13 @@ test("PromptBuilder は人格・応答ルール・ユーザー名・日時を含
     assert.match(prompt, /ユーザー名: /);
     assert.match(prompt, /現在の日時: \d{4}\/\d{2}\/\d{2}/);
     assert.match(prompt, /日本語/);
+    // 言語の固定（先頭と末尾の両方に置く）
+    assert.match(prompt, /【最重要】応答は必ず日本語で書くこと/);
+    assert.match(prompt, /ハングル/);
+    assert.ok(
+      prompt.trimEnd().endsWith("- 日本語以外の言語（韓国語・中国語・英語など）の文字は使わないこと"),
+      "末尾にも言語指定が必要"
+    );
   } finally {
     project.cleanup();
   }

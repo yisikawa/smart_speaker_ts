@@ -12,6 +12,7 @@ import {
 import { Logger } from "../core/logger";
 import { wavDurationMs } from "../services/wav";
 import { ConversationHistory } from "./ConversationHistory";
+import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
 
 /** 中断起因のエラーか（AbortController / socket 由来） */
@@ -426,6 +427,20 @@ export class ConversationPipeline {
         },
         { signal: controller.signal }
       );
+
+      // 日本語の指示を無視してハングルを混ぜるモデルがあるため、1 回だけ再生成する。
+      // 画面は llm_complete の全文で上書きされるので、再生成中の差分は送出しない。
+      if (containsHangul(reply)) {
+        this.deps.logger.warn("応答にハングルが混入したため日本語で再生成します");
+        reply = await this.deps.llm.chatStream(
+          this.buildMessages({ languageRetry: true }),
+          () => undefined,
+          { signal: controller.signal }
+        );
+        if (containsHangul(reply)) {
+          this.deps.logger.warn("再生成してもハングルが残りました");
+        }
+      }
     } catch (error) {
       if (isAbortError(error)) {
         return undefined;
@@ -546,11 +561,16 @@ export class ConversationPipeline {
     this.emit({ type: "history_updated", messages: this.deps.history.all() });
   }
 
-  private buildMessages(): LlmMessage[] {
-    return [
-      { role: "system", content: this.deps.promptBuilder.build() },
+  private buildMessages(options: { languageRetry?: boolean } = {}): LlmMessage[] {
+    const system = this.deps.promptBuilder.build();
+    const messages: LlmMessage[] = [
+      { role: "system", content: system },
       ...this.deps.history.forPrompt(),
     ];
+    if (options.languageRetry) {
+      messages.push({ role: "system", content: LANGUAGE_RETRY_INSTRUCTION });
+    }
+    return messages;
   }
 
   private sleep(ms: number): Promise<void> {

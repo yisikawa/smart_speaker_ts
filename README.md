@@ -113,6 +113,7 @@ npm start              # node dist/backend/index.js
 - **「マイク確認」ボタン**: 5 秒間だけ録音して入力レベル（peak / dBFS / フレーム数）を表示（送信はしない）
 - **聞き取りを継続**（`conversation.keep_listening = true`）: フォローアップ回数の上限後も「停止」を押すまで待機を続ける
 - ストリーミング応答（差分を逐次表示）と `AbortController` による中断
+- **応答言語ガード**: ハングル（韓国語）が混入した応答は 1 回だけ日本語で再生成（小規模モデルの言語混入対策）
 - バージイン（発話で再生を停止し、その発話を次のターンとして処理）
 - フォローアップ（連続会話）
 - キャラクター定義（`config/characters/*.toml`）の人格・応答ルール・口癖をプロンプトへ反映
@@ -211,7 +212,7 @@ logs/                          # app.log（実行ログ）
 | マイクが開かない（ffmpeg モード） | `audio.input_mode = "server"` の場合。`ffmpeg` の PATH、`audio.input_device`、`GET /api/audio-devices` |
 | 入力レベルが動かない（マイクが拾っていない） | 「マイク確認」を押して 5 秒話す。peak が 0.02 未満なら「マイク」セレクトで別デバイスを選択 |
 | 発話を検出しない | `audio.silence_threshold`（RMS 0..1）を上げる、`audio.input_gain` を上げる。UI のレベルメーターを確認 |
-| LLM が 404 | `llm.model` が未取得（起動時に警告が出ます） |
+| LLM が 404（`model 'xxx' not found`） | `llm.model` が Ollama に無い。`ollama list` で確認し `ollama pull <model>` を実行。**`settings.toml` を書き換えただけでは反映されない**ので `POST /api/config/reload` か再起動も行う（起動時にも警告が出ます） |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |
 | バージインしない | `conversation.barge_in_enabled`, `barge_in_min_score`（既定 0.08） |
 | 設定が効かない | `POST /api/config/reload` または再起動 |

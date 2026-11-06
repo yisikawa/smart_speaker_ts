@@ -18,6 +18,7 @@ import {
   TextToSpeech,
 } from "../src/backend/core/ports";
 import { Logger } from "../src/backend/core/logger";
+import type { LlmMessage } from "../src/backend/core/messages";
 import { encodeWav } from "../src/backend/services/wav";
 
 Logger.configure({ level: "error" });
@@ -233,6 +234,48 @@ test("テキスト入力は STT をスキップして応答する", async () => 
     assert.equal(harness.sttCalls(), 0);
     assert.equal(harness.llmCalls(), 1);
     assert.equal(harness.history.all()[0]?.content, "テキストから話しかける");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("ハングルが混入した応答は日本語で 1 回だけ再生成する", async () => {
+  const replies = ["음, 당연히 잘 돌아가고 있지! 내가 뭐 도와줄 거 있어?", "うん、ちゃんと動いてるよ！何か手伝おうか？"];
+  const sentMessages: LlmMessage[][] = [];
+  let calls = 0;
+  const llm: LanguageModel = {
+    isAvailable: async () => true,
+    listModels: async () => ["fake"],
+    chatStream: async (messages, onDelta) => {
+      const reply = replies[Math.min(calls, replies.length - 1)];
+      sentMessages.push(messages);
+      calls += 1;
+      onDelta(reply);
+      return reply;
+    },
+  };
+
+  const harness = setup({ specs: [{ hasSpeech: false, reason: "no_speech" }], llmOverride: llm });
+  try {
+    await harness.pipeline.submitText("動作してますか？");
+
+    assert.equal(calls, 2, "ハングル検出で再生成する");
+    const retryMessages = sentMessages[1];
+    const lastMessage = retryMessages[retryMessages.length - 1];
+    assert.equal(lastMessage?.role, "system");
+    assert.match(lastMessage?.content ?? "", /日本語だけで書いてください/);
+
+    // 差分は 1 回目の分だけ流し、確定テキストは再生成後の日本語
+    const deltas = harness.events
+      .filter((event): event is Extract<PipelineEvent, { type: "llm_delta" }> => event.type === "llm_delta")
+      .map((event) => event.content);
+    assert.deepEqual(deltas, [replies[0]]);
+
+    const complete = harness.events.find(
+      (event): event is Extract<PipelineEvent, { type: "llm_complete" }> => event.type === "llm_complete"
+    );
+    assert.equal(complete?.text, replies[1]);
+    assert.equal(harness.history.all().at(-1)?.content, replies[1]);
   } finally {
     harness.cleanup();
   }
