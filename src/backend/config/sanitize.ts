@@ -71,6 +71,10 @@ export function sanitizeConfig(config: AppConfig): string[] {
   clampField(config.stt, "beam_size", 1, 8, "stt.beam_size", warnings);
   clampField(config.stt, "threads", 1, 64, "stt.threads", warnings);
   clampField(config.stt, "timeout_seconds", 5, 600, "stt.timeout_seconds", warnings);
+  clampField(config.stt, "max_context", 0, 64, "stt.max_context", warnings);
+  clampField(config.stt, "no_speech_thold", 0, 1, "stt.no_speech_thold", warnings);
+  clampField(config.stt, "drop_no_speech_prob", 0, 1, "stt.drop_no_speech_prob", warnings);
+  clampField(config.stt, "drop_avg_logprob", -5, 0, "stt.drop_avg_logprob", warnings);
 
   clampField(config.llm, "temperature", 0, 2, "llm.temperature", warnings);
   clampField(config.llm, "max_tokens", 32, 8192, "llm.max_tokens", warnings);

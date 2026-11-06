@@ -281,6 +281,70 @@ test("ハングルが混入した応答は日本語で 1 回だけ再生成す�
   }
 });
 
+test("幻聴と判定された認識結果は LLM に渡さず、履歴にも残さない", async () => {
+  const harness = setup({
+    specs: [
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: true, reason: "silence" },
+    ],
+    sttTexts: ["ご視聴ありがとうございました。"],
+  });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    assert.equal(harness.llmCalls(), 0, "幻聴では LLM を呼ばない");
+    assert.equal(harness.playCalls(), 0, "幻聴では読み上げない");
+    assert.deepEqual(harness.history.all(), []);
+    const userBubbles = harness.events.filter(
+      (event) => event.type === "stt_complete"
+    );
+    assert.equal(userBubbles.length, 0, "幻聴はユーザー発話として表示しない");
+  } finally {
+    harness.cleanup();
+  }
+});
+
+test("自分の声（直前の応答のエコー）は会話に載せない", async () => {
+  const reply = "今日はいい天気だよ、散歩でもどう？";
+  let llmCalls = 0;
+  const llm: LanguageModel = {
+    isAvailable: async () => true,
+    listModels: async () => ["fake"],
+    chatStream: async (_messages, onDelta) => {
+      llmCalls += 1;
+      onDelta(reply);
+      return reply;
+    },
+  };
+
+  const harness = setup({
+    specs: [
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: true, reason: "silence" },
+      { hasSpeech: true, reason: "silence" },
+    ],
+    sttTexts: ["今日の天気は？", "今日はいい天気だよ、散歩でもどう"],
+    configPatch: { conversation: { followup_enabled: true, max_followup_turns: 1 } },
+    llmOverride: llm,
+  });
+  try {
+    await harness.pipeline.handleWakeWord("テスト");
+
+    assert.equal(llmCalls, 1, "エコーでは追加の応答を生成しない");
+    assert.deepEqual(
+      harness.history.all().map((message) => [message.role, message.content]),
+      [
+        ["user", "今日の天気は？"],
+        ["assistant", reply],
+      ]
+    );
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test("フォローアップが有効なら連続ターンを録音し続ける", async () => {
   const harness = setup({
     specs: [

@@ -5,12 +5,25 @@ import { ConfigManager } from "../config/ConfigManager";
 import { runProcess } from "../core/childProcess";
 import { Logger } from "../core/logger";
 import { SpeechToText, Transcript } from "../core/ports";
+import { isHallucination, joinSegments, WhisperSegment } from "./transcriptFilter";
+
+/** whisper.cpp の `-ojf`（JSON full）出力のうち、こちらで使う部分 */
+interface WhisperJson {
+  transcription?: WhisperSegment[];
+}
 
 /**
  * whisper.cpp（main.exe）を子プロセスで呼び出す STT 実装。
  *
  * 注意: whisper.cpp の `-ng` は「GPU を無効化」するフラグである。
  * 旧実装は use_gpu=true のときに `-ng` を渡しており意味が逆だった。
+ *
+ * 無音・雑音に対する幻聴（「ご視聴ありがとうございました」等）対策として、
+ * - `-sns`（非音声トークン抑制）
+ * - `-mc 0`（文脈を引き継がない）
+ * - `-nth`（無音判定しきい値）
+ * - `-ojf` の no_speech_prob / avg_logprob による区間フィルタ
+ * を併用する。
  */
 export class WhisperSttService implements SpeechToText {
   private readonly logger: Logger;
@@ -41,14 +54,22 @@ export class WhisperSttService implements SpeechToText {
       "-l",
       stt.language,
       "-otxt",
+      "-ojf",
       "-of",
       outputBase,
       "-t",
       String(stt.threads),
       "-bs",
       String(stt.beam_size),
+      "-mc",
+      String(stt.max_context),
+      "-nth",
+      String(stt.no_speech_thold),
       stt.flash_attn ? "-fa" : "-nfa",
     ];
+    if (stt.suppress_non_speech) {
+      args.push("-sns");
+    }
     if (!stt.use_gpu) {
       args.push("-ng");
     }
@@ -56,6 +77,18 @@ export class WhisperSttService implements SpeechToText {
       args.push("--prompt", stt.initial_prompt);
     }
     return args;
+  }
+
+  /** `-ojf` の JSON を読む（無ければ null） */
+  private readJson(jsonPath: string): WhisperJson | null {
+    if (!fs.existsSync(jsonPath)) {
+      return null;
+    }
+    try {
+      return JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as WhisperJson;
+    } catch {
+      return null;
+    }
   }
 
   async transcribe(wav: Buffer, options: { signal?: AbortSignal } = {}): Promise<Transcript> {
@@ -95,9 +128,32 @@ export class WhisperSttService implements SpeechToText {
       }
 
       const textPath = `${outputBase}.txt`;
-      const text = fs.existsSync(textPath) ? (await fs.promises.readFile(textPath, "utf-8")).trim() : "";
+      const jsonPath = `${outputBase}.json`;
+      const sttConfig = this.deps.config.getSTT();
+      let text = "";
+      let droppedSegments = 0;
+
+      const json = this.readJson(jsonPath);
+      const segments = Array.isArray(json?.transcription) ? json.transcription : [];
+      if (segments.length > 0) {
+        const joined = joinSegments(segments, {
+          noSpeechProb: sttConfig.drop_no_speech_prob,
+          avgLogprob: sttConfig.drop_avg_logprob,
+        });
+        text = joined.text;
+        droppedSegments = joined.dropped;
+      } else if (fs.existsSync(textPath)) {
+        text = (await fs.promises.readFile(textPath, "utf-8")).trim();
+      }
+
+      if (text && sttConfig.filter_hallucinations && isHallucination(text)) {
+        this.logger.warn(`幻聴と判定したため破棄します: ${text}`);
+        text = "";
+      }
+
       const elapsedMs = Date.now() - started;
-      this.logger.info(`認識完了 (${elapsedMs}ms): ${text || "(空)"}`);
+      const droppedNote = droppedSegments > 0 ? `, 低信頼の区間 ${droppedSegments} 件を破棄` : "";
+      this.logger.info(`認識完了 (${elapsedMs}ms${droppedNote}): ${text || "(空)"}`);
       return { text, language: stt.language, elapsedMs };
     } finally {
       await fs.promises.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
