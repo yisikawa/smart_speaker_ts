@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 import type { CaptureEndReason, PipelineEvent } from "../src/shared/protocol";
-import { ConfigManager } from "../src/backend/config/ConfigManager";
 import { AppConfig, DeepPartial } from "../src/backend/config/schema";
 import { ConversationHistory } from "../src/backend/conversation/ConversationHistory";
 import { ConversationPipeline } from "../src/backend/conversation/ConversationPipeline";
@@ -20,6 +16,7 @@ import {
 import { Logger } from "../src/backend/core/logger";
 import type { LlmMessage } from "../src/backend/core/messages";
 import { encodeWav } from "../src/backend/services/wav";
+import { createTempProject } from "./helpers/project";
 
 Logger.configure({ level: "error" });
 
@@ -50,19 +47,21 @@ function setup(options: {
   llmOverride?: LanguageModel;
   configPatch?: DeepPartial<AppConfig>;
 }): Harness {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-pipe-"));
-  const config = new ConfigManager({ rootDir });
-  config.update({
-    // サーバー（ffmpeg）録音モードを既定にしたテスト。ブラウザモードは個別に上書きする
-    audio: { input_mode: "server", ...(options.configPatch?.audio ?? {}) },
-    // 無限に聞き続けないよう、テストでは明示的に停止させる（keep_listening のテストで上書き）
-    conversation: {
-      barge_in_enabled: false,
-      followup_enabled: false,
-      keep_listening: false,
-      ...(options.configPatch?.conversation ?? {}),
+  const project = createTempProject({
+    prefix: "sumika-pipe-",
+    patch: {
+      // サーバー（ffmpeg）録音モードを既定にしたテスト。ブラウザモードは個別に上書きする
+      audio: { input_mode: "server", ...(options.configPatch?.audio ?? {}) },
+      // 無限に聞き続けないよう、テストでは明示的に停止させる（keep_listening のテストで上書き）
+      conversation: {
+        barge_in_enabled: false,
+        followup_enabled: false,
+        keep_listening: false,
+        ...(options.configPatch?.conversation ?? {}),
+      },
     },
   });
+  const config = project.config;
 
   const events: PipelineEvent[] = [];
   const history = new ConversationHistory(6);
@@ -159,7 +158,7 @@ function setup(options: {
     playCalls: () => playCount,
     sttCalls: () => sttCount,
     llmCalls: () => llmCount,
-    cleanup: () => fs.rmSync(rootDir, { recursive: true, force: true }),
+    cleanup: () => project.cleanup(),
   };
 }
 

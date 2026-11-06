@@ -1,12 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import * as fs from "node:fs";
 import * as http from "node:http";
-import * as os from "node:os";
-import * as path from "node:path";
 import { AddressInfo } from "node:net";
-import { ConfigManager } from "../src/backend/config/ConfigManager";
 import { OllamaLlmService } from "../src/backend/services/OllamaLlmService";
+import { createTempProject, TempProject } from "./helpers/project";
 
 /** NDJSON をわざと細かく分割して返す擬似 Ollama サーバー */
 function startFakeOllama(): Promise<{ server: http.Server; port: number }> {
@@ -48,11 +45,11 @@ function startFakeOllama(): Promise<{ server: http.Server; port: number }> {
   });
 }
 
-function withConfig(port: number): { rootDir: string; config: ConfigManager; cleanup: () => void } {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-llm-"));
-  const config = new ConfigManager({ rootDir });
-  config.update({ llm: { endpoint: `http://127.0.0.1:${port}`, model: "test-model" } });
-  return { rootDir, config, cleanup: () => fs.rmSync(rootDir, { recursive: true, force: true }) };
+function withConfig(port: number): TempProject {
+  return createTempProject({
+    prefix: "sumika-llm-",
+    patch: { llm: { endpoint: `http://127.0.0.1:${port}`, model: "test-model" } },
+  });
 }
 
 test("Ollama の NDJSON ストリームはチャンク境界をまたいでも欠落しない", async () => {

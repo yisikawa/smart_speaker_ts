@@ -1,18 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
-import { ConfigManager } from "../src/backend/config/ConfigManager";
 import { createSttService } from "../src/backend/services/sttFactory";
 import { SherpaSttService } from "../src/backend/services/SherpaSttService";
 import { WhisperSttService } from "../src/backend/services/WhisperSttService";
+import { createTempProject, TempProject } from "./helpers/project";
 
-function withConfig(engine: "whisper" | "sherpa"): { rootDir: string; config: ConfigManager; cleanup: () => void } {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-sherpa-"));
-  const config = new ConfigManager({ rootDir });
-  config.update({ stt: { engine } });
-  return { rootDir, config, cleanup: () => fs.rmSync(rootDir, { recursive: true, force: true }) };
+function withConfig(engine: "whisper" | "sherpa"): TempProject {
+  return createTempProject({ prefix: "sumika-sherpa-", patch: { stt: { engine } } });
 }
 
 test("createSttService は stt.engine に応じた実装を返す", () => {
@@ -32,15 +28,15 @@ test("createSttService は stt.engine に応じた実装を返す", () => {
 });
 
 test("stt.engine が未対応値なら whisper に補正される", () => {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-sherpa-"));
+  const project = createTempProject({ prefix: "sumika-sherpa-" });
   try {
-    const config = new ConfigManager({ rootDir });
+    const config = project.config;
     config.update({ stt: { engine: "unknown" as unknown as "whisper" } });
 
     assert.equal(config.getSTT().engine, "whisper");
     assert.ok(config.getWarnings().some((warning) => warning.includes("stt.engine")));
   } finally {
-    fs.rmSync(rootDir, { recursive: true, force: true });
+    project.cleanup();
   }
 });
 

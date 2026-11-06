@@ -184,8 +184,10 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 ## 開発
 
 ```powershell
-npm run typecheck      # 型チェック
-npm test               # ユニット/結合テスト（node:test, 63 ケース）
+npm run verify         # typecheck → test → build をまとめて実行（作業後はこれ 1 本）
+npm run typecheck      # 型チェック（backend）
+npm test               # ユニット/結合テスト（node:test, 95 ケース）
+npm run clean:tests    # dist-test の削除（pretest から自動実行）
 npm run smoke          # 起動中サーバーの疎通確認
 npm run check-audio    # マイク入力の診断（3 秒録音してピーク/dBFS を表示）
 npm run dev            # ts-node で直接起動

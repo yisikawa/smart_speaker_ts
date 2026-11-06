@@ -5,11 +5,13 @@
   "main": "dist/backend/index.js",
   "scripts": {
     "clean": "node scripts/clean.js",
+    "clean:tests": "node scripts/clean.js --tests",
     "build": "npm run clean && tsc -p tsconfig.frontend.json && tsc -p tsconfig.json && node scripts/build.js",
     "start": "node dist/backend/index.js",
     "dev": "ts-node src/backend/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "pretest": "tsc -p tsconfig.frontend.json && node scripts/build.js",
+    "verify": "npm run typecheck && npm test && npm run build",
+    "pretest": "npm run clean:tests && tsc -p tsconfig.frontend.json && node scripts/build.js",
     "test": "tsc -p tsconfig.test.json && node --test --test-timeout=30000 \"dist-test/tests/*.test.js\"",
     "check-audio": "node scripts/check-audio.js",
     "smoke": "node scripts/smoke.js"

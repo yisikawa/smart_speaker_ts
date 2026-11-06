@@ -1,13 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import * as fs from "node:fs";
 import * as http from "node:http";
-import * as os from "node:os";
-import * as path from "node:path";
 import { AddressInfo } from "node:net";
-import { ConfigManager } from "../src/backend/config/ConfigManager";
 import { encodeWav } from "../src/backend/services/wav";
 import { VoicevoxTtsService } from "../src/backend/services/VoicevoxTtsService";
+import { createTempProject, TempProject } from "./helpers/project";
 
 /** 0x80-0xFF を含むバイナリ（UTF-8 変換で壊れることを検出するため） */
 function binaryWav(): Buffer {
@@ -69,13 +66,13 @@ function startFakeVoicevox(audio: Buffer): Promise<FakeVoicevox> {
   });
 }
 
-function withConfig(port: number): { config: ConfigManager; cleanup: () => void } {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-tts-"));
-  const config = new ConfigManager({ rootDir });
-  config.update({
-    tts: { endpoint: `http://127.0.0.1:${port}`, speed: 1.5, pitch: -0.1, volume: 0.8, speaker_id: 3 },
+function withConfig(port: number): TempProject {
+  return createTempProject({
+    prefix: "sumika-tts-",
+    patch: {
+      tts: { endpoint: `http://127.0.0.1:${port}`, speed: 1.5, pitch: -0.1, volume: 0.8, speaker_id: 3 },
+    },
   });
-  return { config, cleanup: () => fs.rmSync(rootDir, { recursive: true, force: true }) };
 }
 
 test("synthesize はバイナリ音声を破損せずに返す（文字列変換バグの回帰テスト）", async () => {

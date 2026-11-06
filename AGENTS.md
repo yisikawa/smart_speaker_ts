@@ -20,6 +20,8 @@
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
 | テスト | `npm test`（`node:test` / 95 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
+| まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
+| テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |

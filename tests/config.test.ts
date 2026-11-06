@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { parse as parseToml } from "toml";
 import { ConfigManager } from "../src/backend/config/ConfigManager";
@@ -9,9 +8,10 @@ import { deepMerge } from "../src/backend/config/merge";
 import { sanitizeConfig } from "../src/backend/config/sanitize";
 import { AppConfig, DEFAULT_CONFIG } from "../src/backend/config/schema";
 import { stringifyToml } from "../src/backend/config/tomlSerializer";
+import { createTempDir } from "./helpers/project";
 
 function tempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "sumika-cfg-"));
+  return createTempDir("sumika-cfg-").dir;
 }
 
 function clone(): AppConfig {
