@@ -3,6 +3,7 @@ import * as os from "os";
 import * as path from "path";
 import { ConfigManager } from "../config/ConfigManager";
 import { runProcess } from "../core/childProcess";
+import { abortError } from "../core/errors";
 import { Logger } from "../core/logger";
 import { SpeechToText, Transcript } from "../core/ports";
 import { isHallucination, joinSegments, WhisperSegment } from "./transcriptFilter";
@@ -116,9 +117,7 @@ export class WhisperSttService implements SpeechToText {
       });
 
       if (result.aborted) {
-        const error = new Error("STT が中断されました");
-        error.name = "AbortError";
-        throw error;
+        throw abortError("STT が中断されました");
       }
       if (result.timedOut) {
         throw new Error(`STT がタイムアウトしました（${stt.timeout_seconds} 秒）`);

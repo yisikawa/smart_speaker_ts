@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 95 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 99 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |

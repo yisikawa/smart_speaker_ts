@@ -9,7 +9,7 @@
 | フェーズ | 状態 | 備考 |
 |---|---|---|
 | **P0 足場固め** | ✅ 完了 | `pretest` で `dist-test` を掃除 / `npm run verify` 追加 / `tests/helpers/project.ts` に共通化（6 ファイルの重複を解消） |
-| P1 重複排除 | ⬜ 未着手 | |
+| P1 重複排除 | 🚧 進行中 | エラー分類を `core/errors.ts` に集約済み（`isAborted` / `abortError` / `describeTransportError`）。残り: WAV/PCM 一本化・`BaseSttService` |
 | P2 パイプライン分割 | ⬜ 未着手 | |
 | P3 フロントエンド分割 | ⬜ 未着手 | |
 | P4 設定整理 | ⬜ 未着手 | |

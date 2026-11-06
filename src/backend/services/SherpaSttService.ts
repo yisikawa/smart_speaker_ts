@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ConfigManager } from "../config/ConfigManager";
+import { abortError } from "../core/errors";
 import { Logger } from "../core/logger";
 import { SpeechToText, Transcript } from "../core/ports";
 import { bytesToInt16, int16ToFloat32, isWav, resample, wavToFloat32 } from "../../shared/audio/pcm";
@@ -31,12 +32,6 @@ interface SherpaModule {
 
 /** sherpa-onnx が前提とするサンプリングレート */
 const SHERPA_SAMPLE_RATE = 16000;
-
-function abortError(): Error {
-  const error = new Error("STT が中断されました");
-  error.name = "AbortError";
-  return error;
-}
 
 /** Float32 サンプル（-1..1）の RMS を返す */
 function rmsOfFloat32(samples: Float32Array): number {
@@ -242,7 +237,7 @@ export class SherpaSttService implements SpeechToText {
   async transcribe(wav: Buffer, options: { signal?: AbortSignal } = {}): Promise<Transcript> {
     const stt = this.deps.config.getSTT();
     if (options.signal?.aborted) {
-      throw abortError();
+      throw abortError("STT が中断されました");
     }
 
     const started = Date.now();
@@ -265,7 +260,7 @@ export class SherpaSttService implements SpeechToText {
     recognizer.decode(stream);
 
     if (options.signal?.aborted) {
-      throw abortError();
+      throw abortError("STT が中断されました");
     }
 
     const result = recognizer.getResult(stream);
