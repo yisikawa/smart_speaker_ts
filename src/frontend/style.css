@@ -247,6 +247,81 @@ main {
   opacity: 0.6;
 }
 
+/* 設定メニュー（STT エンジン／モデル・LLM モデル） */
+.title-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.settings {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings.hidden {
+  display: none;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.settings-row label {
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 5.5em;
+}
+
+.settings-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #1f2937;
+}
+
+.settings-row select.hidden {
+  display: none;
+}
+
+.settings-note {
+  font-size: 0.78rem;
+  color: #b45309;
+  line-height: 1.5;
+}
+
+.settings-note.hidden {
+  display: none;
+}
+
 .composer textarea {
   flex: 1;
   resize: none;

@@ -10,7 +10,7 @@ import { AppServer } from "./server/AppServer";
 import { AudioService } from "./services/AudioService";
 import { CharacterService } from "./services/CharacterService";
 import { OllamaLlmService } from "./services/OllamaLlmService";
-import { createSttService } from "./services/sttFactory";
+import { SttSwitcher } from "./services/SttSwitcher";
 import { VoicevoxTtsService } from "./services/VoicevoxTtsService";
 
 function readVersion(rootDir: string): string {
@@ -46,7 +46,8 @@ async function main(): Promise<void> {
 
   // 2. サービス（ポート/アダプタ）
   const audio = new AudioService({ config, logger: new Logger("Audio") });
-  const stt = createSttService({ config, logger: new Logger("STT") });
+  // STT は画面からエンジン／モデルを切り替えられるよう、差し替え可能なファサードで包む
+  const stt = new SttSwitcher({ config, logger: new Logger("STT") });
   const llm = new OllamaLlmService({ config, logger: new Logger("LLM") });
   const tts = new VoicevoxTtsService({ config, logger: new Logger("TTS") });
 
@@ -81,6 +82,18 @@ async function main(): Promise<void> {
   });
 
   await server.start();
+
+  // 設定が変わったら STT の実装を差し替え、疎通（🟢/🔴）も更新する。
+  // 画面のモデル切替 / PATCH /api/config / POST /api/config/reload のすべてがここを通る。
+  config.onChange(() => {
+    if (stt.reconfigure()) {
+      bootLogger.info(`STT を切り替えました: ${stt.describe()}`);
+    }
+    void server.refreshServices();
+  });
+
+  // 初回の疎通確認が終わるまで待つ（直後の警告が「実際は接続できているのに出る」のを防ぐ）
+  await server.refreshServices();
 
   const services = server.serviceStatus();
   if (!services.llm) {

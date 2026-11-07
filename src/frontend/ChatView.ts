@@ -1,4 +1,4 @@
-import type { AssistantState, ChatMessage, ServiceStatus } from "../shared/protocol";
+import type { AssistantState, ChatMessage, ModelSelection, ServiceStatus } from "../shared/protocol";
 import { must } from "./dom";
 
 /** 状態 → 画面表示 */
@@ -23,6 +23,8 @@ export class ChatView {
   private assistantName = "さくら";
   private userName = "あなた";
   private streaming: { element: HTMLElement; text: string } | null = null;
+  /** 設定パネルを開いているか */
+  private settingsOpen = false;
 
   readonly conversationEl = must<HTMLElement>("conversation");
   readonly statusEl = must<HTMLElement>("status");
@@ -43,6 +45,13 @@ export class ChatView {
   readonly inputEl = must<HTMLTextAreaElement>("textInput");
   readonly deviceSelect = must<HTMLSelectElement>("inputDevice");
   readonly toastEl = must<HTMLElement>("toast");
+  readonly btnSettings = must<HTMLButtonElement>("btnSettings");
+  readonly settingsPanel = must<HTMLElement>("settingsPanel");
+  readonly sttEngine = must<HTMLSelectElement>("sttEngine");
+  readonly sttModel = must<HTMLSelectElement>("sttModel");
+  readonly sttModelType = must<HTMLSelectElement>("sttModelType");
+  readonly llmModel = must<HTMLSelectElement>("llmModel");
+  readonly settingsNote = must<HTMLElement>("settingsNote");
 
   /** 表示名（hello で受け取る） */
   setNames(assistant: string, user: string): void {
@@ -65,12 +74,16 @@ export class ChatView {
     this.servicesEl.textContent = text;
   }
 
-  /** 依存サービスの疎通とマイク方式 */
-  renderServices(services: ServiceStatus, inputMode: string): void {
+  /** 依存サービスの疎通・マイク方式・現在のモデル */
+  renderServices(services: ServiceStatus, inputMode: string, models?: ModelSelection): void {
     const mark = (ok: boolean): string => (ok ? "🟢" : "🔴");
     const mode = inputMode === "browser" ? "マイク: ブラウザ" : "マイク: サーバー";
+    const llmLabel = models ? ` ${models.llm.model}` : "";
+    const sttLabel = models ? ` ${models.stt.engine}` : "";
     this.setServicesText(
-      `LLM ${mark(services.llm)}  TTS ${mark(services.tts)}  STT ${mark(services.stt)}  /  ${mode}`
+      `LLM ${mark(services.llm)}${llmLabel}  TTS ${mark(services.tts)}  STT ${mark(
+        services.stt
+      )}${sttLabel}  /  ${mode}`
     );
   }
 
@@ -180,6 +193,42 @@ export class ChatView {
     if (current) {
       this.deviceSelect.value = current;
     }
+  }
+
+  /** セレクトの選択肢を差し替える（現在値が候補に無い場合は「未検出」として残す） */
+  setSelectOptions(
+    select: HTMLSelectElement,
+    options: { value: string; label: string }[],
+    current: string
+  ): void {
+    select.innerHTML = "";
+    for (const option of options) {
+      const element = document.createElement("option");
+      element.value = option.value;
+      element.textContent = option.label;
+      select.appendChild(element);
+    }
+    if (current && !options.some((option) => option.value === current)) {
+      const element = document.createElement("option");
+      element.value = current;
+      element.textContent = `${current}（未検出）`;
+      select.appendChild(element);
+    }
+    select.value = current || options[0]?.value || "";
+  }
+
+  /** 設定パネルの開閉（新しい状態を返す） */
+  toggleSettings(): boolean {
+    this.settingsOpen = !this.settingsOpen;
+    this.settingsPanel.className = this.settingsOpen ? "settings" : "settings hidden";
+    this.btnSettings.setAttribute?.("aria-expanded", this.settingsOpen ? "true" : "false");
+    return this.settingsOpen;
+  }
+
+  /** 設定パネルの補足・警告（null で非表示） */
+  setSettingsNote(text: string | null): void {
+    this.settingsNote.textContent = text ?? "";
+    this.settingsNote.className = text ? "settings-note" : "settings-note hidden";
   }
 
   private createBubble(

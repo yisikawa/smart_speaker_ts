@@ -121,6 +121,25 @@ test("update は上書き前の settings.toml を .bak に退避する", () => {
   }
 });
 
+test("reload は設定の購読者へ通知する（STT 切替の反映に使う）", () => {
+  const dir = tempDir();
+  try {
+    const manager = new ConfigManager({ rootDir: dir });
+    let calls = 0;
+    manager.onChange(() => {
+      calls += 1;
+    });
+
+    manager.reload();
+    assert.equal(calls, 1, "reload でも通知される（POST /api/config/reload の経路）");
+
+    manager.update({ tts: { speaker_id: 8 } });
+    assert.equal(calls, 2);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("resolvePath は rootDir 基準の絶対パスを返す", () => {
   const dir = tempDir();
   try {

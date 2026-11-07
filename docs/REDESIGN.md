@@ -347,14 +347,22 @@ ffmpeg -hide_banner -loglevel error \
 | GET | `/api/config` | 設定（`home_assistant.token` などはマスク） |
 | PATCH | `/api/config` | 設定の部分更新（マージ → 検証 → `settings.toml` 保存） |
 | POST | `/api/config/reload` | 設定とキャラクターを再読み込み |
+| GET | `/api/models` | 画面のモデル選択用の候補一覧（`ModelCatalog`。Ollama 停止中でも 200 + `llm.available=false`） |
+| PUT | `/api/models/llm` | `{model}` で LLM モデルを切替（未導入は 400。即保存し次の発話から有効） |
+| PUT | `/api/models/stt` | `{engine, model_path?, sherpa_model_dir?, sherpa_model_type?}` で STT を切替（パス検証あり） |
 | GET | `/api/history` | `{ messages: ChatMessage[] }` |
 | DELETE / POST | `/api/history`, `/api/history/clear` | 履歴クリア |
 | GET | `/api/audio-devices` | 入力デバイス一覧（`ffmpeg -list_devices` 由来） |
 | POST | `/api/tts` | `{text}` を読み上げ（会話履歴には残さない） |
 
+モデルの切り替えは `ConfigManager.onChange` に集約する。`SttSwitcher`（`src/backend/services/SttSwitcher.ts`）が
+「エンジンと関連設定の署名」の変化だけを見て STT 実装を作り直す（sherpa は recognizer をキャッシュするため、
+モデル変更時に再生成が必須）。切替は次の発話から有効で、進行中の `transcribe()` は呼び出し開始時の実装が完遂する。
+候補の列挙・検証は `src/backend/services/modelCatalog.ts`（純粋ロジック）に置く。
+
 ### 7.2 WebSocket `/ws`
 
-接続直後にサーバーから `hello` を送る（状態・履歴・キャラクター名・バージョン・サービス疎通）。
+接続直後にサーバーから `hello` を送る（状態・履歴・キャラクター名・バージョン・サービス疎通・現在のモデル）。
 30 秒間隔の ping/pong で死活監視し、無応答クライアントは `terminate()`。
 
 ```ts

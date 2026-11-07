@@ -1,6 +1,6 @@
 # 残作業（TODO / バックログ）
 
-最終更新: 2026-11-06（v0.3.0 / リファクタリング P0〜P6 完了時点）
+最終更新: 2026-11-07（v0.3.0 / 画面から LLM・STT のモデル切替を追加）
 
 このファイルは「**まだ終わっていない作業**」の一覧です。完了した項目は削除し、
 `AGENTS.md` の「現在の状態」と README を更新してください（履歴は Git のコミットに残します）。
@@ -20,7 +20,7 @@
 
 | # | 項目 | 現状 / 理由 | 受け入れ条件 | 見積 |
 |---|---|---|---|---|
-| 1-1 | **設定 UI（音声まわり）** | しきい値・ゲイン・無音時間・話者などは `config/settings.toml` を直接編集するしかない。`PATCH /api/config` はあるが画面から触れない | 画面から `audio.silence_threshold` / `silence_threshold_max` / `input_gain` / `output_volume` / `tts.speaker_id` / `llm.temperature` を変更でき、`warnings` を表示する。保存後に `POST /api/config/reload` を呼び、応答が壊れないこと | 1.5 日 |
+| 1-1 | **設定 UI（音声まわりのしきい値）** | **モデル切替（LLM モデル / STT のエンジン・モデル）は画面の「⚙️ 設定」で実装済み**。残りは `audio.silence_threshold` / `input_gain` / `output_volume` / `tts.speaker_id` など数値項目 | 画面から当該項目を変更でき、`warnings` を表示する。保存後に `POST /api/config/reload` を呼び、応答が壊れないこと | 1 日 |
 | 1-2 | **VAD 設定の二重管理の解消** | ブラウザ VAD は hello で受け取った値、サーバー VAD は `AudioService` が設定を直接読む。同じ計算式が 2 経路 | ブラウザ・サーバー双方が同じ `VadSettings` 生成関数（`shared`）を使う。テストで一致を担保 | 0.5 日 |
 | 1-3 | **エコー対策の本命（WebAudio 再生）** | TTS は ffplay（ブラウザ外）で再生するため `echoCancellation` が効かない。現状は「エコー/短断片を破棄」「バージイン既定 OFF」で回避 | (a) ブラウザで音声を再生して AEC を効かせるモードを追加、または (b) 再生音を参照信号にした簡易エコー除去。**バージインを既定 ON に戻せる**ことが目標 | 2〜3 日 |
 | 1-4 | **CI（`npm run verify` の自動実行）** | 手元実行のみ。壊れた状態が main に入り得る | GitHub Actions で push/PR 時に `npm ci && npm run verify` が走る。Windows ランナーか ubuntu（ネイティブ依存なしで通ること）を確認 | 0.5 日 |
@@ -75,7 +75,7 @@
 | ブラウザのマイクは `localhost` / `127.0.0.1` のみ | secure context の仕様。LAN の IP で開くと `getUserMedia` が拒否される（https が必要） |
 | TTS の再生は ffplay / SoundPlayer（ブラウザ外） | ブラウザの AEC が効かない → エコーは必ず起きる前提。バージインは既定 OFF、断片は破棄で対処（1-3 で本質対応） |
 | `PATCH /api/config` はコメントを失う | `stringifyToml` で正規化するため。上書き前に `settings.toml.bak` を退避。コメント維持が必要なら `npm run config:default` の方式を拡張する |
-| `stt.engine` の変更は実行中に反映されない | `createSttService()` は起動時に 1 回だけ生成。切替は再起動が必要（README に明記） |
+| モデル切替は「次の発話から」有効 | `SttSwitcher` が呼び出し開始時の実装を捕捉するため、進行中のターンは切替前の設定で完遂する（設定は即保存・即反映） |
 | sherpa-onnx の `decode()` は中断できない | 同期処理（200〜400ms）。`stop()` は「完了後に破棄」で対応（2-3 で改善予定） |
 | VOICEVOX / Ollama / モデルの有無は環境依存 | `npm run smoke` と `/api/health` の `services` / `warnings` で確認する |
 | 認証なし | localhost 前提。外部公開する場合はリバースプロキシ等で保護すること |
@@ -90,8 +90,9 @@
 | テキスト入力 / 連続会話（フォローアップ）/ 停止 | ✅ |
 | 幻聴・エコー・短断片・繰り返しの破棄（＋`turn_skipped` 通知） | ✅ |
 | 応答言語ガード（ハングル混入時に 1 回だけ再生成） | ✅ |
-| STT エンジン切替（whisper.cpp / sherpa-onnx） | ✅（既定は whisper） |
+| STT エンジン切替（whisper.cpp / sherpa-onnx） | ✅（既定は whisper。画面の「⚙️ 設定」から切替可） |
+| LLM モデル切替（Ollama の導入済み一覧から選択） | ✅（画面の「⚙️ 設定」。未導入は 400 で拒否） |
 | 診断（`/api/diagnostics`・画面の「診断」パネル） | ✅ |
-| 設定 API（GET/PATCH/reload・`warnings`） | ✅（UI は無し: 1-1） |
+| 設定 API（GET/PATCH/reload・`warnings`） | ✅（画面の「⚙️ 設定」はモデル切替のみ。しきい値 UI は 1-1） |
 | バージイン | ⚠️ 既定 OFF（エコー対策待ち: 1-3） |
 | 未実装セクション（wakeword / rag / recipe_db / music / apps.*） | ❌ 設定のみ（P3） |

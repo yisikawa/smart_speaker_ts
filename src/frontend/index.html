@@ -11,7 +11,10 @@
     <header>
       <div class="title-row">
         <h1>🎙️ <span id="characterName">Sumika</span></h1>
-        <div id="status" class="status idle">待機中</div>
+        <div class="title-actions">
+          <button id="btnSettings" class="btn btn-ghost" aria-expanded="false" aria-controls="settingsPanel">⚙️ 設定</button>
+          <div id="status" class="status idle">待機中</div>
+        </div>
       </div>
       <div class="level-row">
         <div class="level-bar"><span id="levelFill" class="level-fill"></span></div>
@@ -48,6 +51,28 @@
         <button id="btnClear" class="btn btn-secondary">履歴クリア</button>
       </section>
       <section id="diagnostics" class="diagnostics hidden"></section>
+
+      <section id="settingsPanel" class="settings hidden" aria-label="モデル設定">
+        <div class="settings-row">
+          <label for="sttEngine">音声認識</label>
+          <select id="sttEngine">
+            <option value="whisper">whisper.cpp</option>
+            <option value="sherpa">sherpa-onnx</option>
+          </select>
+          <select id="sttModel" aria-label="認識モデル"></select>
+          <select id="sttModelType" class="hidden" aria-label="sherpa のモデル種別">
+            <option value="nemo_ctc">nemo_ctc</option>
+            <option value="nemo_transducer">nemo_transducer</option>
+            <option value="sense_voice">sense_voice</option>
+            <option value="zipformer_transducer">zipformer_transducer</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <label for="llmModel">LLM</label>
+          <select id="llmModel" aria-label="LLM モデル"></select>
+        </div>
+        <div id="settingsNote" class="settings-note hidden"></div>
+      </section>
     </main>
 
     <footer class="footer">

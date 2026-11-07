@@ -1,6 +1,6 @@
 import * as http from "http";
 import { WebSocket, WebSocketServer } from "ws";
-import type { ClientCommand, ServerMessage, ServiceStatus } from "../../shared/protocol";
+import type { ClientCommand, ModelSelection, ServerMessage, ServiceStatus } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
@@ -15,6 +15,8 @@ export interface WsHubDeps {
   character: CharacterService;
   version: string;
   serviceStatus: () => ServiceStatus;
+  /** 現在選択中のモデル（hello の表示用） */
+  models: () => ModelSelection;
   heartbeatMs?: number;
 }
 
@@ -68,6 +70,7 @@ export class WsHub {
         user: this.deps.config.getGUI().user_name,
         version: this.deps.version,
         services: this.deps.serviceStatus(),
+        models: this.deps.models(),
         audio: {
           inputMode: audioConfig.input_mode,
           sampleRate: audioConfig.sample_rate,

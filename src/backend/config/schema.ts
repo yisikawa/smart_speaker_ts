@@ -5,6 +5,9 @@
  * - 設定ファイル（TOML）はこの型に対して部分指定できる（深いマージで補完）
  */
 
+// フロントエンドと共有する型（内向き依存: backend → shared）
+import type { SherpaModelTypeName, SttEngineName } from "../../shared/protocol";
+
 export interface AudioConfig {
   /** STT / VAD が前提とするサンプリングレート（Whisper は 16kHz 必須） */
   sample_rate: number;
@@ -78,10 +81,10 @@ export interface ConversationConfig {
 }
 
 /** 認識エンジン（whisper: whisper.cpp / sherpa: sherpa-onnx） */
-export type SttEngine = "whisper" | "sherpa";
+export type SttEngine = SttEngineName;
 
 /** sherpa-onnx のモデル種別（使用する ONNX 一式の構成を決める） */
-export type SherpaModelType = "nemo_transducer" | "nemo_ctc" | "sense_voice" | "zipformer_transducer";
+export type SherpaModelType = SherpaModelTypeName;
 
 export interface STTConfig {
   /** 認識エンジン（whisper: whisper.cpp / sherpa: sherpa-onnx） */

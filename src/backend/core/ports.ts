@@ -75,6 +75,13 @@ export interface Transcript {
 export interface SpeechToText {
   isAvailable(): Promise<boolean>;
   transcribe(wav: Buffer, options?: { signal?: AbortSignal }): Promise<Transcript>;
+  /**
+   * 設定変更を反映する（実行中に実装を差し替えられる場合のみ実装する）。
+   * 再生成したら true。既定の実装は持たない（任意メソッド）。
+   */
+  reconfigure?(): boolean;
+  /** 現在の構成の表示名（任意。hello の表示に使う） */
+  describe?(): string;
 }
 
 /* ------------------------------------------------------------------ */

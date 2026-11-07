@@ -7,6 +7,7 @@ import type {
 } from "../shared/protocol";
 import { ChatView } from "./ChatView";
 import { MicLoop } from "./MicLoop";
+import { SettingsPanel } from "./SettingsPanel";
 import { WsClient } from "./WsClient";
 
 /**
@@ -22,6 +23,10 @@ class SumikaApp {
   private readonly view = new ChatView();
   private readonly ws: WsClient;
   private readonly micLoop: MicLoop;
+  /** 設定メニュー（STT / LLM のモデル切り替え） */
+  private readonly settings: SettingsPanel;
+  /** 現在の音声入力方式（hello で更新。疎通表示に使う） */
+  private inputMode: "browser" | "server" = "browser";
   /** 診断パネルを開いているか */
   private diagnosticsOpen = false;
 
@@ -48,10 +53,12 @@ class SumikaApp {
       send: (command) => this.send(command),
       isConnected: () => this.ws.isOpen,
     });
+    this.settings = new SettingsPanel(this.view, () => this.inputMode);
   }
 
   start(): void {
     this.bindEvents();
+    this.settings.bind();
     // connect() より先に初期状態を設定する（未接続時の表示を上書きしないため）
     this.view.setState("idle");
     this.connect();
@@ -166,12 +173,14 @@ class SumikaApp {
     this.view.setNames(hello.character.name, hello.user);
     this.view.setCharacter(hello.character.name, hello.character.label);
     this.view.setVersion(hello.version);
+    this.inputMode = hello.audio.inputMode;
     this.micLoop.configure(hello.audio);
     if (hello.audio.inputMode === "browser") {
       void this.micLoop.refreshDevices();
     }
     this.view.renderHistory(hello.history);
-    this.view.renderServices(hello.services, hello.audio.inputMode);
+    this.view.renderServices(hello.services, hello.audio.inputMode, hello.models);
+    this.settings.updateSelection(hello.models);
     this.view.setState(hello.state);
   }
 

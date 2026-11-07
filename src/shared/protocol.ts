@@ -78,6 +78,72 @@ export interface ServiceStatus {
 /** 音声入力の方式（browser: ブラウザのマイク / server: サーバーの ffmpeg） */
 export type InputMode = "browser" | "server";
 
+/** STT エンジン名（`src/backend/config/schema.ts` の SttEngine はこの別名） */
+export type SttEngineName = "whisper" | "sherpa";
+
+/** sherpa-onnx のモデル種別（使用する ONNX 一式の構成を決める） */
+export type SherpaModelTypeName =
+  | "nemo_transducer"
+  | "nemo_ctc"
+  | "sense_voice"
+  | "zipformer_transducer";
+
+/** whisper.cpp のモデル候補（models/*.bin） */
+export interface WhisperModelOption {
+  /** 設定へ保存するパス（プロジェクトルート基準） */
+  path: string;
+  /** 表示名（ファイル名） */
+  label: string;
+  sizeBytes: number;
+}
+
+/** sherpa-onnx のモデル候補（tokens.txt を含むディレクトリ） */
+export interface SherpaModelOption {
+  /** 設定へ保存するディレクトリ（プロジェクトルート基準） */
+  dir: string;
+  /** 表示名（ディレクトリ名） */
+  label: string;
+  /** ファイル構成から推定したモデル種別 */
+  suggestedModelType: SherpaModelTypeName;
+}
+
+/** GET /api/models のレスポンス（画面のモデル選択に使う） */
+export interface ModelCatalog {
+  stt: {
+    engine: SttEngineName;
+    current: {
+      modelPath: string;
+      sherpaModelDir: string;
+      sherpaModelType: SherpaModelTypeName;
+    };
+    whisper: WhisperModelOption[];
+    sherpa: SherpaModelOption[];
+  };
+  llm: {
+    /** 現在使用中のモデル（config の値） */
+    model: string;
+    /** Ollama に導入済みのモデル（取得できなければ空配列） */
+    models: string[];
+    /** Ollama に接続できたか */
+    available: boolean;
+  };
+}
+
+/** 現在選択中のモデル（hello で表示に使う） */
+export interface ModelSelection {
+  stt: { engine: SttEngineName; label: string };
+  llm: { model: string };
+}
+
+/** PUT /api/models/stt・PUT /api/models/llm のレスポンス */
+export interface ModelUpdateResult {
+  ok: boolean;
+  warnings: string[];
+  services: ServiceStatus;
+  /** 画面に出す結果メッセージ */
+  message: string;
+}
+
 /** 接続直後に送られる初期化メッセージ */
 export interface HelloPayload {
   type: "hello";
@@ -87,6 +153,8 @@ export interface HelloPayload {
   user: string;
   version: string;
   services: ServiceStatus;
+  /** 現在選択中のモデル（旧サーバーとの互換のため任意） */
+  models?: ModelSelection;
   /** ブラウザ側の録音制御に必要な情報 */
   audio: {
     inputMode: InputMode;

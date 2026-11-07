@@ -1,17 +1,46 @@
 import { Router, Request, RequestHandler, Response } from "express";
-import type { DiagnosticsReport, HealthReport } from "../../shared/protocol";
+import * as fs from "fs";
+import * as path from "path";
+import type {
+  DiagnosticsReport,
+  HealthReport,
+  ModelCatalog,
+  ModelUpdateResult,
+  SherpaModelTypeName,
+} from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
-import { AppConfig, DeepPartial } from "../config/schema";
+import { AppConfig, DeepPartial, STTConfig } from "../config/schema";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
-import { AudioIO } from "../core/ports";
+import { AudioIO, LanguageModel } from "../core/ports";
 import { CharacterService } from "../services/CharacterService";
+import {
+  listSherpaModels,
+  listWhisperModels,
+  llmModelMissingMessage,
+  pickLlmModel,
+} from "../services/modelCatalog";
 import { ServiceMonitor } from "./ServiceMonitor";
+
+/** 受け付ける sherpa-onnx のモデル種別（`schema.ts` と一致させる） */
+const SHERPA_MODEL_TYPES: SherpaModelTypeName[] = [
+  "nemo_transducer",
+  "nemo_ctc",
+  "sense_voice",
+  "zipformer_transducer",
+];
+
+/** 設定へ保存するパスは `/` 区切りに統一する（TOML の可読性） */
+function toConfigPath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
 
 export interface ApiDeps {
   config: ConfigManager;
   pipeline: ConversationPipeline;
   audio: AudioIO;
+  /** モデル一覧の取得に使う */
+  llm: LanguageModel;
   character: CharacterService;
   /** 依存サービスの疎通（WebSocket の hello と同じ判定を共有する） */
   serviceMonitor: ServiceMonitor;
@@ -121,6 +150,168 @@ export function createApiRouter(deps: ApiDeps): Router {
     deps.character.reload();
     res.json(configPayload());
   });
+
+  /**
+   * 画面のモデル選択に使う候補一覧。
+   * Ollama が停止していても 200 を返し、`llm.available=false` で伝える（画面を壊さない）。
+   */
+  router.get(
+    "/models",
+    asyncHandler(async (_req, res) => {
+      const sttConfig = deps.config.getSTT();
+      const modelsDir = deps.config.resolvePath("models");
+
+      let llmModels: string[] = [];
+      let llmAvailable = false;
+      try {
+        llmModels = await deps.llm.listModels();
+        llmAvailable = true;
+      } catch {
+        llmAvailable = false;
+      }
+
+      const catalog: ModelCatalog = {
+        stt: {
+          engine: sttConfig.engine,
+          current: {
+            modelPath: sttConfig.model_path,
+            sherpaModelDir: sttConfig.sherpa_model_dir,
+            sherpaModelType: sttConfig.sherpa_model_type,
+          },
+          whisper: listWhisperModels(modelsDir),
+          sherpa: listSherpaModels(modelsDir),
+        },
+        llm: {
+          model: deps.config.getLLM().model,
+          models: llmModels,
+          available: llmAvailable,
+        },
+      };
+      res.json(catalog);
+    })
+  );
+
+  /**
+   * LLM モデルの切り替え。Ollama に無いモデルは 400 で拒否する
+   * （存在しないまま保存すると次の応答が 404 になり、原因が分かりにくいため）。
+   */
+  router.put(
+    "/models/llm",
+    asyncHandler(async (req, res) => {
+      const requested = typeof req.body?.model === "string" ? req.body.model.trim() : "";
+      if (!requested) {
+        res.status(400).json({ error: "model は必須です" });
+        return;
+      }
+
+      let installed: string[] = [];
+      try {
+        installed = await deps.llm.listModels();
+      } catch {
+        res.status(400).json({
+          error: `Ollama に接続できないためモデルを確認できません（${deps.config.getLLM().endpoint}）`,
+        });
+        return;
+      }
+
+      const matched = pickLlmModel(installed, requested);
+      if (!matched) {
+        res.status(400).json({ error: llmModelMissingMessage(installed, requested) });
+        return;
+      }
+
+      // 保存すると ConfigManager の購読者（STT の再構成・疎通の再確認）が動く
+      deps.config.update({ llm: { model: matched } });
+      const services = await deps.serviceMonitor.refresh();
+      const result: ModelUpdateResult = {
+        ok: true,
+        warnings: deps.config.getWarnings(),
+        services,
+        message: `LLM モデルを ${matched} に切り替えました（次の発話から使われます）`,
+      };
+      logger.info(result.message);
+      res.json(result);
+    })
+  );
+
+  /**
+   * STT のエンジン・モデル切り替え。
+   * パスの存在だけ検証し、疎通できない場合（sherpa-onnx-node 未導入など）は
+   * 切替を許可したうえで `services.stt=false` と warnings で知らせる（原因が見えるようにする）。
+   */
+  router.put(
+    "/models/stt",
+    asyncHandler(async (req, res) => {
+      const engine = req.body?.engine;
+      if (engine !== "whisper" && engine !== "sherpa") {
+        res.status(400).json({ error: 'engine は "whisper" か "sherpa" を指定してください' });
+        return;
+      }
+
+      const sttPatch: DeepPartial<STTConfig> = { engine };
+      let label: string;
+
+      if (engine === "whisper") {
+        const requested = typeof req.body?.model_path === "string" ? req.body.model_path.trim() : "";
+        if (requested) {
+          if (!fs.existsSync(deps.config.resolvePath(requested))) {
+            res.status(400).json({
+              error: `Whisper のモデルが見つかりません: ${requested}（models/*.bin を確認してください）`,
+            });
+            return;
+          }
+          sttPatch.model_path = toConfigPath(requested);
+        }
+        const modelPath = sttPatch.model_path ?? deps.config.getSTT().model_path;
+        label = `whisper.cpp / ${path.basename(modelPath) || "未設定"}`;
+      } else {
+        const requested = typeof req.body?.sherpa_model_dir === "string" ? req.body.sherpa_model_dir.trim() : "";
+        if (!requested) {
+          res.status(400).json({ error: "sherpa を選ぶ場合は sherpa_model_dir が必要です" });
+          return;
+        }
+        const absolute = deps.config.resolvePath(requested);
+        if (!fs.existsSync(path.join(absolute, "tokens.txt"))) {
+          res.status(400).json({
+            error: `sherpa-onnx のモデルが見つかりません: ${requested}（tokens.txt がありません）`,
+          });
+          return;
+        }
+        sttPatch.sherpa_model_dir = toConfigPath(requested);
+
+        const modelType = req.body?.sherpa_model_type;
+        if (typeof modelType === "string" && modelType) {
+          if (!SHERPA_MODEL_TYPES.includes(modelType as SherpaModelTypeName)) {
+            res.status(400).json({ error: `未対応の sherpa_model_type です: ${modelType}` });
+            return;
+          }
+          sttPatch.sherpa_model_type = modelType as SherpaModelTypeName;
+        }
+        label = `sherpa-onnx / ${path.basename(requested)}`;
+      }
+
+      deps.config.update({ stt: sttPatch });
+      const services = await deps.serviceMonitor.refresh();
+      const warnings = [...deps.config.getWarnings()];
+      if (!services.stt) {
+        warnings.push(
+          "STT の疎通確認に失敗しました（モデル・whisper.cpp の実行ファイル・sherpa-onnx-node を確認してください）"
+        );
+      }
+      if (deps.pipeline.isBusy) {
+        warnings.push("進行中の発話は切り替え前の設定で処理されます");
+      }
+
+      const result: ModelUpdateResult = {
+        ok: true,
+        warnings,
+        services,
+        message: `音声認識を ${label} に切り替えました（次の発話から有効）`,
+      };
+      logger.info(result.message);
+      res.json(result);
+    })
+  );
 
   router.get("/history", (_req, res) => {
     res.json({ messages: deps.pipeline.getHistory() });

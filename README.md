@@ -126,6 +126,8 @@ npm start              # node dist/backend/index.js
 - キャラクター定義（`config/characters/*.toml`）の人格・応答ルール・口癖をプロンプトへ反映
 - Web GUI（レベルメーター、履歴同期、自動再接続）
 - REST API（設定の参照・部分更新・保存、履歴、ヘルスチェック、デバイス一覧、診断）
+- **設定メニュー（⚙️ 設定）**: 画面から **LLM モデル**（Ollama の導入済み一覧）と **STT のエンジン／モデル**
+  （whisper の `*.bin` / sherpa のモデル一式）を切り替えられる。再起動不要（次の発話から有効）
 - **診断パネル（「診断」ボタン / `GET /api/diagnostics`）**: 状態・サービス疎通・破棄の内訳（幻聴/短断片/エコー/繰り返し）・
   直近の破棄理由・録音結果・VAD しきい値を 1 箇所で確認できる
 - レベル付きロガー（コンソール + `logs/app.log`）
@@ -161,6 +163,20 @@ sherpa_provider = "cpu"
 
 実測（この PC / VOICEVOX の日本語音声）: sherpa-onnx は **222〜420ms / 発話**（whisper.cpp + CUDA q5_0 は約 1.5〜3.5 秒）。
 詳細と他エンジンの比較は [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) を参照してください。
+
+### 画面から切り替える（⚙️ 設定）
+
+画面右上の **⚙️ 設定** を開くと、次の 2 つを切り替えられます（変更は即保存され `config/settings.toml` に書き込まれます）。
+
+| 項目 | 切り替え内容 | 反映タイミング |
+|---|---|---|
+| LLM | Ollama に導入済みのモデル（`GET /api/models` が `ollama list` 相当を返す） | 次の発話から（再起動不要） |
+| 音声認識 | エンジン（whisper.cpp / sherpa-onnx）とモデル（`models/*.bin` / sherpa のモデル一式） | 次の発話から（STT 実装を差し替え） |
+
+- 一覧は `GET /api/models`、切替は `PUT /api/models/llm` / `PUT /api/models/stt`
+- 存在しないモデルは **400 で拒否**されます（`ollama pull <model>` / `scripts\setup-sherpa.ps1` の案内が画面に出ます）
+- 切替後に STT が 🔴 のままなら、`models/` のパスか `sherpa-onnx-node` の導入（`npm install sherpa-onnx-node`）を確認してください
+- 進行中の発話は切り替え前の設定で処理され、完了後に新しい設定が使われます
 
 主な項目:
 
@@ -259,7 +275,9 @@ logs/                          # app.log（実行ログ）
 | 返答が返ってこない | `logs/app.log` に `ERROR [LLM]` が出ていないか確認。接続断は「Ollama との接続が中断されました（モデルの読み込み失敗・VRAM 不足など）」として通知されます。タイムアウトは `llm.response_timeout_seconds` |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |
 | バージインしない | `conversation.barge_in_enabled`, `barge_in_min_score`（既定 0.08） |
-| 設定が効かない | `POST /api/config/reload` または再起動 |
+| 設定が効かない | 画面の「⚙️ 設定」で切り替えたモデルは即時反映（次の発話から）。手で `settings.toml` を編集した場合は `POST /api/config/reload` または再起動 |
+| モデルを切り替えたら STT が 🔴 のまま | `models/` のパス、`whisper.cpp/main.exe` の有無、`npm install sherpa-onnx-node` を確認。`logs/app.log` に「STT を再構成しました」が出ているか確認 |
+| LLM のモデルを切り替えられない | Ollama に未導入のモデルは 400 で拒否されます。`ollama pull <model>` を実行してから選び直してください |
 
 ## 未実装（設定のみ）
 

@@ -2,7 +2,7 @@ import express, { Express, NextFunction, Request, Response } from "express";
 import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
-import type { ServiceStatus } from "../../shared/protocol";
+import type { ModelSelection, ServiceStatus } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
@@ -61,6 +61,7 @@ export class AppServer {
         config: deps.config,
         pipeline: deps.pipeline,
         audio: deps.audio,
+        llm: deps.llm,
         character: deps.character,
         serviceMonitor: this.services,
         version: deps.version,
@@ -118,6 +119,20 @@ export class AppServer {
     return this.services.current;
   }
 
+  /** 疎通状態を今すぐ確認し直す（モデル切替の直後に画面の 🟢/🔴 を更新する） */
+  refreshServices(): Promise<ServiceStatus> {
+    return this.services.refresh();
+  }
+
+  /** hello に載せる現在のモデル情報（画面の表示用） */
+  private modelSelection(): ModelSelection {
+    const sttConfig = this.deps.config.getSTT();
+    return {
+      stt: { engine: sttConfig.engine, label: this.deps.stt.describe?.() ?? sttConfig.engine },
+      llm: { model: this.deps.config.getLLM().model },
+    };
+  }
+
   async start(): Promise<void> {
     this.services.start();
 
@@ -128,6 +143,7 @@ export class AppServer {
       character: this.deps.character,
       version: this.deps.version,
       serviceStatus: () => this.services.current,
+      models: () => this.modelSelection(),
     });
 
     await new Promise<void>((resolve, reject) => {

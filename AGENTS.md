@@ -35,11 +35,12 @@
 src/shared/protocol.ts, shared/audio/{pcm,vad}.ts   ← 型と純粋ロジック（ブラウザ・Node 共通）
 src/backend/core/ports.ts                           ← AudioIO / STT / LLM / TTS のインターフェース
 src/backend/services/*                              ← 具体実装（ffmpeg / whisper.cpp / Ollama / VOICEVOX）
+  ├─ SttSwitcher.ts / modelCatalog.ts               ← STT の実行時切替・モデル候補の列挙と検証
 src/backend/conversation/*                          ← 状態機械・履歴・プロンプト
 src/backend/server/*                                ← Express + WebSocket
 src/frontend/{app,mic}.ts                           ← UI・ブラウザ録音（esbuild でバンドル）
 src/frontend/app.ts                                 ← 組み立て（Composition Root）
-src/frontend/{WsClient,ChatView,MicLoop,dom}.ts     ← 通信・描画・録音ループ・DOM ヘルパ
+src/frontend/{WsClient,ChatView,MicLoop,SettingsPanel,dom}.ts ← 通信・描画・録音ループ・設定メニュー・DOM ヘルパ
 src/backend/index.ts                                ← Composition Root（DI 配線）
 ```
 
@@ -89,6 +90,15 @@ src/backend/index.ts                                ← Composition Root（DI �
 12-6. **サービスの疎通確認は `ServiceMonitor` に集約**（`/api/health` は `refresh()`、hello は `current`）。
 12-7. **破棄の統計は `SpeechGate` のカウンタが真実源**。`/api/diagnostics` はそれを返すだけにし、
     ログと API で数字がずれないようにする。
+12-8. **STT は `SttSwitcher` 経由で配線する**（`createSttService()` を直接 DI しない）。
+    - `src/backend/services/SttSwitcher.ts` が「エンジンと関連設定の署名」を見て実装を作り直す
+    - 反映は `ConfigManager.onChange` に集約（画面の `PUT /api/models/*`・`PATCH /api/config`・`reload` の共通経路）
+    - **sherpa は recognizer をキャッシュする**ため、モデル変更時に再生成しないと設定が効かない（回帰テスト: `tests/stt-switcher.test.ts`）
+    - 切替は次の発話から。`transcribe()` は呼び出し開始時の実装を捕捉するので進行中の認識は壊れない
+    - モデル候補の列挙・検証は `src/backend/services/modelCatalog.ts`（純粋ロジック。`tests/model-catalog.test.ts`）
+12-9. **画面のモデル一覧は `GET /api/models` だけを真実源にする**。`models/` のスキャン結果と
+    `llm.listModels()`（Ollama）を合成して返し、Ollama 停止中でも 200 + `llm.available=false` とする
+    （500 にすると画面が壊れる）。
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする
@@ -129,6 +139,8 @@ src/backend/index.ts                                ← Composition Root（DI �
 - 未実装（設定のみ）: `[rag]` / `[recipe_db]` / `[music]` / `[apps.proactive_speech]` / `[apps.home_assistant]` / ウェイクワード
   （真実源は `ConfigManager.UNSUPPORTED_SECTIONS`）
 - STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は whisper）
+- **画面の「⚙️ 設定」から LLM モデルと STT のエンジン／モデルを切り替えられる**（`GET /api/models`・
+  `PUT /api/models/llm`・`PUT /api/models/stt`。設定は即保存、次の発話から有効）
 - **残作業のバックログは `docs/TODO.md` に集約**（優先度・受け入れ条件・見積つき）。作業を終えたら同ファイルから削除し、
   この節と README を更新する。
 

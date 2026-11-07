@@ -107,6 +107,20 @@ function waitForWebSocket() {
     JSON.stringify({ llm: config.llm?.model, tts: config.tts?.speaker_id, auto_start: config.conversation?.auto_start })
   );
 
+  // 画面のモデル選択が使う候補一覧（Ollama 停止中でも 200 が返る）
+  const models = await getJson("/api/models");
+  console.log(
+    "[smoke] models:",
+    JSON.stringify({
+      stt: models.stt?.engine,
+      whisper: models.stt?.whisper?.length ?? 0,
+      sherpa: models.stt?.sherpa?.length ?? 0,
+      llm: models.llm?.model,
+      llmModels: models.llm?.models?.length ?? 0,
+      ollama: models.llm?.available,
+    })
+  );
+
   const history = await getJson("/api/history");
   console.log("[smoke] history messages:", history.messages?.length ?? 0);
 

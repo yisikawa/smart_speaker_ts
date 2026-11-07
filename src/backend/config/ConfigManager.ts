@@ -91,6 +91,7 @@ export class ConfigManager {
       this.logger.warn(`設定ファイルが見つかりません: ${source}（既定値で起動します）`);
       this.config = deepClone(DEFAULT_CONFIG);
       this.warnings = ["設定ファイルが見つからないため既定値を使用しています"];
+      this.notify();
       return this.config;
     }
 
@@ -107,6 +108,7 @@ export class ConfigManager {
       this.config = deepClone(DEFAULT_CONFIG);
       this.warnings = [`設定ファイルの解析に失敗したため既定値を使用しています: ${source}`];
     }
+    this.notify();
     return this.config;
   }
 
@@ -115,10 +117,22 @@ export class ConfigManager {
     this.config = deepMerge(this.config, patch);
     this.warnings = sanitizeConfig(this.config);
     this.save();
-    for (const listener of this.listeners) {
-      listener(this.config);
-    }
+    this.notify();
     return this.config;
+  }
+
+  /**
+   * 購読者へ通知する（update / reload の両方から呼ぶ）。
+   * 反映処理（STT の再構成・疎通の再確認）はここに集約する。
+   */
+  private notify(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(this.config);
+      } catch (error) {
+        this.logger.error("設定の購読者でエラー", error);
+      }
+    }
   }
 
   /** 現在の設定を settings.toml へ書き出す（上書き前の内容は .bak に残す） */
