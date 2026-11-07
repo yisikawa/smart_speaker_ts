@@ -28,7 +28,12 @@ export class OllamaLlmService implements LanguageModel {
     return new URL(this.deps.config.getLLM().endpoint.replace(/\/$/, ""));
   }
 
-  private requestOptions(method: "GET" | "POST", pathAndQuery: string, body?: string): http.RequestOptions {
+  private requestOptions(
+    method: "GET" | "POST",
+    pathAndQuery: string,
+    body?: string,
+    timeoutMs?: number
+  ): http.RequestOptions {
     const url = this.endpoint();
     return {
       hostname: url.hostname,
@@ -38,7 +43,7 @@ export class OllamaLlmService implements LanguageModel {
       headers: body
         ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
         : {},
-      timeout: this.deps.config.getLLM().response_timeout_seconds * 1000,
+      timeout: timeoutMs ?? this.deps.config.getLLM().response_timeout_seconds * 1000,
     };
   }
 
@@ -68,6 +73,36 @@ export class OllamaLlmService implements LanguageModel {
       req.on("timeout", () => {
         req.destroy(new Error("Ollama への接続がタイムアウトしました"));
       });
+      req.end();
+    });
+  }
+
+  /** ボディ付きの JSON リクエスト（`/api/generate` のモデル読み込みに使う） */
+  private postJson(pathAndQuery: string, body: string, timeoutMs: number): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const req = http.request(this.requestOptions("POST", pathAndQuery, body, timeoutMs), (res) => {
+        let raw = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => {
+          raw += chunk;
+        });
+        res.on("end", () => {
+          if (res.statusCode !== undefined && res.statusCode >= 400) {
+            reject(new Error(`Ollama が ${res.statusCode} を返しました: ${raw.slice(0, 200)}`));
+            return;
+          }
+          try {
+            resolve(raw ? JSON.parse(raw) : {});
+          } catch {
+            reject(new Error(`Ollama の応答を解析できません: ${raw.slice(0, 200)}`));
+          }
+        });
+      });
+      req.on("error", reject);
+      req.on("timeout", () => {
+        req.destroy(new Error("Ollama への接続がタイムアウトしました"));
+      });
+      req.write(body);
       req.end();
     });
   }
@@ -110,6 +145,29 @@ export class OllamaLlmService implements LanguageModel {
     return models.some((name) => name === target || name.startsWith(`${target}:`) || name.startsWith(target));
   }
 
+  /**
+   * モデルを事前に読み込む（切替直後の初回発話がタイムアウトしないように）。
+   *
+   * Ollama の `/api/generate` に空プロンプトを投げると、生成はせず読み込みだけで
+   * `done_reason: "load"` が返る。この処理を切り替え時に済ませておくと、
+   * 最初の発話からすぐ応答が始まる。戻り値は所要ミリ秒。
+   */
+  async prepare(model?: string): Promise<number> {
+    const cfg = this.deps.config.getLLM();
+    const target = model ?? cfg.model;
+    const started = Date.now();
+    const body = JSON.stringify({
+      model: target,
+      prompt: "",
+      stream: false,
+      keep_alive: "10m",
+    });
+    await this.postJson("/api/generate", body, cfg.model_load_timeout_seconds * 1000);
+    const elapsedMs = Date.now() - started;
+    this.logger.info(`モデルを事前読み込みしました: ${target} (${elapsedMs}ms)`);
+    return elapsedMs;
+  }
+
   chatStream(
     messages: LlmMessage[],
     onDelta: (chunk: string) => void,
@@ -133,11 +191,22 @@ export class OllamaLlmService implements LanguageModel {
 
     const body = JSON.stringify(payload);
 
+    const responseTimeoutMs = cfg.response_timeout_seconds * 1000;
+    const loadTimeoutMs = Math.max(responseTimeoutMs, cfg.model_load_timeout_seconds * 1000);
+    /** モデル読み込み中は何も届かないため、最初のチャンクまでは長めに待つ */
+    const loadTimeoutMessage =
+      `LLM がタイムアウトしました（${Math.round(loadTimeoutMs / 1000)} 秒）。` +
+      `モデルの読み込みに時間がかかっている可能性があります（VRAM 不足・ディスク速度）。` +
+      `より小さいモデルを選ぶか、llm.model_load_timeout_seconds を増やしてください`;
+
     return new Promise<string>((resolve, reject) => {
       let settled = false;
       let content = "";
       let remainder = "";
       let timer: NodeJS.Timeout | null = null;
+      let request: http.ClientRequest | null = null;
+      /** まだ 1 文字も受信していない（＝モデルの読み込み中かもしれない） */
+      let waitingForFirstChunk = true;
 
       const clearTimer = (): void => {
         if (timer) {
@@ -163,6 +232,25 @@ export class OllamaLlmService implements LanguageModel {
         clearTimer();
         this.logger.info(`応答完了 (${Date.now() - start}ms, ${text.length} 文字)`);
         resolve(text);
+      };
+
+      const armTimer = (ms: number, message: string): void => {
+        clearTimer();
+        timer = setTimeout(() => {
+          fail(new Error(message));
+          request?.destroy();
+        }, ms);
+      };
+
+      /** 最初のデータが届いたら「応答中」のタイムアウトへ切り替える */
+      const onFirstChunk = (): void => {
+        if (!waitingForFirstChunk) {
+          return;
+        }
+        waitingForFirstChunk = false;
+        request?.setTimeout(responseTimeoutMs);
+        armTimer(responseTimeoutMs, `LLM の応答が止まりました（${cfg.response_timeout_seconds} 秒）`);
+        this.logger.info(`最初のチャンクを受信しました (${Date.now() - start}ms)`);
       };
 
       const handleLine = (line: string): void => {
@@ -191,12 +279,12 @@ export class OllamaLlmService implements LanguageModel {
         }
       };
 
-      const requestOptions = this.requestOptions("POST", "/api/chat", body);
+      const requestOptions = this.requestOptions("POST", "/api/chat", body, loadTimeoutMs);
       if (options.signal) {
         requestOptions.signal = options.signal;
       }
 
-      const req = http.request(requestOptions, (res) => {
+      request = http.request(requestOptions, (res) => {
         if (res.statusCode !== 200) {
           let raw = "";
           res.setEncoding("utf8");
@@ -211,6 +299,7 @@ export class OllamaLlmService implements LanguageModel {
 
         res.setEncoding("utf8");
         res.on("data", (chunk: string) => {
+          onFirstChunk();
           remainder += chunk;
           let index = remainder.indexOf("\n");
           while (index >= 0) {
@@ -229,19 +318,16 @@ export class OllamaLlmService implements LanguageModel {
             if (content) {
               succeed(content);
             } else {
-              fail(new Error("Ollama から応答がありませんでした"));
+              fail(new Error(waitingForFirstChunk ? loadTimeoutMessage : "Ollama から応答がありませんでした"));
             }
           }
         });
         res.on("error", (error) => fail(error));
       });
 
-      timer = setTimeout(() => {
-        fail(new Error(`LLM がタイムアウトしました（${cfg.response_timeout_seconds} 秒）`));
-        req.destroy();
-      }, cfg.response_timeout_seconds * 1000);
+      armTimer(loadTimeoutMs, loadTimeoutMessage);
 
-      req.on("error", (error) =>
+      request.on("error", (error) =>
         fail(
           describeTransportError(
             error,
@@ -250,12 +336,18 @@ export class OllamaLlmService implements LanguageModel {
           )
         )
       );
-      req.on("timeout", () => {
-        fail(new Error(`LLM がタイムアウトしました（${cfg.response_timeout_seconds} 秒）`));
-        req.destroy();
+      request.on("timeout", () => {
+        fail(
+          new Error(
+            waitingForFirstChunk
+              ? loadTimeoutMessage
+              : `LLM がタイムアウトしました（${cfg.response_timeout_seconds} 秒）`
+          )
+        );
+        request?.destroy();
       });
-      req.write(body);
-      req.end();
+      request.write(body);
+      request.end();
     });
   }
 }

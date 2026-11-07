@@ -170,3 +170,105 @@ test("モデル未取得の 404 は ollama pull を促すエラーになる", as
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+
+/** 任意のハンドラで応答する擬似 Ollama（読み込み待ちの再現用） */
+function startCustomOllama(
+  handler: (req: http.IncomingMessage, res: http.ServerResponse) => void
+): Promise<{ server: http.Server; port: number }> {
+  const server = http.createServer((req, res) => {
+    if (req.url === "/api/tags") {
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ models: [{ name: "test-model:latest" }] }));
+      return;
+    }
+    req.resume();
+    req.on("end", () => handler(req, res));
+  });
+
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      resolve({ server, port: (server.address() as AddressInfo).port });
+    });
+  });
+}
+
+test("prepare は /api/generate でモデルを事前読み込みする", async () => {
+  let generateCalled = 0;
+  const { server, port } = await startCustomOllama((req, res) => {
+    if (req.url === "/api/generate") {
+      generateCalled += 1;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ done: true, done_reason: "load" }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  });
+  const project = withConfig(port);
+
+  try {
+    const service = new OllamaLlmService({ config: project.config });
+    const elapsedMs = await service.prepare("test-model");
+    assert.equal(generateCalled, 1);
+    assert.ok(elapsedMs >= 0);
+  } finally {
+    project.cleanup();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("最初のチャンクは応答タイムアウトより長く待つ（モデル読み込み中でも切らない）", async () => {
+  // 応答タイムアウト 5 秒・読み込み待ち 30 秒。6 秒後に最初のチャンクを返す
+  const { server, port } = await startCustomOllama((_req, res) => {
+    res.setHeader("Content-Type", "application/x-ndjson");
+    setTimeout(() => {
+      res.write(`${JSON.stringify({ message: { content: "おはよう" }, done: false })}\n`);
+      res.write(`${JSON.stringify({ message: { content: "！" }, done: true })}\n`);
+      res.end();
+    }, 6000);
+  });
+  const project = createTempProject({
+    prefix: "sumika-llm-",
+    patch: {
+      llm: {
+        endpoint: `http://127.0.0.1:${port}`,
+        model: "test-model",
+        response_timeout_seconds: 5,
+        model_load_timeout_seconds: 30,
+      },
+    },
+  });
+
+  try {
+    const service = new OllamaLlmService({ config: project.config });
+    const text = await service.chatStream([{ role: "user", content: "やあ" }], () => {});
+    assert.equal(text, "おはよう！", "読み込み待ちで打ち切られないこと");
+  } finally {
+    project.cleanup();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test("応答が空のまま終わった場合はモデル読み込みの案内になる", async () => {
+  const { server, port } = await startCustomOllama((_req, res) => {
+    // 本文を書かずに終了する（読み込みに失敗した場合に近い）
+    res.setHeader("Content-Type", "application/x-ndjson");
+    res.end();
+  });
+  const project = withConfig(port);
+
+  try {
+    const service = new OllamaLlmService({ config: project.config });
+    await assert.rejects(
+      () => service.chatStream([{ role: "user", content: "やあ" }], () => {}),
+      (error: Error) => {
+        assert.match(error.message, /モデルの読み込みに時間がかかっている可能性/);
+        assert.match(error.message, /llm\.model_load_timeout_seconds/);
+        return true;
+      }
+    );
+  } finally {
+    project.cleanup();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});

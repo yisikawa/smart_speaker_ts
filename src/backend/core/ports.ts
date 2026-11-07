@@ -97,6 +97,11 @@ export interface ChatOptions {
 export interface LanguageModel {
   isAvailable(): Promise<boolean>;
   listModels(): Promise<string[]>;
+  /**
+   * モデルを事前に読み込む（任意）。切り替え直後の初回リクエストが
+   * 読み込み待ちでタイムアウトしないようにする。戻り値は所要ミリ秒。
+   */
+  prepare?(model?: string): Promise<number>;
   /** ストリーミング応答。差分ごとに onDelta を呼び、最終的な全文を返す */
   chatStream(
     messages: LlmMessage[],

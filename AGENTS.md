@@ -114,6 +114,14 @@ src/backend/index.ts                                ← Composition Root（DI �
     - 直近 3 件の応答と一致する断片（バイグラム一致率 0.6 以上を含む）と 2 文字以下の断片は破棄する
     - **破棄したら必ず `turn_skipped` を通知する**。通知しないとブラウザの `waitForTurn()` が解けず、
       画面が「待機中」のまま固まる（回帰テストあり）
+17. **Ollama のモデル切替は「読み込み」に数十秒かかる（ここで詰まると永久に失敗する）**
+    - 切替直後の初回リクエストはモデルの読み込みを含む。実測 27 秒、混雑時は 60 秒超
+    - クライアント（このアプリ）が 60 秒で打ち切ると **Ollama は `client connection closed before
+      llama-server finished loading, aborting load` で読み込みごと中止**し、以降も同じことが繰り返される
+    - 対策: (1) `llm.model_load_timeout_seconds`（既定 180）まで**最初のチャンクを待つ**（2 段階タイムアウト）、
+      (2) 切り替え時に `OllamaLlmService.prepare()`（`/api/generate` 空プロンプト + `keep_alive`）で事前読み込み
+    - 判定は「最初のチャンクを受信したか」（`waitingForFirstChunk`）で行う。診断は
+      `%LOCALAPPDATA%\Ollama\server.log` と `ollama ps`（`size_vram`）を見る
 
 ## 5. 環境前提（この PC）
 

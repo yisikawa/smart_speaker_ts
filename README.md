@@ -174,6 +174,8 @@ sherpa_provider = "cpu"
 | 音声認識 | エンジン（whisper.cpp / sherpa-onnx）とモデル（`models/*.bin` / sherpa のモデル一式） | 次の発話から（STT 実装を差し替え） |
 
 - 一覧は `GET /api/models`、切替は `PUT /api/models/llm` / `PUT /api/models/stt`
+- **LLM の切り替えは 20〜60 秒かかることがあります**（Ollama がモデルを VRAM に読み込むため）。
+  切り替え時に事前読み込みを行い、完了後に「読み込み◯秒」と表示します（`llm.model_load_timeout_seconds` 既定 180 秒）
 - 存在しないモデルは **400 で拒否**されます（`ollama pull <model>` / `scripts\setup-sherpa.ps1` の案内が画面に出ます）
 - 切替後に STT が 🔴 のままなら、`models/` のパスか `sherpa-onnx-node` の導入（`npm install sherpa-onnx-node`）を確認してください
 - 進行中の発話は切り替え前の設定で処理され、完了後に新しい設定が使われます
@@ -185,7 +187,7 @@ sherpa_provider = "cpu"
 | `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_threshold_max`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `relative_threshold_multiplier`, `calibration_duration`, `debounce_frames`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
 | `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language` |
-| `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns` |
+| `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns`, `response_timeout_seconds`, `model_load_timeout_seconds` |
 | `[tts]` | `endpoint`, `speaker_id`, `speed`, `pitch`, `volume` |
 
 設定の反映:
@@ -278,6 +280,8 @@ logs/                          # app.log（実行ログ）
 | 設定が効かない | 画面の「⚙️ 設定」で切り替えたモデルは即時反映（次の発話から）。手で `settings.toml` を編集した場合は `POST /api/config/reload` または再起動 |
 | モデルを切り替えたら STT が 🔴 のまま | `models/` のパス、`whisper.cpp/main.exe` の有無、`npm install sherpa-onnx-node` を確認。`logs/app.log` に「STT を再構成しました」が出ているか確認 |
 | LLM のモデルを切り替えられない | Ollama に未導入のモデルは 400 で拒否されます。`ollama pull <model>` を実行してから選び直してください |
+| LLM を切り替えるとタイムアウトする／切り替えが終わらない | モデルの読み込みが遅い環境です。`llm.model_load_timeout_seconds`（既定 180 秒）を増やすか、より小さいモデルを選んでください。`ollama ps` で `size_vram`（VRAM に載っているか）を確認 |
+| 「LLM がタイムアウトしました」で応答が止まる | 読み込み中なら上記。生成中なら `llm.response_timeout_seconds`（既定 60 秒）。`logs/app.log` の「最初のチャンクを受信しました」で読み込みと生成を切り分けられる |
 | 「⚙️ 設定」で「/api/models が見つかりません」 | 画面（静的ファイル）だけ新しく、起動中のサーバーが古いままです。**アプリを再起動**してください（`start.bat`。コード更新後は必須） |
 
 ## 未実装（設定のみ）

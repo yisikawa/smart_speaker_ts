@@ -119,6 +119,9 @@ character_file = "config/characters/sakura.toml"
 temperature = 0.7
 max_tokens = 512
 response_timeout_seconds = 60
+# モデルの読み込みを待つ上限（秒）。切替直後の初回は読み込みに数十秒かかるため、
+# 応答タイムアウト（60 秒）で打ち切ると Ollama 側の読み込みごと中止され、以後ずっと失敗します
+model_load_timeout_seconds = 180
 # プロンプトに含める直近ターン数
 history_turns = 6
 

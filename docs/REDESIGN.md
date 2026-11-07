@@ -425,6 +425,7 @@ type ServerMessage =
 | `stt` | `timeout_seconds` | 60 | 認識タイムアウト |
 | `stt` | `initial_prompt` | `""` | 認識ヒント（`--prompt`） |
 | `llm` | `history_turns` | 6 | プロンプトに含める直近ターン数 |
+| `llm` | `model_load_timeout_seconds` | 180 | モデル読み込み待ちの上限（切替直後の初回） |
 | `tts` | `timeout_seconds` | 30 | 音声合成タイムアウト |
 
 ### 8.2 既定値・意味の変更
@@ -439,6 +440,7 @@ type ServerMessage =
 | `audio.input_gain` | レベル計算のみ | 実サンプルにも適用 | 小さいマイク入力を実際に増幅できるようにした |
 | `conversation.barge_in_min_score` | 0.5 | 0.08 | **RMS（0..1）しきい値**として定義し直した |
 | `llm.response_timeout_seconds` | 30 | 60 | 長文応答の打ち切り防止 |
+| `llm.model_load_timeout_seconds` | （なし） | 180 | モデル切替直後の読み込みで応答タイムアウトさせない（読み込みを中断すると Ollama 側も中止し、以後ずっと失敗する） |
 | `stt.use_gpu` | 意味が逆 | `true` = GPU 使用 | `-ng` の付与条件を修正 |
 
 ### 8.3 既存 `settings.toml` からの移行

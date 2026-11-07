@@ -222,12 +222,31 @@ export function createApiRouter(deps: ApiDeps): Router {
 
       // 保存すると ConfigManager の購読者（STT の再構成・疎通の再確認）が動く
       deps.config.update({ llm: { model: matched } });
+
+      // 切替直後の初回発話が「モデル読み込み待ち」でタイムアウトしないよう、ここで読み込む
+      // （Ollama は読み込み中のリクエストを中断されると読み込みごと中止するため、
+      //   60 秒で切ると永久にタイムアウトし続ける）
+      const warnings = [...deps.config.getWarnings()];
+      let loadSeconds: number | null = null;
+      if (deps.llm.prepare) {
+        try {
+          loadSeconds = (await deps.llm.prepare(matched)) / 1000;
+        } catch (error) {
+          warnings.push(
+            `モデルの事前読み込みに失敗しました（最初の発話が遅くなる可能性があります）: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+
       const services = await deps.serviceMonitor.refresh();
+      const timing = loadSeconds === null ? "" : `読み込み ${loadSeconds.toFixed(1)} 秒・`;
       const result: ModelUpdateResult = {
         ok: true,
-        warnings: deps.config.getWarnings(),
+        warnings,
         services,
-        message: `LLM モデルを ${matched} に切り替えました（次の発話から使われます）`,
+        message: `LLM モデルを ${matched} に切り替えました（${timing}次の発話から使われます）`,
       };
       logger.info(result.message);
       res.json(result);

@@ -51,6 +51,7 @@ const CLAMP_RULES: ClampRule[] = [
   { section: "llm", key: "temperature", min: 0, max: 2 },
   { section: "llm", key: "max_tokens", min: 32, max: 8192 },
   { section: "llm", key: "response_timeout_seconds", min: 5, max: 600 },
+  { section: "llm", key: "model_load_timeout_seconds", min: 30, max: 900 },
   { section: "llm", key: "history_turns", min: 0, max: 40 },
 
   { section: "tts", key: "speaker_id", min: 0, max: 1000 },

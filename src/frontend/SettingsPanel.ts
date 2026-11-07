@@ -221,7 +221,7 @@ export class SettingsPanel {
       body.model_path = view.sttModel.value;
     }
 
-    await this.send("/api/models/stt", body);
+    await this.send("/api/models/stt", body, "音声認識を切り替えています…");
   }
 
   private async applyLlm(): Promise<void> {
@@ -229,7 +229,12 @@ export class SettingsPanel {
     if (!model) {
       return;
     }
-    await this.send("/api/models/llm", { model });
+    // モデルの読み込みを待つため、切り替えには数十秒かかることがある
+    await this.send(
+      "/api/models/llm",
+      { model },
+      `LLM モデル（${model}）を読み込み中です…（初回は 20〜60 秒かかることがあります）`
+    );
   }
 
   private selectedModelType(): SherpaModelTypeName {
@@ -238,8 +243,11 @@ export class SettingsPanel {
   }
 
   /** 設定を保存し、結果（トースト・警告・疎通表示）を画面へ反映する */
-  private async send(path: string, body: unknown): Promise<void> {
+  private async send(path: string, body: unknown, pendingNote?: string): Promise<void> {
     const view = this.view;
+    if (pendingNote) {
+      view.setSettingsNote(pendingNote);
+    }
     try {
       const result = await requestJson<ModelUpdateResult>("PUT", path, body);
       view.showToast(result.message, "info");

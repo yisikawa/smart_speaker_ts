@@ -133,6 +133,13 @@ export interface LLMConfig {
   temperature: number;
   max_tokens: number;
   response_timeout_seconds: number;
+  /**
+   * モデルの読み込みを待つ上限（秒）。
+   * モデルを切り替えた直後の初回は読み込みに数十秒かかることがあり、
+   * これを `response_timeout_seconds` と同じにすると読み込みごと打ち切られて
+   * 「永遠にタイムアウトする」状態になる。
+   */
+  model_load_timeout_seconds: number;
   /** プロンプトに含める直近ターン数 */
   history_turns: number;
 }
@@ -307,6 +314,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     temperature: 0.7,
     max_tokens: 512,
     response_timeout_seconds: 60,
+    model_load_timeout_seconds: 180,
     history_turns: 6,
   },
   tts: {
