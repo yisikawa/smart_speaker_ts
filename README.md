@@ -278,6 +278,7 @@ logs/                          # app.log（実行ログ）
 | 設定が効かない | 画面の「⚙️ 設定」で切り替えたモデルは即時反映（次の発話から）。手で `settings.toml` を編集した場合は `POST /api/config/reload` または再起動 |
 | モデルを切り替えたら STT が 🔴 のまま | `models/` のパス、`whisper.cpp/main.exe` の有無、`npm install sherpa-onnx-node` を確認。`logs/app.log` に「STT を再構成しました」が出ているか確認 |
 | LLM のモデルを切り替えられない | Ollama に未導入のモデルは 400 で拒否されます。`ollama pull <model>` を実行してから選び直してください |
+| 「⚙️ 設定」で「/api/models が見つかりません」 | 画面（静的ファイル）だけ新しく、起動中のサーバーが古いままです。**アプリを再起動**してください（`start.bat`。コード更新後は必須） |
 
 ## 未実装（設定のみ）
 

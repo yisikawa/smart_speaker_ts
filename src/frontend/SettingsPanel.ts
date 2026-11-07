@@ -48,6 +48,12 @@ async function requestJson<T>(method: "GET" | "PUT", path: string, body?: unknow
     }
   }
   if (!response.ok) {
+    if (response.status === 404) {
+      // 画面（静的ファイル）だけ新しく、起動中のサーバーが古いままの典型パターン
+      throw new Error(
+        `${path} が見つかりません。起動中のサーバーが古いままの可能性があります（アプリを再起動してください）`
+      );
+    }
     const message = (parsed as { error?: string } | null)?.error;
     throw new Error(message ?? `${path} が ${response.status} を返しました`);
   }
