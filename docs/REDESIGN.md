@@ -639,3 +639,14 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 - 文の区切りは `tts.min_sentence_chars` / `tts.max_sentence_chars`、先読みは `tts.prefetch_depth`。
 
 
+
+### 13.5 アバター描画とステージ（P3）
+
+- `frontend/avatar/AvatarRenderer`（`mount` / `setMouth` / `setExpression` / `playMotion` / `destroy`）を
+  `AvatarStage` が選ぶ。P3 は `sprite`（CSS 立ち絵）と `none`。`live2d` を要求されても sprite へ落とす（P4）。
+- 口パクは `shared/avatar/lipSync.ts` の `mouthLevelAt(volumes, sliceMs, elapsedMs, { previous, smoothing })`。
+  `audio_tts` の `volumes` と `AudioPlayer.elapsedMs()` を `LipSyncDriver` が毎フレーム渡す。
+- `StageView` は `?mode=stage&transparent=1`（`shared/ui/stageMode.ts` で解釈）に応じて
+  `body.stage-mode` / `body.transparent` を切り替え、チャット UI を隠して `#stage` と `#caption` を出す。
+- 字幕は `llm_delta` で伸ばし、`llm_complete` で確定する（OBS 側のテキストソース不要）。
+

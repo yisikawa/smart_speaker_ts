@@ -141,6 +141,9 @@ npm start              # node dist/backend/index.js
   `http://localhost:3000/?role=display`。未接続なら自動で ffplay に戻る
 - 読み上げは**文単位**（`tts.split_sentences = true`）。1 文目が確定した時点で話し始める。
   文の区切りは `min_sentence_chars` / `max_sentence_chars` で調整できる（`false` で従来動作）
+- 画面: `http://localhost:3000/?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
+  OBS のブラウザソース（1920×1080 / 30fps）にそのまま入れられる
+- アバター: モデルが無いときは CSS 立ち絵（`renderer: "sprite"`）で表示し、`volumes` に合わせて口が動く
 - ライセンス: Live2D の Cubism Core とモデルは**各自取得**（`vendor/` と `live2d-models/` は gitignore）
 
 ## 設定
