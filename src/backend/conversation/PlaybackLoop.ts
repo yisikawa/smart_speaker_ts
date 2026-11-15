@@ -1,6 +1,6 @@
 import type { PipelineEvent } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
-import { AudioIO, CaptureHandle, PlaybackHandle } from "../core/ports";
+import { AudioIO, CaptureHandle, PlaybackHandle, PlaybackMeta, PlaybackSink } from "../core/ports";
 import { wavDurationMs } from "../services/wav";
 
 export interface PlaybackHooks {
@@ -21,14 +21,16 @@ export interface PlaybackHooks {
  * - サーバー入力モードでは再生中の発話を検知したら再生を止め、その音声を次ターンへ渡す
  */
 export class PlaybackLoop {
-  constructor(private readonly deps: { config: ConfigManager; audio: AudioIO }) {}
+  constructor(
+    private readonly deps: { config: ConfigManager; audio: AudioIO; playback: PlaybackSink }
+  ) {}
 
   /** 読み上げる。バージイン発話があれば次のターンの WAV を返す */
-  async play(wav: Buffer, hooks: PlaybackHooks): Promise<Buffer | undefined> {
+  async play(wav: Buffer, meta: PlaybackMeta, hooks: PlaybackHooks): Promise<Buffer | undefined> {
     const conv = this.deps.config.getConversation();
     const audio = this.deps.config.getAudio();
 
-    const playback = this.deps.audio.play(wav);
+    const playback = this.deps.playback.play(wav, meta);
     hooks.onPlayback(playback);
     hooks.emit({ type: "speaking_started" });
 

@@ -3,13 +3,16 @@ import * as path from "path";
 import { ConfigManager } from "./config/ConfigManager";
 import { ConversationPipeline } from "./conversation/ConversationPipeline";
 import { ConversationHistory } from "./conversation/ConversationHistory";
+import { PlaybackRouter } from "./conversation/PlaybackRouter";
 import { PromptBuilder } from "./conversation/PromptBuilder";
 import { Logger, LogLevel } from "./core/logger";
 import { findProjectRoot } from "./core/paths";
 import { AppServer } from "./server/AppServer";
+import { WsPlaybackSink } from "./server/WsPlaybackSink";
 import { AudioService } from "./services/AudioService";
 import { CharacterService } from "./services/CharacterService";
 import { OllamaLlmService } from "./services/OllamaLlmService";
+import { ServerPlaybackSink } from "./services/ServerPlaybackSink";
 import { SttSwitcher } from "./services/SttSwitcher";
 import { VoicevoxTtsService } from "./services/VoicevoxTtsService";
 
@@ -52,6 +55,21 @@ async function main(): Promise<void> {
   const tts = new VoicevoxTtsService({ config, logger: new Logger("TTS") });
 
   // 3. 会話パイプライン
+  // 読み上げの出力先（ブラウザ再生が本命。表示クライアントが居なければ ffplay へ落ちる）
+  let appServer: AppServer | null = null;
+  const serverPlayback = new ServerPlaybackSink({ audio });
+  const browserPlayback = new WsPlaybackSink({
+    send: (message) => appServer?.broadcast(message) ?? false,
+    hasPrimaryClient: () => appServer?.hasPrimaryClient() ?? false,
+    logger: new Logger("Playback"),
+  });
+  const playback = new PlaybackRouter({
+    config,
+    server: serverPlayback,
+    browser: browserPlayback,
+    logger: new Logger("Playback"),
+  });
+
   const history = new ConversationHistory(config.getLLM().history_turns);
   const promptBuilder = new PromptBuilder({ config, character });
   const pipeline = new ConversationPipeline({
@@ -63,11 +81,12 @@ async function main(): Promise<void> {
     llm,
     tts,
     logger: new Logger("Pipeline"),
+    playback,
   });
 
   // 4. サーバー
   const port = Number(process.env.PORT ?? 3000);
-  const server = new AppServer({
+  appServer = new AppServer({
     config,
     pipeline,
     audio,
@@ -79,7 +98,9 @@ async function main(): Promise<void> {
     version,
     port,
     frontendDirs: [path.join(rootDir, "dist", "frontend"), path.join(rootDir, "src", "frontend")],
+    playbackAck: { resolveDone: (utteranceId) => browserPlayback.resolveDone(utteranceId) },
   });
+  const server = appServer;
 
   await server.start();
 

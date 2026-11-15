@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
 import type { AssistantState, PipelineEvent } from "../../shared/protocol";
+import { buildVolumeEnvelope } from "../../shared/audio/envelope";
 import { ConfigManager } from "../config/ConfigManager";
 import { Logger } from "../core/logger";
 import { LlmMessage } from "../core/messages";
-import { LanguageModel, TextToSpeech } from "../core/ports";
+import { LanguageModel, PlaybackMeta, TextToSpeech } from "../core/ports";
+import { wavDurationMs } from "../services/wav";
 import { ConversationHistory } from "./ConversationHistory";
 import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
@@ -29,7 +32,7 @@ export interface TurnHooks {
   /** 応答文が確定した（エコー判定用の記憶などに使う） */
   onReply(reply: string): void;
   /** 読み上げ（バージイン監視込み）。次のターンの発話 WAV を返す */
-  play(wav: Buffer): Promise<Buffer | undefined>;
+  play(wav: Buffer, meta: PlaybackMeta): Promise<Buffer | undefined>;
 }
 
 /**
@@ -107,7 +110,14 @@ export class TurnRunner {
     }
     hooks.emit({ type: "tts_complete", elapsedMs: Date.now() - ttsStartedAt });
 
-    return hooks.play(wav);
+    const meta: PlaybackMeta = {
+      utteranceId: randomUUID(),
+      text: reply,
+      volumes: buildVolumeEnvelope(wav),
+      sliceMs: 20,
+      durationMs: wavDurationMs(wav, this.deps.config.getAudio().sample_rate),
+    };
+    return hooks.play(wav, meta);
   }
 
   /** LLM へ渡すメッセージ（言語再生成時は追加の system 指示を末尾に足す） */

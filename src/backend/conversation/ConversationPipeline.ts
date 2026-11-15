@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AssistantState,
   CaptureStats,
@@ -5,16 +6,21 @@ import type {
   PipelineEvent,
   SkipStats,
 } from "../../shared/protocol";
+import { buildVolumeEnvelope } from "../../shared/audio/envelope";
 import { ConfigManager } from "../config/ConfigManager";
 import {
   AudioIO,
   CaptureHandle,
   LanguageModel,
   PlaybackHandle,
+  PlaybackMeta,
+  PlaybackSink,
   SpeechToText,
   TextToSpeech,
 } from "../core/ports";
 import { Logger } from "../core/logger";
+import { ServerPlaybackSink } from "../services/ServerPlaybackSink";
+import { wavDurationMs } from "../services/wav";
 import { ConversationHistory } from "./ConversationHistory";
 import { ListeningHooks, ListeningLoop } from "./ListeningLoop";
 import { PlaybackLoop } from "./PlaybackLoop";
@@ -35,6 +41,8 @@ export interface PipelineDeps {
   llm: LanguageModel;
   tts: TextToSpeech;
   logger: Logger;
+  /** 読み上げの出力先（未指定ならサーバー再生） */
+  playback?: PlaybackSink;
 }
 
 export type PipelineListener = (event: PipelineEvent) => void;
@@ -69,8 +77,11 @@ export class ConversationPipeline {
   private readonly playbackLoop: PlaybackLoop;
   /** 音声認識と採否判定 */
   private readonly transcription: TranscriptionRunner;
+  /** 読み上げの出力先（server / browser を切り替えるルータを含む） */
+  private readonly playbackSink: PlaybackSink;
 
   constructor(private readonly deps: PipelineDeps) {
+    this.playbackSink = deps.playback ?? new ServerPlaybackSink({ audio: deps.audio });
     this.turnRunner = new TurnRunner({
       config: deps.config,
       history: deps.history,
@@ -80,7 +91,11 @@ export class ConversationPipeline {
       logger: deps.logger,
     });
     this.listening = new ListeningLoop({ config: deps.config, audio: deps.audio });
-    this.playbackLoop = new PlaybackLoop({ config: deps.config, audio: deps.audio });
+    this.playbackLoop = new PlaybackLoop({
+      config: deps.config,
+      audio: deps.audio,
+      playback: this.playbackSink,
+    });
     this.transcription = new TranscriptionRunner({ stt: deps.stt, gate: this.gate, logger: deps.logger });
   }
 
@@ -189,7 +204,13 @@ export class ConversationPipeline {
       const controller = this.newAbort();
       const wav = await this.deps.tts.synthesize(trimmed, { signal: controller.signal });
       this.emit({ type: "tts_complete", elapsedMs: Date.now() - started });
-      const playback = this.deps.audio.play(wav);
+      const playback = this.playbackSink.play(wav, {
+        utteranceId: randomUUID(),
+        text: trimmed,
+        volumes: buildVolumeEnvelope(wav),
+        sliceMs: 20,
+        durationMs: wavDurationMs(wav, this.deps.config.getAudio().sample_rate),
+      });
       this.playback = playback;
       this.emit({ type: "speaking_started" });
       await playback.finished;
@@ -405,7 +426,7 @@ export class ConversationPipeline {
         // （幻聴ループ対策の判定が、正当な聞き返しまで落とさないようにする）
         this.gate.resetRepeat();
       },
-      play: (wav) => this.playWithBargeIn(wav),
+      play: (wav, meta) => this.playWithBargeIn(wav, meta),
     };
     return this.turnRunner.run(userText, hooks, controller.signal);
   }
@@ -414,8 +435,8 @@ export class ConversationPipeline {
    * 再生とバージイン監視（実装は `PlaybackLoop`）。
    * 再生中に発話を検知したら再生を止め、その発話を次ターンの入力として返す。
    */
-  private playWithBargeIn(wav: Buffer): Promise<Buffer | undefined> {
-    return this.playbackLoop.play(wav, {
+  private playWithBargeIn(wav: Buffer, meta: PlaybackMeta): Promise<Buffer | undefined> {
+    return this.playbackLoop.play(wav, meta, {
       emit: (event) => this.emit(event),
       onPlayback: (handle) => {
         this.playback = handle;
