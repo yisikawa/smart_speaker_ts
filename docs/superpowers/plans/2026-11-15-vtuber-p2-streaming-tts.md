@@ -1022,6 +1022,26 @@ git commit -m "docs: 文単位ストリーミングの挙動と設定を追記"
 - **既知の割り切り**: 言語ガードで読み直すとき、既に再生中の 1 文は最後まで鳴る（`stopPlayback()` で止めるが、
   バージイン監視の録音は次ターンまで残る）。気になる場合は P5 で「文の再生開始前にタグ・言語を確定」へ寄せる。
 
+---
+
+## 実行結果（2026-11-15 / `develop`）
+
+| タスク | コミット | 結果 |
+|---|---|---|
+| 1 `SentenceSplitter` | `3cbdc81` | ✅ 5 件（短い文を「次の区切りまで伸ばす」方式に修正） |
+| 2 `SpeechQueue` | `2ec2595` | ✅ 5 件（順序・失敗継続・先読み・stop・バージイン） |
+| 3 イベント抑止 + `speech_reset` | `75f774f` | ✅ 既存 178 件緑 |
+| 4 `TurnRunner` 文単位化 | `f5e435d` | ✅ 3 件（文単位 / `false` で全文 / ハングル読み直し） |
+| 5 画面 + ドキュメント | （このコミット） | ✅ `npm run verify` 181 件 pass / build OK |
+
+**実装で確定した点**
+
+- `speaking_started` / `speaking_finished` は `TurnRunner` がターン単位で出し、文ごとの再生は
+  `announce: false`。既存の `pipeline` テストは無変更で緑のまま。
+- `split_sentences=false` は `runWholeText()` に分岐（従来のハングル再生成も維持）。
+- ハングル検出時は「キューを捨てる → `stopPlayback()` → `speech_reset` → 再生成 → 新しいキューで最初から」。
+
+
 
 
 
