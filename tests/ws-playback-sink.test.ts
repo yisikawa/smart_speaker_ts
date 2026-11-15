@@ -10,6 +10,7 @@ Logger.configure({ level: "error" });
 const meta: PlaybackMeta = {
   utteranceId: "u1",
   text: "こんにちは",
+  expression: "exp_01",
   volumes: [0.5, 1],
   sliceMs: 20,
   durationMs: 100,
@@ -33,11 +34,15 @@ test("tts_audio を送り、ack で解決する", async () => {
   const handle = sink.play(Buffer.from([1, 2, 3]), meta);
 
   assert.equal(sent.length, 1);
-  const message = sent[0] as { type: "event"; event: { type: string; utteranceId: string; audio: string } };
+  const message = sent[0] as {
+    type: "event";
+    event: { type: string; utteranceId: string; audio: string; expression?: string };
+  };
   assert.equal(message.type, "event");
   assert.equal(message.event.type, "tts_audio");
   assert.equal(message.event.utteranceId, "u1");
   assert.equal(message.event.audio, "AQID");
+  assert.equal(message.event.expression, "exp_01");
 
   sink.resolveDone("u1");
   await handle.finished;

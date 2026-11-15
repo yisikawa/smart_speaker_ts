@@ -94,6 +94,18 @@ test("split_sentences=false なら全文を 1 回だけ合成する", async () =
   }
 });
 
+test("感情タグは読み上げから除かれる", async () => {
+  const ctx = setup({ replies: ["おはよう！[喜] いい天気だね。"] });
+  try {
+    await ctx.runner.run("やあ", ctx.hooks, new AbortController().signal);
+    // 文分割は「！」で切れるため 2 文になる。どちらにもタグは残らない
+    assert.deepEqual(ctx.synthCalls, ["おはよう！", "いい天気だね。"]);
+    assert.ok(ctx.synthCalls.every((text) => !text.includes("[")));
+  } finally {
+    ctx.project.cleanup();
+  }
+});
+
 test("ハングルを検出したら読み直す（speech_reset）", async () => {
   const ctx = setup({ replies: ["안녕하세요。", "こんにちは。元気です。"] });
   try {

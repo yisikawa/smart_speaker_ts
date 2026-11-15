@@ -26,6 +26,7 @@ export interface SpeechQueueResult {
 
 interface Item {
   text: string;
+  expression?: string;
   promise?: Promise<Buffer | null>;
 }
 
@@ -48,12 +49,12 @@ export class SpeechQueue {
 
   constructor(private readonly deps: SpeechQueueDeps) {}
 
-  enqueue(text: string): void {
+  enqueue(text: string, expression?: string): void {
     const trimmed = text.trim();
     if (!trimmed || this.stopped || this.deps.signal.aborted) {
       return;
     }
-    this.items.push({ text: trimmed });
+    this.items.push({ text: trimmed, expression });
     void this.run();
   }
 
@@ -109,7 +110,7 @@ export class SpeechQueue {
         }
 
         this.items.shift();
-        const barge = await this.deps.play(wav, this.meta(wav, item.text));
+        const barge = await this.deps.play(wav, this.meta(wav, item.text, item.expression));
         if (this.stopped) {
           return;
         }
@@ -140,10 +141,11 @@ export class SpeechQueue {
     return item.promise;
   }
 
-  private meta(wav: Buffer, text: string): PlaybackMeta {
+  private meta(wav: Buffer, text: string, expression?: string): PlaybackMeta {
     return {
       utteranceId: randomUUID(),
       text,
+      expression,
       volumes: buildVolumeEnvelope(wav),
       sliceMs: 20,
       durationMs: wavDurationMs(wav, this.deps.sampleRate),

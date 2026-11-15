@@ -11,6 +11,7 @@ import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
 import { SpeechQueue } from "./SpeechQueue";
 import { SentenceSplitter } from "../../shared/text/sentenceSplitter";
+import { extractEmotion } from "../../shared/avatar/emotion";
 
 export interface TurnDeps {
   config: ConfigManager;
@@ -132,6 +133,7 @@ export class TurnRunner {
     llmStartedAt: number
   ): Promise<Buffer | undefined> {
     const ttsConfig = this.deps.config.getTTS();
+    const avatarConfig = this.deps.config.getAvatar();
     const splitter = new SentenceSplitter({
       minChars: ttsConfig.min_sentence_chars,
       maxChars: ttsConfig.max_sentence_chars,
@@ -141,8 +143,11 @@ export class TurnRunner {
     let resetRequested = false;
     let queue: SpeechQueue | null = this.createQueue(hooks, signal);
 
-    const enqueue = (text: string): void => {
-      if (!queue) {
+    const enqueue = (raw: string): void => {
+      const { text, expression } = extractEmotion(raw, avatarConfig.expressions, {
+        heuristic: avatarConfig.emotion_heuristic_enabled,
+      });
+      if (!text || !queue) {
         return;
       }
       if (containsHangul(text)) {
@@ -160,7 +165,7 @@ export class TurnRunner {
         hooks.setState("speaking");
         hooks.emit({ type: "speaking_started" });
       }
-      queue.enqueue(text);
+      queue.enqueue(text, expression ?? undefined);
     };
 
     let reply = "";

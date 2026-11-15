@@ -63,6 +63,8 @@ export type PipelineEvent =
       utteranceId: string;
       /** 表示用テキスト（感情タグは除去済み） */
       text: string;
+      /** 発火する表情（モデルの表情名） */
+      expression?: string;
       /** base64 WAV */
       audio: string;
       /** 20ms スライスごとの 0..1（口パク用） */

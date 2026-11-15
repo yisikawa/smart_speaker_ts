@@ -65,6 +65,7 @@ export class WsPlaybackSink implements PlaybackSink {
         type: "tts_audio",
         utteranceId: meta.utteranceId,
         text: meta.text,
+        expression: meta.expression,
         audio: bytesToBase64(wav),
         volumes: meta.volumes,
         sliceMs: meta.sliceMs,

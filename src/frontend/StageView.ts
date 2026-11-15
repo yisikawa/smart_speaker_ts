@@ -28,6 +28,10 @@ export class StageView {
     this.avatar.setMouth(level);
   }
 
+  setExpression(name: string | null): void {
+    this.avatar.setExpression(name);
+  }
+
   setCaption(text: string, final: boolean): void {
     this.captionEl.textContent = text;
     this.captionEl.classList.toggle("final", final);

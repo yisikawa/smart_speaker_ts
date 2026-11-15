@@ -266,6 +266,7 @@ class SumikaApp {
         this.micLoop.startBargeMonitor();
         break;
       case "tts_audio":
+        this.stage.setExpression(event.expression ?? null);
         this.audioPlayer?.enqueue(event);
         break;
       case "speech_reset":
@@ -273,6 +274,7 @@ class SumikaApp {
         break;
       case "speaking_finished":
         view.setFace("🌸");
+        this.stage.setExpression(null);
         break;
       case "barge_in":
         this.audioPlayer?.stop();

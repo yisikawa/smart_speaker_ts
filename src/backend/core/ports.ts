@@ -61,6 +61,8 @@ export interface PlaybackMeta {
   utteranceId: string;
   /** 表示用テキスト（感情タグは除去済み） */
   text: string;
+  /** この文で発火する表情（モデルの表情名。無ければ undefined） */
+  expression?: string;
   /** スライスごとの 0..1（口パク用）。サーバー再生では未使用 */
   volumes: number[];
   sliceMs: number;
