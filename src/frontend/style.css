@@ -424,3 +424,95 @@ main {
 .toast.info {
   background: #2563eb;
 }
+
+/* ---- VTuber ステージ ---- */
+.stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+  overflow: hidden;
+}
+
+.avatar-sprite {
+  position: relative;
+  width: calc(220px * var(--avatar-scale, 1));
+  height: calc(300px * var(--avatar-scale, 1));
+  transform: translate(-50%, -50%);
+  border-radius: 45% 45% 40% 40%;
+  background: #1f2430;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.avatar-face {
+  position: absolute;
+  inset: 12% 10% 10%;
+  border-radius: 50% 50% 45% 45%;
+  background: #f7e9de;
+}
+
+.avatar-eye {
+  position: absolute;
+  top: 38%;
+  width: 12%;
+  height: 8%;
+  border-radius: 50%;
+  background: #2b2b2b;
+}
+.avatar-eye-left { left: 22%; }
+.avatar-eye-right { right: 22%; }
+
+.avatar-mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  width: 22%;
+  height: 4px;
+  transform: translateX(-50%);
+  background: #b3455b;
+  border-radius: 2px;
+  transition: height 60ms linear;
+}
+
+.avatar-expression {
+  position: absolute;
+  right: 6%;
+  bottom: 4%;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.caption {
+  position: fixed;
+  left: 50%;
+  bottom: 6vh;
+  max-width: 80vw;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border-radius: 14px;
+  background: rgba(15, 17, 23, 0.72);
+  color: #fff;
+  font-size: 34px;
+  line-height: 1.45;
+  text-align: center;
+  white-space: pre-wrap;
+}
+.caption.final { opacity: 0.92; }
+
+body.stage-mode { background: #0f1117; overflow: hidden; }
+body.stage-mode #app { max-width: none; min-height: 100vh; padding: 0; }
+body.stage-mode header,
+body.stage-mode .character,
+body.stage-mode .conversation,
+body.stage-mode .mic-row,
+body.stage-mode .composer,
+body.stage-mode .controls,
+body.stage-mode .diagnostics,
+body.stage-mode .settings,
+body.stage-mode footer { display: none; }
+body.stage-mode #stage { min-height: 100vh; }
+
+body.transparent { background: transparent !important; }
+body.transparent #app { background: transparent; }
+
