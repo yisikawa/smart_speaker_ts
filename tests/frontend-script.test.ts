@@ -18,6 +18,12 @@ interface StubElement {
   scrollTop: number;
   scrollHeight: number;
   children: StubElement[];
+  classList: {
+    toggle(): void;
+    add(): void;
+    remove(): void;
+    contains(): boolean;
+  };
   addEventListener(type: string, handler: (event?: unknown) => void): void;
   appendChild(child: StubElement): StubElement;
   append(...nodes: StubElement[]): void;
@@ -37,6 +43,12 @@ function createElement(id?: string): StubElement {
     scrollTop: 0,
     scrollHeight: 0,
     children: [],
+    classList: {
+      toggle: () => undefined,
+      add: () => undefined,
+      remove: () => undefined,
+      contains: () => false,
+    },
     addEventListener: (type, handler) => {
       listeners[type] = handler;
     },
@@ -78,6 +90,8 @@ class FakeWebSocket {
 }
 
 const ELEMENT_IDS = [
+  "stage",
+  "caption",
   "conversation",
   "status",
   "levelFill",
@@ -154,6 +168,7 @@ function bootApp(
   const documentStub = {
     getElementById: (id: string) => elements.get(id) ?? null,
     createElement: () => createElement(),
+    body: createElement(),
     addEventListener: (type: string, handler: () => void) => {
       if (type === "DOMContentLoaded") {
         domReady = handler;
@@ -188,6 +203,9 @@ function bootApp(
     WebSocket: FakeWebSocket,
     fetch: fetchStub,
     navigator: { mediaDevices: undefined },
+    requestAnimationFrame: () => 0,
+    cancelAnimationFrame: () => undefined,
+    URLSearchParams,
     console,
   });
   assert.ok(domReady, "DOMContentLoaded ハンドラが登録されること");
@@ -208,8 +226,26 @@ const HELLO = {
     stt: { engine: "whisper", label: "whisper.cpp / ggml-large-v3-turbo.bin" },
     llm: { model: "llama3.2:1b" },
   },
+  avatar: {
+    enabled: true,
+    renderer: "sprite",
+    modelUrl: "",
+    scale: 1,
+    offsetX: 0.5,
+    offsetY: 0.85,
+    background: "#0f1117",
+    expressions: {},
+    motions: {},
+    emotionStyles: {},
+    idleMotionIntervalSeconds: 20,
+    lipSync: { sliceMs: 20, smoothing: 0.4, gain: 1 },
+    emotionTags: [],
+  },
   audio: {
     inputMode: "browser",
+    playbackTarget: "server",
+    isPrimary: true,
+    outputVolume: 1,
     sampleRate: 16000,
     noSpeechTimeoutMs: 3000,
     followup: { enabled: true, maxTurns: 3, timeoutMs: 6000, guardMs: 250, keepListening: true },

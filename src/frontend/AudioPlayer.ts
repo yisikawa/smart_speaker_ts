@@ -19,6 +19,10 @@ export class AudioPlayer {
   private readonly ready: { event: AudioEvent; buffer: AudioBuffer }[] = [];
   private current: AudioBufferSourceNode | null = null;
   private playing = false;
+  /** 再生中の音量列（口パク用） */
+  private currentVolumesInfo: { volumes: number[]; sliceMs: number } | null = null;
+  /** 再生開始時の AudioContext 時刻 */
+  private startedAt = 0;
   /** stop 後に古い onended が ack を送らないようにするための世代番号 */
   private token = 0;
 
@@ -47,9 +51,25 @@ export class AudioPlayer {
     void this.decode(event);
   }
 
+  /** 再生中か（口パクの判定に使う） */
+  isPlaying(): boolean {
+    return this.playing;
+  }
+
+  /** 現在の音声の再生位置（ms） */
+  elapsedMs(): number {
+    return this.ctx ? Math.max(0, (this.ctx.currentTime - this.startedAt) * 1000) : 0;
+  }
+
+  /** 再生中の音量列（口パク用）。停止中は null */
+  currentVolumes(): { volumes: number[]; sliceMs: number } | null {
+    return this.currentVolumesInfo;
+  }
+
   stop(): void {
     this.token += 1;
     this.ready.length = 0;
+    this.currentVolumesInfo = null;
     if (this.current) {
       try {
         this.current.stop();
@@ -107,6 +127,8 @@ export class AudioPlayer {
     const token = this.token;
     this.playing = true;
     this.current = source;
+    this.startedAt = this.context().currentTime;
+    this.currentVolumesInfo = { volumes: next.event.volumes, sliceMs: next.event.sliceMs };
     this.deps.onPlayingChange?.(true);
 
     source.onended = () => {
@@ -115,6 +137,7 @@ export class AudioPlayer {
       }
       this.current = null;
       this.playing = false;
+      this.currentVolumesInfo = null;
       this.deps.send({ type: "audio_playback_done", utteranceId: next.event.utteranceId });
       this.pump();
     };

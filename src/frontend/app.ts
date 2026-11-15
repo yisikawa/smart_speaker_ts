@@ -7,7 +7,10 @@ import type {
 } from "../shared/protocol";
 import { ChatView } from "./ChatView";
 import { AudioPlayer } from "./AudioPlayer";
+import { LipSyncDriver } from "./avatar/LipSyncDriver";
 import { MicLoop } from "./MicLoop";
+import { StageView } from "./StageView";
+import { parseStageOptions } from "../shared/ui/stageMode";
 import { SettingsPanel } from "./SettingsPanel";
 import { WsClient } from "./WsClient";
 
@@ -28,6 +31,11 @@ class SumikaApp {
   private readonly settings: SettingsPanel;
   /** ブラウザ再生（tts_audio）のキュー。`playbackTarget=browser` のときだけ作る */
   private audioPlayer: AudioPlayer | null = null;
+  /** 配信向けステージ（アバター + 字幕） */
+  private readonly stage = new StageView();
+  private lipSync: LipSyncDriver | null = null;
+  /** 字幕の組み立て用バッファ */
+  private caption = "";
   /** 現在の音声入力方式（hello で更新。疎通表示に使う） */
   private inputMode: "browser" | "server" = "browser";
   /** 診断パネルを開いているか */
@@ -60,6 +68,7 @@ class SumikaApp {
   }
 
   start(): void {
+    this.stage.apply(parseStageOptions(window.location.search ?? ""));
     this.bindEvents();
     this.settings.bind();
     // connect() より先に初期状態を設定する（未接続時の表示を上書きしないため）
@@ -197,6 +206,18 @@ class SumikaApp {
     } else {
       this.audioPlayer?.configure(hello.audio);
     }
+
+    if (hello.avatar) {
+      void this.stage.mountAvatar(hello.avatar);
+    }
+    if (this.audioPlayer && hello.avatar) {
+      this.lipSync = new LipSyncDriver({
+        player: this.audioPlayer,
+        onLevel: (level) => this.stage.setMouth(level),
+        smoothing: hello.avatar.lipSync.smoothing,
+      });
+      this.lipSync.start();
+    }
   }
 
   private handleEvent(event: PipelineEvent): void {
@@ -224,12 +245,20 @@ class SumikaApp {
       case "stt_complete":
         view.addMessage("user", event.text);
         break;
+      case "llm_started":
+        this.caption = "";
+        this.stage.setCaption("", false);
+        break;
       case "llm_delta":
         view.appendStreamChunk(event.content);
+        this.caption += event.content;
+        this.stage.setCaption(this.caption, false);
         break;
       case "llm_complete":
         view.finalizeStream(event.text);
         view.setFace("🌸");
+        this.caption = event.text;
+        this.stage.setCaption(event.text, true);
         break;
       case "speaking_started":
         view.setFace("🗣️");
