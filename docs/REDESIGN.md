@@ -650,3 +650,13 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
   `body.stage-mode` / `body.transparent` を切り替え、チャット UI を隠して `#stage` と `#caption` を出す。
 - 字幕は `llm_delta` で伸ばし、`llm_complete` で確定する（OBS 側のテキストソース不要）。
 
+
+### 13.6 感情タグと表情（P5）
+
+- `PromptBuilder` は `avatar.emotion_tags_enabled` のときだけ語彙（`[喜] [怒] [哀] [驚] [照] [考]`）を追加する。
+- `shared/avatar/emotion.ts` の `extractEmotion()` が**文ごとに**タグを除去し、`avatar.expressions` で
+  モデルの表情名へ解決する（空文字は「変えない」）。未知タグは落とすだけ。
+- タグが無ければ `emotion_heuristic_enabled` のときだけ語彙推定（`inferEmotion`）。
+- 表情は `PlaybackMeta.expression` → `tts_audio.expression` → `AvatarStage.setExpression()` で反映し、
+  `speaking_finished` で解除する。
+

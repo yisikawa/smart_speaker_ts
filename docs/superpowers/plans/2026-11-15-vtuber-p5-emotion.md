@@ -305,11 +305,13 @@ git commit -m "feat(prompt): 感情タグの語彙をプロンプトに追加（
 `tests/turn-runner-streaming.test.ts` に:
 
 ```ts
-test("感情タグは読み上げから除かれ、表情として渡る", async () => {
+test("感情タグは読み上げから除かれる", async () => {
   const ctx = setup({ replies: ["おはよう！[喜] いい天気だね。"] });
   try {
     await ctx.runner.run("やあ", ctx.hooks, new AbortController().signal);
-    assert.deepEqual(ctx.synthCalls, ["おはよう！ いい天気だね。"]);
+    // 文分割は「！」で切れるため 2 文になる。どちらにもタグは残らない
+    assert.deepEqual(ctx.synthCalls, ["おはよう！", "いい天気だね。"]);
+    assert.ok(ctx.synthCalls.every((text) => !text.includes("[")));
   } finally {
     ctx.project.cleanup();
   }
@@ -469,6 +471,25 @@ git commit -m "docs: 感情タグと表情の使い方を追記"
 
 - タグは `[喜]`（日本語）と `[happy]`（英語）の両対応。未知タグは落とすが表情は変えない。
 - 読み上げテキストは常にタグ除去後（TTS に `[` が渡らない）。
+
+---
+
+## 実行結果（2026-11-15 / `develop`）
+
+| タスク | コミット | 結果 |
+|---|---|---|
+| 1 感情の抽出・推定 | `36fe2d5` | ✅ 6 件 |
+| 2 プロンプト語彙 | `4e70b61` | ✅ 2 件 |
+| 3 表情の配線 | `6e0736a` | ✅ 200 件（`ws-playback-sink` / `turn-runner-streaming` に追記） |
+| 4 ドキュメント | （このコミット） | ✅ `npm run verify` 200 件 pass / build OK |
+
+**計画から変えた点**
+
+1. 感情タグは**文単位**で除去するため、`おはよう！[喜] …` は `！` で 2 文に割れ、タグは 2 文目に付く。
+   テストは「どの文にも `[` が残らない」ことで検証する（1 文に収めるにはタグを句点の前に置く）。
+2. `extractEmotion` は `null` を返すので、`SpeechQueue.enqueue` へは `expression ?? undefined` で渡す。
+3. `StageView.setExpression()`（`AvatarStage` への委譲）を追加（計画の Interfaces に漏れていた）。
+
 
 
 

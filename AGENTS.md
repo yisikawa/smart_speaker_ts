@@ -113,6 +113,10 @@ src/backend/index.ts                                ← Composition Root（DI �
     `live2d` を要求されても sprite にフォールバックする。口パクは `mouthLevelAt()`（`shared/avatar/lipSync.ts`）に
     再生位置と `volumes` を渡す。`StageView` は `?mode=stage&transparent=1` で body クラスを切り替える。
 
+12-13. **感情タグは TTS の前に必ず除去する**（`shared/avatar/emotion.ts` の `extractEmotion`）。
+    タグ→表情名の対応は `avatar.expressions`（空文字は「変えない」）。タグが無ければ
+    `emotion_heuristic_enabled` のときだけ語彙推定する。表情は `tts_audio.expression` で画面へ渡す。
+
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする
