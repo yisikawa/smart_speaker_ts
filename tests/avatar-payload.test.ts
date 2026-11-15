@@ -20,9 +20,9 @@ test("モデルが見つかれば live2d", () => {
   assert.deepEqual(payload.emotionTags, ["happy", "angry", "sad", "surprised", "shy", "thinking"]);
 });
 
-test("モデルが無ければ none", () => {
+test("モデルが無ければ sprite（CSS 立ち絵へフォールバック）", () => {
   const payload = buildAvatarPayload(DEFAULT_CONFIG.avatar, []);
-  assert.equal(payload.renderer, "none");
+  assert.equal(payload.renderer, "sprite");
   assert.equal(payload.modelUrl, "");
 });
 

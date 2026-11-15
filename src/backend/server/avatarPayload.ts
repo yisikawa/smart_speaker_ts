@@ -15,7 +15,7 @@ export function buildAvatarPayload(
 
   return {
     enabled: config.enabled,
-    renderer: config.enabled && model ? "live2d" : "none",
+    renderer: config.enabled ? (model ? "live2d" : "sprite") : "none",
     modelUrl: model?.url ?? "",
     scale: config.scale,
     offsetX: config.offset_x,
