@@ -3,6 +3,17 @@ import type { StageOptions } from "../shared/ui/stageMode";
 import { AvatarStage } from "./avatar/AvatarStage";
 import { must } from "./dom";
 
+/** 背景設定（色 or 画像 URL）を CSS の background へ変換する */
+function toBackground(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "#0f1117";
+  }
+  const looksLikeImage =
+    /^(https?:|\/|\.\/|data:image\/)/i.test(trimmed) || /\.(png|jpe?g|webp|gif|avif)$/i.test(trimmed);
+  return looksLikeImage ? `url("${trimmed}") center / cover no-repeat` : trimmed;
+}
+
 /** ステージ（配信向けレイアウト）と字幕・アバターの表示を担当する */
 export class StageView {
   private readonly stageEl = must<HTMLElement>("stage");
@@ -19,6 +30,7 @@ export class StageView {
   }
 
   async mountAvatar(config: AvatarConfigPayload): Promise<void> {
+    this.stageEl.style.setProperty?.("--stage-background", toBackground(config.background));
     await this.avatar.mount(this.stageEl, config);
     const empty = config.renderer === "none";
     this.stageEl.classList.toggle("hidden", this.mode !== "stage" || empty);

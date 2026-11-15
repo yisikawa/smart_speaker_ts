@@ -16,7 +16,6 @@ export class SpriteRenderer implements AvatarRenderer {
     const root = document.createElement("div");
     root.className = "avatar-sprite";
     root.style.setProperty?.("--avatar-scale", String(config.scale));
-    root.style.background = config.background;
     root.style.left = `${config.offsetX * 100}%`;
     root.style.top = `${config.offsetY * 100}%`;
 
