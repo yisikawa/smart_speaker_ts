@@ -99,6 +99,11 @@ src/backend/index.ts                                ← Composition Root（DI �
 12-9. **画面のモデル一覧は `GET /api/models` だけを真実源にする**。`models/` のスキャン結果と
     `llm.listModels()`（Ollama）を合成して返し、Ollama 停止中でも 200 + `llm.available=false` とする
     （500 にすると画面が壊れる）。
+12-10. **読み上げの出力先は `PlaybackSink`**（`core/ports.ts`）。`PlaybackRouter` が
+    `audio.playback_target` と接続状況で server（ffplay）/ browser（WebAudio）を選ぶ。
+    `tts_audio` は primary（`role=display`）のみへ送り、クライアントの `audio_playback_done` を待つ
+    （来なくても `durationMs + 1500ms` で必ず解く）。`hello.avatar` は `buildAvatarPayload()` が組み立てる。
+
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする

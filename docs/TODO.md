@@ -22,7 +22,7 @@
 |---|---|---|---|---|
 | 1-1 | **設定 UI（音声まわりのしきい値）** | **モデル切替（LLM モデル / STT のエンジン・モデル）は画面の「⚙️ 設定」で実装済み**。残りは `audio.silence_threshold` / `input_gain` / `output_volume` / `tts.speaker_id` など数値項目 | 画面から当該項目を変更でき、`warnings` を表示する。保存後に `POST /api/config/reload` を呼び、応答が壊れないこと | 1 日 |
 | 1-2 | **VAD 設定の二重管理の解消** | ブラウザ VAD は hello で受け取った値、サーバー VAD は `AudioService` が設定を直接読む。同じ計算式が 2 経路 | ブラウザ・サーバー双方が同じ `VadSettings` 生成関数（`shared`）を使う。テストで一致を担保 | 0.5 日 |
-| 1-3 | **エコー対策の本命（WebAudio 再生）** | TTS は ffplay（ブラウザ外）で再生するため `echoCancellation` が効かない。現状は「エコー/短断片を破棄」「バージイン既定 OFF」で回避 | (a) ブラウザで音声を再生して AEC を効かせるモードを追加、または (b) 再生音を参照信号にした簡易エコー除去。**バージインを既定 ON に戻せる**ことが目標 | 2〜3 日 |
+| 1-3 | **エコー対策の本命（WebAudio 再生）** | **ブラウザ再生（`audio.playback_target = "browser"`）を実装済み**。`getUserMedia` の `echoCancellation` が効く構成になった。残りは実測（3 往復で誤検知 0）と `barge_in_enabled` の既定 ON 化 | `config/profiles/vtuber-rtx3060.toml` で既定 ON にして 3 往復の誤検知 0 を確認し、README / `AGENTS.md` を更新 | 0.5 日 |
 | 1-4 | **CI（`npm run verify` の自動実行）** | 手元実行のみ。壊れた状態が main に入り得る | GitHub Actions で push/PR 時に `npm ci && npm run verify` が走る。Windows ランナーか ubuntu（ネイティブ依存なしで通ること）を確認 | 0.5 日 |
 | 1-5 | **リリース手順の自動化** | バージョン更新は `package.json` / `package-lock.json` / ドキュメントを手で直している | `npm version` 相当のスクリプト（または手順書）で 4 箇所が一括更新される。`tests` でバージョン整合を検証 | 0.5 日 |
 

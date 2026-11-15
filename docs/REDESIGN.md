@@ -583,3 +583,43 @@ npm start                # 直接起動する場合
 
 
 
+
+---
+
+## 13. 音声経路とアバター層（P0 / P0.5 / P1 実装）
+
+VTuber 化の第 1 段。詳細は `docs/superpowers/specs/2026-11-15-vtuber-avatar-design.md`、
+手順は `docs/superpowers/plans/2026-11-15-vtuber-p0-p1.md`。
+
+### 13.1 設定（`schema.ts` が真実源）
+
+- `[avatar]`（`enabled` / `model_path` / `scale` / `offset_x,y` / `background` / `lip_sync_*` /
+  `emotion_tags_enabled` / `emotion_heuristic_enabled` / `expressions` / `emotion_styles` / `motions`）
+- `audio.playback_target = "server" | "browser"`（既定 `server`）
+- `[llm] keep_alive` / `num_ctx`（VRAM 使用量の制御。Ollama の body へ渡す）
+- `[tts] split_sentences` / `prefetch_depth` / `min_sentence_chars` / `max_sentence_chars`（P2 で使用）
+- `[gui] layout` / `caption_enabled` / `caption_font_size`（P3 で使用）
+
+### 13.2 読み上げの出力先
+
+```
+TurnRunner ── meta（utteranceId / text / volumes / sliceMs / durationMs）──► PlaybackLoop
+                                                                         │
+                                                            PlaybackRouter（設定 × 接続状況）
+                                                              ├─ ServerPlaybackSink（ffplay）
+                                                              └─ WsPlaybackSink（tts_audio → ack 待ち）
+```
+
+- `volumes` は `shared/audio/envelope.ts` の `buildVolumeEnvelope()`（20ms スライスの RMS を最大値で正規化）。
+- `tts_audio` は `WsHub.broadcast()` が横取りして **primary（`?role=display`）にだけ**送る。
+- クライアントは再生完了で `audio_playback_done` を返す。来なくても `durationMs + 1500ms` で必ず解決する。
+- 表示クライアントが居ない場合は `PlaybackRouter` がサーバー再生へフォールバックする（warn 1 行）。
+
+### 13.3 アバター情報
+
+- `GET /api/avatar/models` は `live2d-models/<dir>/*.model3.json` を列挙し、
+  `Expressions[].Name` と `Motions` のキーを返す（壊れた JSON も候補として残す）。
+- `hello.avatar` は `buildAvatarPayload()`（`server/avatarPayload.ts`）が組み立てる。
+  `renderer` は現状 `live2d` / `none`（P3 で `sprite` を追加）。
+- `vendor/`（Cubism Core）と `live2d-models/` は gitignore。CI はモデル無しで通る。
+

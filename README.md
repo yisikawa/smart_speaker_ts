@@ -132,6 +132,15 @@ npm start              # node dist/backend/index.js
   直近の破棄理由・録音結果・VAD しきい値を 1 箇所で確認できる
 - レベル付きロガー（コンソール + `logs/app.log`）
 
+## VTuber モード（準備中: P0/P1 実装済み）
+
+- 設定: `config/profiles/vtuber-rtx3060.toml` の内容を `config/settings.toml` へコピーする
+- アバター: `live2d-models/<name>/<name>.model3.json` を置くと `GET /api/avatar/models` に現れ、
+  `hello.avatar` で画面へ配られる（描画は P3 で実装）
+- 音声: `audio.playback_target = "browser"` でブラウザ再生（WebAudio）。表示担当タブは
+  `http://localhost:3000/?role=display`。未接続なら自動で ffplay に戻る
+- ライセンス: Live2D の Cubism Core とモデルは**各自取得**（`vendor/` と `live2d-models/` は gitignore）
+
 ## 設定
 
 `config/settings.toml` に**変更したい項目だけ**を書きます。未指定は `config/settings.default.toml`
