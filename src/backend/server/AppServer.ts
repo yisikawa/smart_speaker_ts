@@ -114,6 +114,16 @@ export class AppServer {
     if (dirs.length === 0) {
       this.logger.warn("フロントエンドのディレクトリが見つかりません（npm run build を実行してください）");
     }
+
+    // 立ち絵などのユーザーアセット（任意）。無ければ何もしない
+    const avatarAssets = path.join(this.deps.config.rootDir, "assets", "avatar");
+    if (fs.existsSync(avatarAssets)) {
+      this.app.use(
+        "/avatar-assets",
+        express.static(avatarAssets, { etag: false, lastModified: false })
+      );
+      this.logger.info(`アバター素材を配信します: ${path.relative(this.deps.config.rootDir, avatarAssets)}`);
+    }
   }
 
   /** WsHub の hello で使うサービス疎通状態（直近の定期確認結果） */

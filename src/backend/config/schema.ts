@@ -174,6 +174,11 @@ export interface AvatarConfig {
   enabled: boolean;
   /** model3.json のパス（プロジェクトルート基準・`/` 区切り） */
   model_path: string;
+  /**
+   * 立ち絵画像（PNG/WebP）のパス。空なら CSS 立ち絵。
+   * `assets/avatar/<file>` に置くと `/avatar-assets/<file>` で配信される。
+   */
+  sprite_image: string;
   /** 拡大率とステージ内の相対位置（0..1） */
   scale: number;
   offset_x: number;
@@ -380,10 +385,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   avatar: {
     enabled: true,
     model_path: "live2d-models/hiyori/hiyori.model3.json",
+    sprite_image: "",
     scale: 1.0,
     offset_x: 0.5,
     offset_y: 0.85,
-    background: "#0f1117",
+    background: "linear-gradient(160deg, #f6e3c5 0%, #e3cbaa 45%, #b99a75 100%)",
     idle_motion_interval_seconds: 20,
     lip_sync_smoothing: 0.4,
     lip_sync_gain: 1.0,

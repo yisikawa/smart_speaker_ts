@@ -26,6 +26,18 @@ test("モデルが無ければ sprite（CSS 立ち絵へフォールバック）
   assert.equal(payload.modelUrl, "");
 });
 
+test("立ち絵画像のパスは /avatar-assets の URL になる", () => {
+  const payload = buildAvatarPayload(
+    { ...DEFAULT_CONFIG.avatar, sprite_image: "assets\\avatar\\sakura.png" },
+    []
+  );
+  assert.equal(payload.spriteUrl, "/avatar-assets/sakura.png");
+});
+
+test("立ち絵画像が未設定なら空文字", () => {
+  assert.equal(buildAvatarPayload(DEFAULT_CONFIG.avatar, []).spriteUrl, "");
+});
+
 test("無効ならモデルがあっても none", () => {
   const payload = buildAvatarPayload({ ...DEFAULT_CONFIG.avatar, enabled: false }, [model]);
   assert.equal(payload.renderer, "none");

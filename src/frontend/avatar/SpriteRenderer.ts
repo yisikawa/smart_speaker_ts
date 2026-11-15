@@ -2,8 +2,9 @@ import type { AvatarConfigPayload } from "../../shared/protocol";
 import type { AvatarRenderer } from "./types";
 
 /**
- * CSS 立ち絵のフォールバック。画像アセットが無くても必ず表示できるよう、
- * 顔・目・口を DOM で描く（Live2D / 画像が用意できたら差し替える）。
+ * 立ち絵のフォールバック。
+ * `spriteUrl` があればその画像を表示し、無い/読めない場合は CSS で顔を描く。
+ * どちらの場合も口（`.avatar-mouth`）を重ねて口パクできるようにする。
  */
 export class SpriteRenderer implements AvatarRenderer {
   readonly name = "sprite" as const;
@@ -18,7 +19,38 @@ export class SpriteRenderer implements AvatarRenderer {
     root.style.setProperty?.("--avatar-scale", String(config.scale));
     root.style.left = `${config.offsetX * 100}%`;
     root.style.top = `${config.offsetY * 100}%`;
+    container.append(root);
+    this.root = root;
 
+    if (config.spriteUrl) {
+      root.classList.add("avatar-sprite--image");
+      const image = document.createElement("img");
+      image.className = "avatar-image";
+      image.alt = "";
+      image.onerror = () => {
+        image.remove?.();
+        root.classList.remove("avatar-sprite--image");
+        this.drawFallbackFace(root);
+      };
+      image.src = config.spriteUrl;
+      root.append(image);
+    } else {
+      this.drawFallbackFace(root);
+    }
+
+    const mouth = document.createElement("div");
+    mouth.className = "avatar-mouth";
+    root.append(mouth);
+    this.mouth = mouth;
+
+    const expression = document.createElement("div");
+    expression.className = "avatar-expression";
+    root.append(expression);
+    this.expression = expression;
+  }
+
+  /** 画像が無い/読めないときの CSS の顔 */
+  private drawFallbackFace(root: HTMLElement): void {
     const face = document.createElement("div");
     face.className = "avatar-face";
 
@@ -26,20 +58,9 @@ export class SpriteRenderer implements AvatarRenderer {
     eyeLeft.className = "avatar-eye avatar-eye-left";
     const eyeRight = document.createElement("div");
     eyeRight.className = "avatar-eye avatar-eye-right";
+    face.append(eyeLeft, eyeRight);
 
-    const mouth = document.createElement("div");
-    mouth.className = "avatar-mouth";
-
-    const expression = document.createElement("div");
-    expression.className = "avatar-expression";
-
-    face.append(eyeLeft, eyeRight, mouth, expression);
     root.append(face);
-    container.append(root);
-
-    this.root = root;
-    this.mouth = mouth;
-    this.expression = expression;
   }
 
   setMouth(level: number): void {

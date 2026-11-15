@@ -225,12 +225,13 @@ model_path = "live2d-models/hiyori/hiyori.model3.json"
 scale = 1
 offset_x = 0.5
 offset_y = 0.85
-background = "#0f1117"
+background = "linear-gradient(160deg, #f6e3c5 0%, #e3cbaa 45%, #b99a75 100%)"
 idle_motion_interval_seconds = 20
 lip_sync_smoothing = 0.4
 lip_sync_gain = 1
 emotion_tags_enabled = true
 emotion_heuristic_enabled = true
+sprite_image = ""
 
 [avatar.expressions]
 happy = ""

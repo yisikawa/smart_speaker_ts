@@ -460,6 +460,29 @@ main {
   background: #3b2f2f;
 }
 
+/* 立ち絵画像があるときは髪の下地を出さず、画像を下寄せで表示する */
+.avatar-sprite--image::before {
+  display: none;
+}
+
+.avatar-image {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  transform: translateX(-50%);
+  object-fit: contain;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.35));
+}
+
+/* 全身画像では口は顔の位置（上から約 22%）に置く */
+.avatar-sprite--image .avatar-mouth {
+  top: 22%;
+  bottom: auto;
+}
+
 
 .avatar-face {
   position: absolute;
@@ -531,6 +554,20 @@ body.stage-mode .diagnostics,
 body.stage-mode .settings,
 body.stage-mode footer { display: none; }
 body.stage-mode #stage { min-height: 100vh; }
+
+/* 配信時はキャラクターを大きく、下中央に置く（OLV 風の構図） */
+body.stage-mode .avatar-sprite {
+  top: 94%;
+  height: calc(68vh * var(--avatar-scale, 1));
+}
+body.stage-mode .avatar-sprite:not(.avatar-sprite--image) {
+  width: calc(34vh * var(--avatar-scale, 1));
+}
+body.stage-mode .avatar-sprite--image {
+  height: calc(78vh * var(--avatar-scale, 1));
+}
+body.stage-mode .avatar-expression { color: #fff; }
+
 
 body.transparent { background: transparent !important; }
 body.transparent #app { background: transparent; }

@@ -97,6 +97,8 @@ export interface AvatarConfigPayload {
   renderer: "live2d" | "sprite" | "none";
   /** ブラウザから取得する model3.json の URL（無ければ空文字） */
   modelUrl: string;
+  /** 立ち絵画像の URL（無ければ空文字。空なら CSS 立ち絵） */
+  spriteUrl: string;
   scale: number;
   offsetX: number;
   offsetY: number;

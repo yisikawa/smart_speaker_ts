@@ -144,6 +144,8 @@ npm start              # node dist/backend/index.js
 - 画面: `http://localhost:3000/?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
   OBS のブラウザソース（1920×1080 / 30fps）にそのまま入れられる
 - アバター: モデルが無いときは CSS 立ち絵（`renderer: "sprite"`）で表示し、`volumes` に合わせて口が動く
+- 立ち絵画像を使う場合: `assets/avatar/sakura.png` を置き、`[avatar] sprite_image = "assets/avatar/sakura.png"`。
+  `/avatar-assets/sakura.png` で配信され、`?mode=stage` では下中央に大きく表示される（口は画像の上 22% に重なる）
 - 感情: LLM に `[喜]` `[怒]` `[哀]` `[驚]` `[照]` `[考]` を出させ、読み上げからは除去して表情だけに使う。
   タグが無い文は語彙から推定する（`avatar.emotion_tags_enabled` / `emotion_heuristic_enabled`）
 - ライセンス: Live2D の Cubism Core とモデルは**各自取得**（`vendor/` と `live2d-models/` は gitignore）
