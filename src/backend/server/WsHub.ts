@@ -1,11 +1,14 @@
 import * as http from "http";
 import { WebSocket, WebSocketServer } from "ws";
+import type { AvatarModelInfo } from "../../shared/avatar/modelCatalog";
 import type { ClientCommand, ModelSelection, ServerMessage, ServiceStatus } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
 import { CharacterService } from "../services/CharacterService";
+import { listAvatarModels } from "../services/avatarCatalog";
 import { AudioPayloadError, decodeAudioPayload } from "./audioPayload";
+import { buildAvatarPayload } from "./avatarPayload";
 
 export interface WsHubDeps {
   server: http.Server;
@@ -71,6 +74,7 @@ export class WsHub {
         version: this.deps.version,
         services: this.deps.serviceStatus(),
         models: this.deps.models(),
+        avatar: buildAvatarPayload(this.deps.config.getAvatar(), this.avatarModels()),
         audio: {
           inputMode: audioConfig.input_mode,
           sampleRate: audioConfig.sample_rate,
@@ -223,6 +227,16 @@ export class WsHub {
       if (client.readyState === WebSocket.OPEN) {
         client.send(payload);
       }
+    }
+  }
+
+  /** アバターのモデル候補（毎回の走査は軽い。失敗しても hello は返す） */
+  private avatarModels(): AvatarModelInfo[] {
+    try {
+      return listAvatarModels(this.deps.config.rootDir);
+    } catch (error) {
+      this.logger.warn("アバターモデルの列挙に失敗しました", error);
+      return [];
     }
   }
 

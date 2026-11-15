@@ -72,6 +72,28 @@ export type ClientCommand =
   | { type: "get_state" }
   | { type: "ping" };
 
+/** アバター描画に必要な設定（hello / avatar_config で配る） */
+export interface AvatarConfigPayload {
+  enabled: boolean;
+  renderer: "live2d" | "sprite" | "none";
+  /** ブラウザから取得する model3.json の URL（無ければ空文字） */
+  modelUrl: string;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  background: string;
+  /** 意味キー → モデルの表情名 */
+  expressions: Record<string, string>;
+  /** 意味キー → モデルのモーショングループ名 */
+  motions: Record<string, string>;
+  /** 意味キー → VOICEVOX のスタイル名 */
+  emotionStyles: Record<string, string>;
+  idleMotionIntervalSeconds: number;
+  lipSync: { sliceMs: number; smoothing: number; gain: number };
+  /** プロンプトと同じ感情キー（UI 表示用） */
+  emotionTags: string[];
+}
+
 /** 依存サービス（LLM / TTS / STT）の疎通状態 */
 export interface ServiceStatus {
   llm: boolean;
@@ -159,6 +181,8 @@ export interface HelloPayload {
   services: ServiceStatus;
   /** 現在選択中のモデル（旧サーバーとの互換のため任意） */
   models?: ModelSelection;
+  /** アバターの表示情報 */
+  avatar: AvatarConfigPayload;
   /** ブラウザ側の録音制御に必要な情報 */
   audio: {
     inputMode: InputMode;

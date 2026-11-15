@@ -1,0 +1,40 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { DEFAULT_CONFIG } from "../src/backend/config/schema";
+import { buildAvatarPayload } from "../src/backend/server/avatarPayload";
+import type { AvatarModelInfo } from "../src/shared/avatar/modelCatalog";
+
+const model: AvatarModelInfo = {
+  path: "live2d-models/hiyori/hiyori.model3.json",
+  url: "/live2d-models/hiyori/hiyori.model3.json",
+  label: "hiyori",
+  expressions: ["exp_01"],
+  motions: ["Idle"],
+};
+
+test("モデルが見つかれば live2d", () => {
+  const payload = buildAvatarPayload(DEFAULT_CONFIG.avatar, [model]);
+  assert.equal(payload.renderer, "live2d");
+  assert.equal(payload.modelUrl, "/live2d-models/hiyori/hiyori.model3.json");
+  assert.deepEqual(payload.lipSync, { sliceMs: 20, smoothing: 0.4, gain: 1 });
+  assert.deepEqual(payload.emotionTags, ["happy", "angry", "sad", "surprised", "shy", "thinking"]);
+});
+
+test("モデルが無ければ none", () => {
+  const payload = buildAvatarPayload(DEFAULT_CONFIG.avatar, []);
+  assert.equal(payload.renderer, "none");
+  assert.equal(payload.modelUrl, "");
+});
+
+test("無効ならモデルがあっても none", () => {
+  const payload = buildAvatarPayload({ ...DEFAULT_CONFIG.avatar, enabled: false }, [model]);
+  assert.equal(payload.renderer, "none");
+});
+
+test("設定の path が \\ 区切りでも一致する", () => {
+  const payload = buildAvatarPayload(
+    { ...DEFAULT_CONFIG.avatar, model_path: "live2d-models\\hiyori\\hiyori.model3.json" },
+    [model]
+  );
+  assert.equal(payload.renderer, "live2d");
+});
