@@ -67,8 +67,8 @@ test("音量列が空なら 0", () => {
 test("再生時刻のスライス値を返す", () => {
   const volumes = [0.2, 0.6, 1];
   assert.equal(mouthLevelAt(volumes, 20, 0), 0.2);
-  assert.equal(mouthLevelAt(volumes, 20, 25), 0.6);
-  assert.equal(mouthLevelAt(volumes, 20, 45), 1);
+  assert.equal(mouthLevelAt(volumes, 20, 20), 0.6);
+  assert.equal(mouthLevelAt(volumes, 20, 40), 1);
 });
 
 test("スライスの間は線形補間する", () => {
