@@ -70,6 +70,8 @@ export type PipelineEvent =
       sliceMs: number;
       durationMs: number;
     }
+  /** 言語ガードで読み直す（画面は「日本語で生成し直しています」を出す） */
+  | { type: "speech_reset" }
   | { type: "error"; scope: string; message: string };
 
 /** クライアント → サーバーへ送るコマンド */

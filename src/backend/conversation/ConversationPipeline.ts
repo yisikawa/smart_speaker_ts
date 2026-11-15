@@ -426,7 +426,10 @@ export class ConversationPipeline {
         // （幻聴ループ対策の判定が、正当な聞き返しまで落とさないようにする）
         this.gate.resetRepeat();
       },
-      play: (wav, meta) => this.playWithBargeIn(wav, meta),
+      play: (wav, meta, options) => this.playWithBargeIn(wav, meta, options),
+      stopPlayback: () => {
+        this.playback?.stop();
+      },
     };
     return this.turnRunner.run(userText, hooks, controller.signal);
   }
@@ -435,7 +438,11 @@ export class ConversationPipeline {
    * 再生とバージイン監視（実装は `PlaybackLoop`）。
    * 再生中に発話を検知したら再生を止め、その発話を次ターンの入力として返す。
    */
-  private playWithBargeIn(wav: Buffer, meta: PlaybackMeta): Promise<Buffer | undefined> {
+  private playWithBargeIn(
+    wav: Buffer,
+    meta: PlaybackMeta,
+    options?: { announce?: boolean }
+  ): Promise<Buffer | undefined> {
     return this.playbackLoop.play(wav, meta, {
       emit: (event) => this.emit(event),
       onPlayback: (handle) => {
@@ -445,7 +452,7 @@ export class ConversationPipeline {
         this.capture = handle;
       },
       isActive: () => this.active,
-    });
+    }, options);
   }
 
   private newAbort(): AbortController {

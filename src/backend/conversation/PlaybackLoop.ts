@@ -26,18 +26,27 @@ export class PlaybackLoop {
   ) {}
 
   /** 読み上げる。バージイン発話があれば次のターンの WAV を返す */
-  async play(wav: Buffer, meta: PlaybackMeta, hooks: PlaybackHooks): Promise<Buffer | undefined> {
+  async play(
+    wav: Buffer,
+    meta: PlaybackMeta,
+    hooks: PlaybackHooks,
+    options: { announce?: boolean } = {}
+  ): Promise<Buffer | undefined> {
     const conv = this.deps.config.getConversation();
     const audio = this.deps.config.getAudio();
 
     const playback = this.deps.playback.play(wav, meta);
     hooks.onPlayback(playback);
-    hooks.emit({ type: "speaking_started" });
+    if (options.announce !== false) {
+      hooks.emit({ type: "speaking_started" });
+    }
 
     if (!conv.barge_in_enabled || audio.input_mode === "browser") {
       await playback.finished;
       hooks.onPlayback(null);
-      hooks.emit({ type: "speaking_finished" });
+      if (options.announce !== false) {
+        hooks.emit({ type: "speaking_finished" });
+      }
       return undefined;
     }
 
@@ -61,12 +70,16 @@ export class PlaybackLoop {
       capture.stop("aborted");
       await capture.result.catch(() => undefined);
       hooks.onCapture(null);
-      hooks.emit({ type: "speaking_finished" });
+      if (options.announce !== false) {
+        hooks.emit({ type: "speaking_finished" });
+      }
       return undefined;
     }
 
     hooks.emit({ type: "barge_in" });
-    hooks.emit({ type: "speaking_finished" });
+    if (options.announce !== false) {
+      hooks.emit({ type: "speaking_finished" });
+    }
     const result = await capture.result;
     hooks.onCapture(null);
     return hooks.isActive() && result.hasSpeech ? result.wav : undefined;

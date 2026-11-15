@@ -52,6 +52,7 @@ test("play に volumes 付きの meta を渡す", async () => {
         captured.push(meta);
         return undefined;
       },
+      stopPlayback: () => undefined,
     };
 
     await runner.run("やあ", hooks, new AbortController().signal);

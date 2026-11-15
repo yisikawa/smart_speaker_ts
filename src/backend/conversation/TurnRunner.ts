@@ -32,7 +32,9 @@ export interface TurnHooks {
   /** 応答文が確定した（エコー判定用の記憶などに使う） */
   onReply(reply: string): void;
   /** 読み上げ（バージイン監視込み）。次のターンの発話 WAV を返す */
-  play(wav: Buffer, meta: PlaybackMeta): Promise<Buffer | undefined>;
+  play(wav: Buffer, meta: PlaybackMeta, options?: { announce?: boolean }): Promise<Buffer | undefined>;
+  /** 進行中の再生だけを止める（ターンは続ける） */
+  stopPlayback(): void;
 }
 
 /**
