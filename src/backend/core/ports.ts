@@ -55,6 +55,29 @@ export interface PlaybackHandle {
   stop(): void;
 }
 
+/** 1 文ぶんの読み上げ情報（クライアントの再生・口パクに使う） */
+export interface PlaybackMeta {
+  /** 発話単位の一意 ID（`audio_playback_done` と突き合わせる） */
+  utteranceId: string;
+  /** 表示用テキスト（感情タグは除去済み） */
+  text: string;
+  /** スライスごとの 0..1（口パク用）。サーバー再生では未使用 */
+  volumes: number[];
+  sliceMs: number;
+  durationMs: number;
+}
+
+/**
+ * 読み上げの出力先（サーバーの ffplay / ブラウザの WebAudio）。
+ * `PlaybackRouter` が設定に応じて実装を選ぶ。
+ */
+export interface PlaybackSink {
+  readonly kind: "server" | "browser";
+  /** いま使えるか（クライアント未接続なら false） */
+  isAvailable(): boolean;
+  play(wav: Buffer, meta: PlaybackMeta): PlaybackHandle;
+}
+
 export interface AudioIO {
   listInputDevices(): Promise<AudioDevice[]>;
   capture(options: CaptureOptions): CaptureHandle;
