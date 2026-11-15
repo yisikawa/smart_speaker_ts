@@ -239,6 +239,9 @@ class SumikaApp {
       case "tts_audio":
         this.audioPlayer?.enqueue(event);
         break;
+      case "speech_reset":
+        view.addSystemNote("日本語で生成し直しています…");
+        break;
       case "speaking_finished":
         view.setFace("🌸");
         break;

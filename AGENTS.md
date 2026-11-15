@@ -104,6 +104,11 @@ src/backend/index.ts                                ← Composition Root（DI �
     `tts_audio` は primary（`role=display`）のみへ送り、クライアントの `audio_playback_done` を待つ
     （来なくても `durationMs + 1500ms` で必ず解く）。`hello.avatar` は `buildAvatarPayload()` が組み立てる。
 
+12-11. **読み上げは文単位（`SentenceSplitter` + `SpeechQueue`）**。`tts.split_sentences=false` で
+    従来動作（全文 1 回）。`speaking_started` / `speaking_finished` は**ターン単位で 1 回**だけ出し、
+    文ごとの再生は `announce: false` で `PlaybackLoop` のイベントを抑止する。
+    言語ガードで読み直すときは `speech_reset` を出し、`hooks.stopPlayback()` で再生だけ止める。
+
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする

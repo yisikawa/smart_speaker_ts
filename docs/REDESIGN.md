@@ -623,3 +623,19 @@ TurnRunner ── meta（utteranceId / text / volumes / sliceMs / durationMs）�
   `renderer` は現状 `live2d` / `none`（P3 で `sprite` を追加）。
 - `vendor/`（Cubism Core）と `live2d-models/` は gitignore。CI はモデル無しで通る。
 
+### 13.4 文単位ストリーミング（P2）
+
+```
+LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► SpeechQueue.enqueue()
+                                                          ├─ 先読み 1（次の文を合成）
+                                                          ├─ 直列再生（PlaybackSink）
+                                                          └─ stop() / AbortSignal で即停止、drain() は必ず解決
+```
+
+- `tts.split_sentences = true`（既定）で有効。`false` は従来の「全文 1 回 TTS」。
+- `speaking_started` / `speaking_finished` はターン単位で 1 回。文ごとの再生は
+  `PlaybackLoop.play(..., { announce: false })` でイベントを抑止する。
+- 言語ガードは**文ごと**に検査し、ハングルを検出したら `speech_reset` を出して 1 回だけ生成し直す。
+- 文の区切りは `tts.min_sentence_chars` / `tts.max_sentence_chars`、先読みは `tts.prefetch_depth`。
+
+

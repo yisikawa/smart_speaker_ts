@@ -139,6 +139,8 @@ npm start              # node dist/backend/index.js
   `hello.avatar` で画面へ配られる（描画は P3 で実装）
 - 音声: `audio.playback_target = "browser"` でブラウザ再生（WebAudio）。表示担当タブは
   `http://localhost:3000/?role=display`。未接続なら自動で ffplay に戻る
+- 読み上げは**文単位**（`tts.split_sentences = true`）。1 文目が確定した時点で話し始める。
+  文の区切りは `min_sentence_chars` / `max_sentence_chars` で調整できる（`false` で従来動作）
 - ライセンス: Live2D の Cubism Core とモデルは**各自取得**（`vendor/` と `live2d-models/` は gitignore）
 
 ## 設定
