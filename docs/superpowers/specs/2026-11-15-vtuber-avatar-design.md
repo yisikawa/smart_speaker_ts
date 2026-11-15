@@ -4,6 +4,8 @@
 - 対象: `smart_speaker_ts` v0.3.0（`develop`）
 - 参考実装: [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber)（`websocket_handler.py` / `utils/stream_audio.py` / `prompts/utils/live2d_expression_prompt.txt`）
 - 位置づけ: 実装前の設計（As-Is は `docs/DESIGN.md`、既存の To-Be は `docs/REDESIGN.md`）。実装時は本書のフェーズを `writing-plans` で手順化する。
+- 前提環境: **19 章の実測環境**（Windows / RTX 3060 12GB / i7-6700 / 40GB RAM / Node 24.11 / Edge 157 / OBS 30 系）。
+  `AGENTS.md` の記載（GTX 1650 4GB・Node 22・llama3.2:1b）は実測と食い違うため、21 章に更新リストを置いた。
 
 ---
 
@@ -24,7 +26,7 @@
 ### 1.1 非ゴール（今回やらない）
 
 - OLV の「多人数チャットグループ（`chat_group`）」「MCP ツール呼び出し」「音声クローン」「履歴管理 UI」
-- VRM / 3D アバター（`three.js` + `@pixiv/three-vrm`）。この PC（GTX 1650 Max-Q 4GB）では重く、Live2D で十分
+- VRM / 3D アバター（`three.js` + `@pixiv/three-vrm`）。RTX 3060 12GB なら描画は可能だが、モデル調達（リグ・権利）と実装コストが大きい。Live2D で配信の見栄えは十分
 - クラウド API 依存（localhost 完結・外部送信なしの前提を維持）
 - 配信プラットフォームへの自動投稿・コメント読み上げ
 
@@ -32,7 +34,7 @@
 
 1. `http://localhost:3000/?mode=stage` でアバターと字幕のみが表示され、OBS のブラウザソースで背景が透過する。
 2. 発話中に口が音声へ追従し、無音時に閉じる（`volumes` 駆動・スライス 20ms）。
-3. 応答の**1 文目**が確定した時点で読み上げが始まる（全文合成を待たない）。本機で初声までの体感が 1 秒台に入る。
+3. 応答の**1 文目**が確定した時点で読み上げが始まる（全文合成を待たない）。本機で初声まで **1.5 秒以内**（計測方法は 20.5）。
 4. 感情タグ（例 `[喜]`）で表情が切り替わり、タグを LLM が出さない場合もヒューリスティックで破綻しない（表情が張り付かない）。
 5. `audio.playback_target = "server"` に戻せば従来どおり ffplay で鳴る（**後方互換**）。
 6. `npm run verify` が通る。**Live2D の vendor ファイルとモデルが無い環境でも test / build が成功する**（sprite フォールバック）。
@@ -320,6 +322,9 @@ renderer.setMouth(level);
 - 再生していないときは 0 へ減衰（閉じる）。
 - `smoothing` は `avatar.lip_sync_smoothing`（既定 0.4）。大きいほど追従が速く、小さいほど滑らか。
 - `avatar.lip_sync_gain`（既定 1.0）で開き量を調整。
+- **この PC の描画設定**: `resolution = Math.min(devicePixelRatio, 2)` / `autoDensity: true` / `ticker.maxFPS = 30`（OBS 側も 30fps に合わせる）/ モデルのテクスチャは 2048px 以下を推奨。
+  RTX 3060 で合成されるよう、Edge の「ハードウェア アクセラレーション」は ON のまま使う（OFF にすると i7-6700 の内蔵 GPU で描画してしまう）。
+- `document.hidden` のときは rAF を止める（OBS のブラウザソースは可視扱いなので止まらない）。
 
 ### 6.4 レイアウト（チャット / ステージ）
 
@@ -376,7 +381,8 @@ thinking  = ""         # 空なら「表情を変えない」
 
 ### 7.2 ヒューリスティック・フォールバック（小さいモデル対策）
 
-`llama3.2:1b` はタグ指示を守らないことが多い。`src/shared/avatar/emotion.ts`（純粋）で文から推定する。
+小さいモデル（1〜3B 級）はタグ指示を落としやすい。現在使用中の `gemma4:e2b-it-qat` でも 100% ではないため、
+`src/shared/avatar/emotion.ts`（純粋）で文から推定する。
 
 ```ts
 export function inferEmotion(text: string): "happy" | "angry" | "sad" | "surprised" | "shy" | "thinking" | null;
@@ -392,15 +398,39 @@ export function inferEmotion(text: string): "happy" | "angry" | "sad" | "surpris
 - 発火条件は最小限: ターン開始時に 1 回（`greeting`）、感情が `happy` のとき `nod`。頻発させない。
 - `avatar.idle_motion_interval_seconds`（既定 20、0 で無効）で待機モーション。
 
+### 7.4 VOICEVOX の話者スタイル切替（この PC は `speaker_id = 2` = 四国めたん）
+
+表情だけでなく**声の演技**も感情に追従させる。VOICEVOX の `/synthesis?speaker=` は「スタイル ID」を受けるので、
+1 文ごとに話者を差し替えられる。
+
+- `VoicevoxTtsService` は既に `synthesize(text, { speakerId })` の上書きと `listSpeakers()` を持っているため、
+  **サービスの変更は不要**（`SpeechQueue` が文ごとに `speakerId` を渡すだけ）。
+- スタイル ID は VOICEVOX の版で変わるので**ハードコードしない**。起動時に `GET /speakers` から
+  `四国めたん` の `styles[]` を引き、**名前一致**で ID を解決する（見つからなければ `tts.speaker_id` にフォールバックし、warn を 1 回だけ出す）。
+- 設定は `avatar.emotion_styles`（意味キー → スタイル名）。表情（`avatar.expressions`）とは独立に指定できる。
+
+```toml
+[avatar.emotion_styles]
+happy = "あまあま"    # [喜]
+angry = "ツンツン"    # [怒]
+sad   = "ささやき"    # [哀]
+```
+
+- 話速・抑揚: 既存の `tts.speed` に感情係数を掛ける（喜 1.06 / 哀 0.94 など）。
+  現在 `tts.pitch` は未使用なので、P5 で `pitchScale` に配線するか、未使用のまま明記する（どちらでもよいが**黙って無視しない**）。
+
 ---
 
 ## 8. 配信・デスクトップ
 
 ### 8.1 OBS（ブラウザソース）
 
-1. `http://localhost:3000/?mode=stage&role=display&transparent=1` をブラウザソースに登録（1920×1080 推奨）。
-2. 「カスタム CSS」は不要（アプリ側で透過）。音声は OBS の「音声をデスクトップから取得」またはアプリのブラウザ音声をキャプチャ。
-3. 字幕はアプリ内で描画（OBS 側のテキストソース不要）。
+この PC は **OBS 30 系が `C:\Program Files\obs-studio\bin\64bit\obs64.exe` に導入済み**。実機の設定値は 20.3 にまとめた。要点だけ:
+
+1. ソース: ブラウザ `http://localhost:3000/?mode=stage&role=display&transparent=1`（1920×1080 / 30fps）。
+2. **「OBS でオーディオを制御」を ON**。OFF のままだとブラウザソースの音が OBS に出ない（この設定は見落としやすい）。
+3. 配信エンコーダは **NVENC H.264**（i7-6700 で x264 を回すとブラウザと競合する。RTX 3060 は AV1 エンコーダ非搭載）。
+4. 字幕はアプリ内で描画（OBS 側のテキストソース不要）。
 
 ### 8.2 ウィンドウ運用（Electron なし）
 
@@ -423,7 +453,12 @@ export function inferEmotion(text: string): "happy" | "angry" | "sad" | "surpris
 - 取得: フロントで `getDisplayMedia`（画面）または `getUserMedia`（カメラ）→ `<canvas>` → JPEG（既定 1024px / 0.7）→ base64。
 - 送信: `ClientCommand { type: "submit_text"; text: string; image?: string }`（既存コマンドの拡張）。
 - サーバー: `LlmMessage` に `images?: string[]` を追加し、`OllamaLlmService` が `/api/chat` の `messages[].images` へ渡す。
-- 制約: **マルチモーダルモデル必須**（`llava` / `qwen2-vl` 等）。`llm.model` が非対応なら `warnings` を出して画像を捨てる（`ServiceMonitor` ではなく `ApiRouter` の `warnings` 経路）。
+- **モデルは会話用と分ける**: 現在の `llm.model = gemma4:e2b-it-qat` は視覚非対応。`vision.model`（例 `qwen2.5vl:3b` / `llava:7b`）を新設し、
+  画像付きターンだけ差し替える（12GB VRAM なら同居可。0.5 日スパイクで実測して決める）。
+- **取得は操作タブでのみ行う**。OBS のブラウザソースは `getDisplayMedia` の許可ダイアログを出せないため、
+  `role=display` のタブでは視覚キャプチャを無効化する（ボタンを出さない）。
+- 1 フレームだけ canvas へ描き JPEG（1024px / 0.7）にする。i7-6700 でも 30ms 程度。
+- キャプチャ中は `navigator.wakeLock`（Edge 157 で利用可）を取得してスリープを防ぐ。
 - プライバシー: 「画面を送る」は明示操作（ボタン）で開始し、`capture_started` をログ・UI に出す。既定は無効。
 
 ---
@@ -459,8 +494,18 @@ export interface AvatarConfig {
   emotion_heuristic_enabled: boolean;
   /** 意味キー → モデルの表情名（空文字は「変えない」） */
   expressions: Record<string, string>;
+  /** 意味キー → VOICEVOX のスタイル名（未指定なら tts.speaker_id） */
+  emotion_styles: Record<string, string>;
   /** 意味キー → モデルのモーショングループ名 */
   motions: Record<string, string>;
+}
+
+export interface LLMConfig {
+  /* 既存（endpoint / model / temperature / max_tokens / model_load_timeout_seconds など） */
+  /** Ollama の keep_alive。切替直後の再読み込みを避ける（既定 "30m"） */
+  keep_alive: string;
+  /** コンテキスト長。VRAM 使用量に直結する（既定 4096） */
+  num_ctx: number;
 }
 
 export interface GUIConfig {
@@ -505,6 +550,15 @@ sad = ""
 surprised = ""
 shy = ""
 thinking = ""
+
+[avatar.emotion_styles]
+happy = ""      # 例: "あまあま"（空なら tts.speaker_id）
+angry = ""
+sad = ""
+
+[llm]
+keep_alive = "30m"
+num_ctx = 4096
 
 [gui]
 layout = "chat"
@@ -611,6 +665,9 @@ interface AvatarConfigPayload {
 | `src/frontend/StageView.ts` | stage レイアウト・字幕・透過 |
 | `scripts/setup-live2d.ps1` | vendor / モデルの配置確認 |
 | `scripts/start-window.bat` | `--app` ウィンドウ起動 |
+| `scripts/start-stage.bat` | サーバー起動 + Edge アプリ窓で stage を開く |
+| `config/profiles/vtuber-rtx3060.toml` | この PC 用のプロファイル（20.2） |
+| `src/backend/services/voiceStyleResolver.ts` | VOICEVOX スタイル名 → ID の解決（純粋 + 起動時キャッシュ） |
 | `tests/*.test.ts` | 13 章のテスト |
 
 ### 変更
@@ -620,7 +677,7 @@ interface AvatarConfigPayload {
 | `src/shared/protocol.ts` | 11 章の差分 |
 | `src/backend/core/ports.ts` | `PlaybackSink` / `PlaybackMeta` |
 | `src/backend/core/messages.ts` | `LlmMessage.images?: string[]`（P7） |
-| `src/backend/config/schema.ts` | `[avatar]` / `[gui]` / `[tts]` / `audio.playback_target` |
+| `src/backend/config/schema.ts` | `[avatar]` / `[gui]` / `[tts]` / `audio.playback_target` / `llm.keep_alive` / `llm.num_ctx` |
 | `config/settings.default.toml` | `npm run config:default` で生成 |
 | `src/backend/conversation/TurnRunner.ts` | 文単位ストリーミング + `speech_reset` |
 | `src/backend/conversation/PlaybackLoop.ts` | 1 文再生に縮小（バージインは現状維持） |
@@ -683,6 +740,7 @@ appServer = new AppServer({ /* … */ pipeline });
 | フェーズ | 内容 | 見積 | 受け入れ条件 |
 |---|---|---|---|
 | **P0** 設定・基盤 | `schema.ts` / `settings.default.toml` / `protocol.ts` の型追加、`GET /api/avatar/models`、`.gitignore` | 1.0 日 | `npm run verify` 緑。`config-defaults` テスト緑。API がモデル 0 件でも 200 を返す |
+| **P0.5** 環境プロファイル | `config/profiles/vtuber-rtx3060.toml` / `scripts/start-stage.bat` / OBS 実機値 / `llm.keep_alive`・`llm.num_ctx` の追加 | 0.5 日 | プロファイルを適用して起動でき、20.3 の手順どおり OBS に透過で出る |
 | **P1** ブラウザ再生 | `PlaybackSink` / `PlaybackRouter` / `WsPlaybackSink` / `AudioPlayer` / `volumes` 生成 / ack / primary client | 2.0 日 | `playback_target=browser` で音が鳴る。`speaking` が必ず終わる（タイムアウト含む）。`server` へ戻すと ffplay で鳴る。3 往復で誤検知 0 を実測 |
 | **P2** 文単位ストリーミング | `SentenceSplitter` / `SpeechQueue` / `TurnRunner` 改修 / 言語ガード | 2.0 日 | 1 文目で発話開始。`speech_reset` で読み直し。`stop_speaking` が即座に効く。既存の `turn_skipped` 回帰が緑 |
 | **P3** アバター描画（sprite） | `AvatarStage` / `AvatarRenderer` / `SpriteRenderer` / `LipSyncDriver` / stage レイアウト・字幕・透過 | 2.0 日 | `?mode=stage&transparent=1` で透過表示。sprite で口パク。チャットモードが従来どおり動く |
@@ -690,7 +748,7 @@ appServer = new AppServer({ /* … */ pipeline });
 | **P5** 感情 | プロンプト語彙 / タグ解決 / ヒューリスティック / モーション発火 | 1.0 日 | タグあり/なし両方で表情が破綻しない。タグが読み上げに混ざらない |
 | **P6** 配信・デスクトップ | OBS 手順 / `start-window.bat` / `role=display` 運用 / README | 1.5 日 | OBS で透過・字幕・音声が成立。2 タブで二重再生しない |
 | **P7** 視覚入力（任意） | `[vision]` 実装 / `LlmMessage.images` / キャプチャ UI | 2.5 日 | 対応モデルで画像質問が通る。非対応モデルで `warnings` |
-| 合計 | P0〜P6 | **12.0 日** | （P7 込み 14.5 日） |
+| 合計 | P0〜P6 | **12.5 日** | （P7 込み 15.0 日） |
 
 > 進め方: 各フェーズの終わりに `npm run verify` と「受け入れ条件」の手動確認を行い、
 > フェーズ単位で `develop` へコミットする（メッセージは日本語で「何を・なぜ」）。
@@ -708,7 +766,7 @@ appServer = new AppServer({ /* … */ pipeline });
 | 口パクがずれる（音声と口の位相） | 見た目の質 | 再生時計（`AudioContext.currentTime`）基準で駆動。`lip_sync_gain` / `smoothing` を設定で調整可能に |
 | `audio_playback_done` が来ない | `speaking` が固まる（既知の事故クラス） | 必ずタイムアウトで resolve（4.2）。回帰テストで固定 |
 | 複数タブで二重再生 | ハウリング・二重音声 | `role=display` の primary client のみに `tts_audio` を送る |
-| `llama3.2:1b` がタグを守らない | 表情が動かない | ヒューリスティック併用。README で品質重視なら `gemma3:4b` を推奨（既存の記載を踏襲） |
+| 小さいモデルが感情タグを落とす | 表情が動かない | ヒューリスティック併用。`gemma4:e2b-it-qat` で実測し、不足なら `qwen2.5:7b` へ（12GB なら同居可） |
 | 文分割で読み上げが不自然（息継ぎ過多） | 体験低下 | `min_sentence_chars` / `max_sentence_chars` / prefetch 1。`tts.split_sentences=false` で従来動作に戻せる |
 | 言語ガードと逐次読み上げの競合 | ハングルを読み上げてしまう | 文ごとに検査し、検出時は `stop` → 再生成 → `speech_reset`。回帰テストを追加 |
 | AEC の実効性が環境依存 | バージイン誤検知 | 既定は OFF のまま。P1 受け入れで 3 往復の実測を条件に ON 化を判断 |
@@ -721,9 +779,9 @@ appServer = new AppServer({ /* … */ pipeline });
 
 | 案 | 内容 | 長所 | 短所 | 判定 |
 |---|---|---|---|---|
-| **案 1（採用）** OLV 方式の移植 | 音声をブラウザ再生 + `volumes` で口パク + 感情タグ + 文単位ストリーミング。レンダラは sprite → Live2D の 2 段 | AEC・口パク・低遅延を同時に解決。純粋ロジックをテストできる。CI がアセット無しで通る | 変更範囲が広い（P0〜P6 で 12 日） | **採用** |
+| **案 1（採用）** OLV 方式の移植 | 音声をブラウザ再生 + `volumes` で口パク + 感情タグ + 文単位ストリーミング。レンダラは sprite → Live2D の 2 段 | AEC・口パク・低遅延を同時に解決。純粋ロジックをテストできる。CI がアセット無しで通る | 変更範囲が広い（P0〜P6 で 12.5 日） | **採用** |
 | 案 2 見た目だけ | サーバー再生（ffplay）のまま、口パクは再生中の sin 波。canvas に Live2D を出すだけ | 変更が小さく 2〜3 日 | 口パクが音声と無関係。AEC 問題（TODO 1-3）が残り、配信で音ズレが目立つ。`speaking` の終了時刻も不正確 | 却下 |
-| 案 3 VRM / 3D | `three.js` + `@pixiv/three-vrm` で 3D アバター | 配信映え・リップシンク（viseme）が豊か | GTX 1650 Max-Q 4GB では負荷が高く、モデル調達も重い。実装も 2〜3 倍 | 将来オプション（今回は対象外） |
+| 案 3 VRM / 3D | `three.js` + `@pixiv/three-vrm` で 3D アバター | 配信映え・リップシンク（viseme）が豊か | RTX 3060 12GB なら描画は余裕だが、VRM モデルの調達（リグ・権利）と実装量が 2〜3 倍。Live2D で配信の見栄えは十分 | 将来オプション（今回は対象外） |
 
 **案 1 を 2 段階（sprite → Live2D）で入れる理由**: Live2D の vendor とモデルが無い環境（CI・初回起動・別 PC）でも
 「表示・口パク・字幕」が成立し、`npm run verify` が常に緑になる。`AvatarRenderer` を挟むことで
@@ -754,6 +812,160 @@ Live2D → VRM への差し替えも将来可能になる。
 | `docs/TODO.md` | 1-3（エコー対策）を完了として削除。残作業（Electron / VRM / viseme）を追記 |
 | `AGENTS.md` | ハマりどころに「`audio_playback_done` が来なくてもタイムアウトで解く」「`tts_audio` は primary client のみ」「Live2D は vendor 前提で CI では sprite」を追加。現在の状態を更新 |
 | `docs/superpowers/specs/` | 本書（実装中に判明した差分は本書へ追記してから実装する） |
+
+---
+
+## 19. この PC の実測環境（2026-11-15 実測）
+
+設計の前提を推測ではなく実測に置き換えた。`AGENTS.md` の記述と食い違う箇所は 21 章に列挙している。
+
+| 項目 | 実測値 | 設計への影響 |
+|---|---|---|
+| OS / シェル | Windows / PowerShell | パスは `\`、URL へは `/`（`modelCatalog.ts` の URL 連結ヘルパを共用し、`\` を混ぜない） |
+| Node / npm | **v24.11.1 / 11.12.1** | `node --test` と `t.mock.timers` が使える。`--test-timeout=30000` は継続 |
+| CPU | **Intel Core i7-6700（4C/8T, Skylake）** | x264 エンコードは厳しい → OBS は NVENC。4 コアなので Edge + OBS + Node の同時実行に注意 |
+| RAM | **39.9 GB** | 複数タブ・履歴保持・Electron に余裕 |
+| GPU | **RTX 3060 12GB**（空き 10,263 MiB / ドライバ 610.88） | VRAM 制約はほぼ解消。whisper CUDA + LLM + Live2D + OBS が同居可能（20.1） |
+| ffmpeg / ffplay | **`C:\ffmpeg\bin`（PATH 済み, gyan 2025-02-13）** | `audio.ffmpeg_path` は空のままで OK。サーバー再生フォールバックも動く |
+| Edge | **157.0.4341.46**（Chromium 157） | `--app` / WebGL2 / Web Audio / Wake Lock / getDisplayMedia すべて可 |
+| OBS | **`C:\Program Files\obs-studio\bin\64bit\obs64.exe`** | ブラウザソース + NVENC H.264（RTX 3060 は AV1 エンコーダ非搭載） |
+| VOICEVOX | 0.26.1 / `speaker_id = 2`（四国めたん）。**執筆時は未起動** | スタイル ID は実行時に `/speakers` から名前解決する（7.4）。ハードコード禁止 |
+| Ollama モデル | `gemma4:e2b-it-qat`(4.3GB, 現在使用中) / `llama3.2:3b` / `qwen2.5:7b` / `qwen2.5:14b` / `llama3.1:8b` / `nomic-embed-text` | `llama3.2:1b` は未導入。タグ遵守は e2b / 7b で改善する見込み |
+| STT | 現在 `engine = "sherpa"`（Parakeet 0.6B JA int8, CPU 0.2〜0.4 秒） | GPU を LLM に空ける現構成は VTuber 向き。whisper は `large-v3-turbo` の q5_0(547MB) / f16(1.5GB) と `whisper-cli.exe` が揃っている |
+| 未整備 | `live2d-models/` と `vendor/` は無い | P0 で作成 + `.gitignore`（6.2） |
+| ディスク | D: 542.5 GB 空き | モデル・録画に十分 |
+
+> 参考: `Win32_VideoController.AdapterRAM` は 4GB と表示されるが、これは WMI の 32bit 丸め。
+> **VRAM は `nvidia-smi` の 12,288 MiB を信じる**（この誤読で「4GB だから無理」と判断しないこと）。
+
+---
+
+## 20. この PC 用のチューニング（VTuber プロファイル）
+
+### 20.1 VRAM / CPU 予算
+
+実測 12,288 MiB（空き 10,263 MiB）。配信中の同時使用量の見積り:
+
+| 用途 | VRAM 目安 | 備考 |
+|---|---|---|
+| Windows デスクトップ + Edge（stage 1 タブ） | 0.8–1.2 GB | WebGL 合成を含む |
+| Ollama `gemma4:e2b-it-qat`（`num_ctx=4096`） | 4.5–5.5 GB | 現在使用中のモデル。14b は 9GB 級で他と同居しづらい |
+| whisper.cpp `large-v3-turbo q5_0`（CUDA, 発話中のみ） | 1.8–2.5 GB | `use_gpu=true` のとき。常駐させない（現構成どおり毎回起動） |
+| Live2D（WebGL, 2048px テクスチャ） | 0.3–0.6 GB | テクスチャ 4K は避ける |
+| OBS（NVENC + シーン + ブラウザソース） | 0.4–0.8 GB | NVENC は専用エンジンだがメモリは共有 |
+| **合計（whisper 同時実行時）** | **7.8–10.6 GB** | 12GB に収まる。ただし余裕は 1.5GB 程度 |
+
+- VRAM が苦しくなったら **`llm.num_ctx` を 2048 に落とす** → STT を sherpa(CPU) のまま使う、の順で対処する。
+- 実測更新の手順: 配信中に `nvidia-smi --query-gpu=memory.used,memory.free --format=csv -l 1` を流し、この表を実測値で置き換える。
+- CPU は 4 コアなので、**OBS の録画（x264）を同時に走らせない**。録画も NVENC にする。
+
+### 20.2 `config/profiles/vtuber-rtx3060.toml`（この PC 用の差分）
+
+```toml
+# この PC 用プロファイル（RTX 3060 12GB / i7-6700 / Edge 157 / OBS 30 系）
+[audio]
+playback_target = "browser"   # WebAudio で再生（AEC が効く）
+output_volume = 0.9
+ffmpeg_path = ""              # PATH の C:\ffmpeg\bin を使う
+
+[conversation]
+barge_in_enabled = true       # ブラウザ再生 + AEC。誤検知が出たら false に戻す
+followup_guard_ms = 400       # 再生終了が正確になったので待ちを短縮
+silence_duration = 1.2
+
+[stt]
+engine = "sherpa"             # CPU。GPU を LLM と Live2D に空ける
+# 精度重視にする場合:
+# engine = "whisper"
+# model_path = "models/ggml-large-v3-turbo-q5_0.bin"
+# use_gpu = true
+
+[llm]
+model = "gemma4:e2b-it-qat"
+keep_alive = "30m"
+num_ctx = 4096
+
+[tts]
+split_sentences = true
+prefetch_depth = 1
+speed = 1.05
+
+[avatar]
+enabled = true
+model_path = "live2d-models/hiyori/hiyori.model3.json"
+lip_sync_smoothing = 0.45
+
+[avatar.emotion_styles]
+happy = "あまあま"
+angry = "ツンツン"
+sad = "ささやき"
+
+[gui]
+layout = "chat"
+caption_font_size = 40
+```
+
+- 適用は `config/settings.toml` へコピーする。`npm run config:default` は**既定値**の同期なので、このファイルを上書きしない。
+- `barge_in_enabled = true` は P1 の実測（3 往復で誤検知 0）が条件。満たさなければ `false` のまま同梱する。
+
+### 20.3 OBS の実機設定
+
+| 項目 | 値 |
+|---|---|
+| ソース | ブラウザ `http://localhost:3000/?mode=stage&role=display&transparent=1` |
+| 幅 × 高さ | 1920 × 1080（「シーンがアクティブなときにソースを再読み込み」ON） |
+| FPS | 30（`ticker.maxFPS = 30` と一致させる） |
+| 音声 | **「OBS でオーディオを制御」ON**（OFF だとブラウザソースの音が OBS に出ない） |
+| 映像出力 | 1080p30 / エンコーダ **NVENC H.264** / CQP 20 / キーフレーム 2 秒 / プリセット Quality |
+| 音声出力 | 48kHz ステレオ（TTS の 24kHz モノラルは OBS がリサンプル） |
+| 注意 | ブラウザソースのハードウェア アクセラレーションは ON のまま（OFF だと i7-6700 の内蔵 GPU 描画になる） |
+
+### 20.4 起動スクリプト（Windows 実パス対応）
+
+`scripts/start-stage.bat`（新規）
+
+```bat
+@echo off
+rem サーバーを別ウィンドウで起動し、Edge のアプリ窓でステージを開く
+start "sumika-server" cmd /c "npm start"
+timeout /t 6 /nobreak > nul
+set "EDGE=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+start "" "%EDGE%" --app="http://localhost:3000/?mode=stage&role=display" --window-size=960,720
+```
+
+- 通常の操作画面は従来の `start.bat`（chat モード）。配信時は 2 枚（操作 + stage）を開く。
+- OBS を使う場合は **OBS のブラウザソースが stage を担当**するので、`start-stage.bat` の Edge 窓は不要（`role=display` が二重にならないよう、どちらか一方にする）。
+
+### 20.5 計測と受け入れ（この PC の実測値で判定する）
+
+| 指標 | 測り方 | 目標 |
+|---|---|---|
+| 初声までの時間 | ログに `tts_started` → `speaking_started` の差分を文単位で出す（`tts_complete` に `utteranceId` / `chars` を追加） | 1 文目 1.5 秒以内 |
+| VRAM 余裕 | `nvidia-smi --query-gpu=memory.free --format=csv -l 1` | 配信中 1.5GB 以上 |
+| バージイン誤検知 | 3 往復して `/api/diagnostics` の `skips` | 0 |
+| 口パクの遅れ | 画面録画して目視（音と口のズレ） | 体感で気にならない（必要なら `lip_sync_smoothing` を調整） |
+| 配信の安定性 | OBS の「フレーム落ち」 | 30 分で 0.1% 未満 |
+
+---
+
+## 21. `AGENTS.md` / ドキュメントの更新（実測との差分）
+
+`AGENTS.md` の「環境前提」は実測と食い違っている。**P0.5 でまとめて更新**し、コミットメッセージに「実測に合わせて環境前提を更新」と書く。
+
+| `AGENTS.md` の記述 | 実測 | 対応 |
+|---|---|---|
+| `Node.js v22` | v24.11.1 | バージョン表記を更新（コマンドはそのまま動く） |
+| `GTX 1650 Max-Q 4GB` / 「VRAM 4GB では f16 が厳しい」 | RTX 3060 12GB | 「既定は q5_0（速度優先）。12GB なら f16 も可」へ書き換え |
+| `Ollama 稼働・llama3.2:1b` | `gemma4:e2b-it-qat`（使用中）/ `llama3.2:3b` / `qwen2.5:7b` / `qwen2.5:14b` / `llama3.1:8b` | 導入済み一覧と推奨（VTuber は e2b、品質重視は 7b）へ更新 |
+| `ffmpeg（C:\ffmpeg-8.0.1\bin）` | `C:\ffmpeg\bin` | パスを更新 |
+| `whisper.cpp は CUDA 版` | 変更なし（`whisper-cli.exe` あり） | そのまま |
+| `マイク: マイク配列 (Realtek(R) Audio)` | 未確認（実測して更新） | `npm run check-audio` の出力で確定 |
+| `docs/TODO.md` 2-2（既定 STT エンジン） | この PC は sherpa を設定済み | VTuber プロファイルの既定を sherpa と決め、README / `settings.default.toml` の方針を明記 |
+| `docs/TODO.md` 2-6（whisper-server 常駐） | 12GB なら常駐も可だが、VTuber では sherpa で足りる | 優先度は据え置き（必要になったら再検討） |
+| `docs/TODO.md` 1-3（エコー対策） | ブラウザ再生で解決見込み | P1 完了時に削除 |
+
+> この 3 章（19〜21）は「設計の前提」なので、実装中に実測が変わったら**先に本書を直してから**コードを変える。
 
 ---
 
