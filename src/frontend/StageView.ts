@@ -3,15 +3,20 @@ import type { StageOptions } from "../shared/ui/stageMode";
 import { AvatarStage } from "./avatar/AvatarStage";
 import { must } from "./dom";
 
-/** 背景設定（色 or 画像 URL）を CSS の background へ変換する */
+/** 背景設定（色 / `assets/avatar/x.jpg` / URL）を CSS の background へ変換する */
 function toBackground(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
     return "#0f1117";
   }
+
+  // ローカル素材は `/avatar-assets/` で配信されるため、URL へ読み替える
+  const local = trimmed.match(/^assets[\\/]avatar[\\/](.+)$/i);
+  const target = local ? `/avatar-assets/${local[1].replace(/\\/g, "/")}` : trimmed;
+
   const looksLikeImage =
-    /^(https?:|\/|\.\/|data:image\/)/i.test(trimmed) || /\.(png|jpe?g|webp|gif|avif)$/i.test(trimmed);
-  return looksLikeImage ? `url("${trimmed}") center / cover no-repeat` : trimmed;
+    /^(https?:|\/|\.\/|data:image\/)/i.test(target) || /\.(png|jpe?g|webp|gif|avif)$/i.test(target);
+  return looksLikeImage ? `url("${target}") center / cover no-repeat` : target;
 }
 
 /** ステージ（配信向けレイアウト）と字幕・アバターの表示を担当する */
