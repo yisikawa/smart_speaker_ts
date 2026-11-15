@@ -36,3 +36,51 @@ test("Windows パスは URL 用に / 区切りへ直す", () => {
   assert.equal(info.path, "live2d-models/hiyori/hiyori.model3.json");
   assert.equal(info.label, "hiyori");
 });
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { createTempDir } from "./helpers/project";
+import { listAvatarModels } from "../src/backend/services/avatarCatalog";
+
+test("live2d-models 配下の model3.json を列挙する", () => {
+  const temp = createTempDir("sumika-avatar-");
+  try {
+    const dir = path.join(temp.dir, "live2d-models", "hiyori");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "hiyori.model3.json"),
+      JSON.stringify({ FileReferences: { Expressions: [{ Name: "exp_01" }], Motions: { Idle: [{}] } } })
+    );
+    const models = listAvatarModels(temp.dir);
+    assert.equal(models.length, 1);
+    assert.equal(models[0].path, "live2d-models/hiyori/hiyori.model3.json");
+    assert.equal(models[0].url, "/live2d-models/hiyori/hiyori.model3.json");
+    assert.deepEqual(models[0].expressions, ["exp_01"]);
+    assert.deepEqual(models[0].motions, ["Idle"]);
+  } finally {
+    temp.cleanup();
+  }
+});
+
+test("ディレクトリが無ければ空配列", () => {
+  const temp = createTempDir("sumika-avatar-");
+  try {
+    assert.deepEqual(listAvatarModels(temp.dir), []);
+  } finally {
+    temp.cleanup();
+  }
+});
+
+test("壊れた JSON でも候補として残し、表情は空にする", () => {
+  const temp = createTempDir("sumika-avatar-");
+  try {
+    const dir = path.join(temp.dir, "live2d-models", "broken");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "broken.model3.json"), "{ broken");
+    const models = listAvatarModels(temp.dir);
+    assert.equal(models.length, 1);
+    assert.deepEqual(models[0].expressions, []);
+  } finally {
+    temp.cleanup();
+  }
+});

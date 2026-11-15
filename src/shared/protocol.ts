@@ -5,6 +5,10 @@
  * コンパイル後の JavaScript には実行時依存（require）が残らない。
  */
 
+import type { AvatarModelInfo } from "./avatar/modelCatalog";
+
+export type { AvatarModelInfo } from "./avatar/modelCatalog";
+
 /** アシスタントの全体状態（UI のステータス表示と 1:1 で対応する） */
 export type AssistantState =
   | "idle"
@@ -245,3 +249,9 @@ export interface HealthReport {
   audioDevices: number;
   warnings: string[];
 }
+
+/** GET /api/avatar/models のレスポンス */
+export interface AvatarModelCatalog {
+  models: AvatarModelInfo[];
+}
+

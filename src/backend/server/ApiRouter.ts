@@ -14,6 +14,7 @@ import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
 import { AudioIO, LanguageModel } from "../core/ports";
 import { CharacterService } from "../services/CharacterService";
+import { listAvatarModels } from "../services/avatarCatalog";
 import {
   listSherpaModels,
   listWhisperModels,
@@ -85,6 +86,10 @@ export function createApiRouter(deps: ApiDeps): Router {
       res.json(report);
     })
   );
+
+  router.get("/avatar/models", (_req, res) => {
+    res.json({ models: listAvatarModels(deps.config.rootDir) });
+  });
 
   router.get("/state", (_req, res) => {
     res.json({ state: deps.pipeline.getState(), busy: deps.pipeline.isBusy });
