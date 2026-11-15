@@ -57,6 +57,19 @@ export type PipelineEvent =
   /** 認識結果を破棄した（幻聴・エコー・短すぎる断片など）。ターンは成立していない */
   | { type: "turn_skipped"; reason: string }
   | { type: "history_updated"; messages: ChatMessage[] }
+  /** 1 文ぶんの音声（ブラウザ再生用）。`speaking_started` の後、`speaking_finished` の前に来る */
+  | {
+      type: "tts_audio";
+      utteranceId: string;
+      /** 表示用テキスト（感情タグは除去済み） */
+      text: string;
+      /** base64 WAV */
+      audio: string;
+      /** 20ms スライスごとの 0..1（口パク用） */
+      volumes: number[];
+      sliceMs: number;
+      durationMs: number;
+    }
   | { type: "error"; scope: string; message: string };
 
 /** クライアント → サーバーへ送るコマンド */
@@ -186,6 +199,12 @@ export interface HelloPayload {
   /** ブラウザ側の録音制御に必要な情報 */
   audio: {
     inputMode: InputMode;
+    /** 再生の出力先（サーバーが選んだ実効値） */
+    playbackTarget: "server" | "browser";
+    /** このタブが音声を鳴らす担当か */
+    isPrimary: boolean;
+    /** ブラウザ再生の音量（0..1） */
+    outputVolume: number;
     sampleRate: number;
     noSpeechTimeoutMs: number;
     followup: {
