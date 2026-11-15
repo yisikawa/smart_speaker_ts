@@ -9,6 +9,8 @@ import { wavDurationMs } from "../services/wav";
 import { ConversationHistory } from "./ConversationHistory";
 import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
+import { SpeechQueue } from "./SpeechQueue";
+import { SentenceSplitter } from "../../shared/text/sentenceSplitter";
 
 export interface TurnDeps {
   config: ConfigManager;
@@ -56,8 +58,20 @@ export class TurnRunner {
 
     hooks.setState("thinking");
     hooks.emit({ type: "llm_started" });
-    const llmStartedAt = Date.now();
+    const startedAt = Date.now();
 
+    if (!this.deps.config.getTTS().split_sentences) {
+      return this.runWholeText(hooks, signal, startedAt);
+    }
+    return this.runStreaming(hooks, signal, startedAt);
+  }
+
+  /** 全文をまとめて 1 回だけ合成する（`tts.split_sentences=false`） */
+  private async runWholeText(
+    hooks: TurnHooks,
+    signal: AbortSignal,
+    llmStartedAt: number
+  ): Promise<Buffer | undefined> {
     let reply = "";
     try {
       reply = await this.deps.llm.chatStream(
@@ -65,9 +79,6 @@ export class TurnRunner {
         (delta) => hooks.emit({ type: "llm_delta", content: delta }),
         { signal }
       );
-
-      // 日本語の指示を無視してハングルを混ぜるモデルがあるため、1 回だけ再生成する。
-      // 画面は llm_complete の全文で上書きされるので、再生成中の差分は送出しない。
       if (containsHangul(reply)) {
         this.logger.warn("応答にハングルが混入したため日本語で再生成します");
         reply = await this.deps.llm.chatStream(
@@ -111,15 +122,145 @@ export class TurnRunner {
       return undefined;
     }
     hooks.emit({ type: "tts_complete", elapsedMs: Date.now() - ttsStartedAt });
+    return hooks.play(wav, this.meta(wav, reply));
+  }
 
-    const meta: PlaybackMeta = {
+  /** 文単位で合成・再生する（既定） */
+  private async runStreaming(
+    hooks: TurnHooks,
+    signal: AbortSignal,
+    llmStartedAt: number
+  ): Promise<Buffer | undefined> {
+    const ttsConfig = this.deps.config.getTTS();
+    const splitter = new SentenceSplitter({
+      minChars: ttsConfig.min_sentence_chars,
+      maxChars: ttsConfig.max_sentence_chars,
+    });
+
+    let announced = false;
+    let resetRequested = false;
+    let queue: SpeechQueue | null = this.createQueue(hooks, signal);
+
+    const enqueue = (text: string): void => {
+      if (!queue) {
+        return;
+      }
+      if (containsHangul(text)) {
+        if (!resetRequested) {
+          resetRequested = true;
+          this.logger.warn("応答にハングルが混入したため読み直します");
+          queue.stop();
+          queue = null;
+          hooks.stopPlayback();
+        }
+        return;
+      }
+      if (!announced) {
+        announced = true;
+        hooks.setState("speaking");
+        hooks.emit({ type: "speaking_started" });
+      }
+      queue.enqueue(text);
+    };
+
+    let reply = "";
+    try {
+      reply = await this.deps.llm.chatStream(
+        this.buildMessages(),
+        (delta) => {
+          hooks.emit({ type: "llm_delta", content: delta });
+          for (const piece of splitter.push(delta)) {
+            enqueue(piece);
+          }
+        },
+        { signal }
+      );
+    } catch (error) {
+      queue?.stop();
+      if (signal.aborted) {
+        return undefined;
+      }
+      hooks.onError("llm", error);
+      return undefined;
+    }
+
+    reply = reply.trim();
+    for (const piece of splitter.flush()) {
+      enqueue(piece);
+    }
+
+    // 言語ガード: ハングルを検出したら 1 回だけ生成し直して最初から読み上げる
+    if (resetRequested) {
+      queue?.stop();
+      queue = null;
+      hooks.emit({ type: "speech_reset" });
+      try {
+        reply = (
+          await this.deps.llm.chatStream(this.buildMessages({ languageRetry: true }), () => undefined, { signal })
+        ).trim();
+      } catch (error) {
+        if (signal.aborted) {
+          return undefined;
+        }
+        hooks.onError("llm", error);
+        return undefined;
+      }
+      announced = false;
+      resetRequested = false;
+      const retrySplitter = new SentenceSplitter({
+        minChars: ttsConfig.min_sentence_chars,
+        maxChars: ttsConfig.max_sentence_chars,
+      });
+      queue = this.createQueue(hooks, signal);
+      for (const piece of [...retrySplitter.push(reply), ...retrySplitter.flush()]) {
+        enqueue(piece);
+      }
+    }
+
+    hooks.emit({ type: "llm_complete", text: reply, elapsedMs: Date.now() - llmStartedAt });
+    if (!reply) {
+      queue?.stop();
+      hooks.emit({ type: "error", scope: "llm", message: "LLM の応答が空でした" });
+      return undefined;
+    }
+    this.deps.history.add("assistant", reply);
+    hooks.onReply(reply);
+    hooks.onHistoryChanged();
+
+    hooks.emit({ type: "tts_started" });
+    const started = Date.now();
+    const result = await queue?.drain();
+    hooks.emit({ type: "tts_complete", elapsedMs: Date.now() - started });
+    if (announced) {
+      hooks.emit({ type: "speaking_finished" });
+    }
+    if (!result || (result.played === 0 && result.failed > 0)) {
+      hooks.emit({ type: "error", scope: "tts", message: "音声合成に失敗しました" });
+    }
+    return result?.bargeWav;
+  }
+
+  /** 文単位再生のキュー（先読み・直列・中断） */
+  private createQueue(hooks: TurnHooks, signal: AbortSignal): SpeechQueue {
+    return new SpeechQueue({
+      tts: this.deps.tts,
+      logger: this.logger,
+      signal,
+      sampleRate: this.deps.config.getAudio().sample_rate,
+      prefetchDepth: this.deps.config.getTTS().prefetch_depth,
+      play: (wav, meta) => hooks.play(wav, meta, { announce: false }),
+    });
+  }
+
+  /** 表示・口パク用のメタ情報 */
+  private meta(wav: Buffer, text: string): PlaybackMeta {
+    return {
       utteranceId: randomUUID(),
-      text: reply,
+      text,
       volumes: buildVolumeEnvelope(wav),
       sliceMs: 20,
       durationMs: wavDurationMs(wav, this.deps.config.getAudio().sample_rate),
     };
-    return hooks.play(wav, meta);
   }
 
   /** LLM へ渡すメッセージ（言語再生成時は追加の system 指示を末尾に足す） */
