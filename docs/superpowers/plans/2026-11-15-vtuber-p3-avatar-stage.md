@@ -877,6 +877,32 @@ git commit -m "docs: ステージモードと口パクの使い方を追記"
 - `frontend` から `backend/core/logger` を import しない（`fs` 依存でブラウザバンドルが壊れる）。`AvatarStage` は `console.info` を使う。
 - フロントのスタブ DOM には `body` / `classList` / `requestAnimationFrame` が無いため、Task 5 でスタブを拡張する。
 
+---
+
+## 実行結果（2026-11-15 / `develop`）
+
+| タスク | コミット | 結果 |
+|---|---|---|
+| 1 `mouthLevelAt` | `34d1c1f` | ✅ 6 件（スライス境界の期待値を 20/40ms に修正） |
+| 2 `parseStageOptions` | `b604a94` | ✅ 4 件 |
+| 3 sprite フォールバック | `3acf0d2` | ✅ `avatar-payload` の期待値を更新 |
+| 4 抽象 + ステージ | `db2584f` | ✅ 型・ビルド緑（`#stage` / `#caption` を配信 HTML に確認） |
+| 5 口パク配線 | `17be57b` | ✅ スタブ DOM を拡張して `frontend-script` も緑 |
+| 6 ドキュメント | （このコミット） | ✅ `npm run verify` 191 件 pass / build OK |
+
+**計画から変えた点**
+
+1. `mouthLevelAt` のテストは「スライス境界（20/40ms）」で検証（25/45ms は補間値になるため）。
+2. `AvatarStage` は `backend/core/logger` を使わず `console.info`（ブラウザバンドルに `fs` を持ち込まない）。
+3. テストスタブに `body` / `classList` / `requestAnimationFrame` / `URLSearchParams` / `hello.avatar` /
+   `audio.playbackTarget` を追加（`StageView` と hello の新フィールドに追随）。
+4. 旧サーバー・スタブとの互換のため `parseStageOptions(window.location.search ?? "")` と
+   `if (hello.avatar)` のガードを入れた。
+5. `SpriteRenderer` は `style.setProperty?.()` / `remove?.()` を使い、DOM スタブでも落ちないようにした。
+
+**未実施（手動）**: 実ブラウザでの見た目・口パクの追従・OBS の透過は `README.md` の手順で実機確認する。
+
+
 
 
 
