@@ -2,7 +2,7 @@ import express, { Express, NextFunction, Request, Response } from "express";
 import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
-import type { ModelSelection, ServiceStatus } from "../../shared/protocol";
+import type { ModelSelection, ServerMessage, ServiceStatus } from "../../shared/protocol";
 import { ConfigManager } from "../config/ConfigManager";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
@@ -29,6 +29,8 @@ export interface AppServerDeps {
   port: number;
   /** 静的ファイル配信ディレクトリ（存在するものだけ使う） */
   frontendDirs: string[];
+  /** ブラウザ再生の完了通知を受け取る先（P1 で WsPlaybackSink を渡す） */
+  playbackAck?: { resolveDone(utteranceId: string): void };
 }
 
 /** HTTP + WebSocket サーバー。DI されたサービス群を配線するだけの薄い層。 */
@@ -124,6 +126,17 @@ export class AppServer {
     return this.services.refresh();
   }
 
+  /** 全クライアントへ配信する（`tts_audio` は WsHub が primary のみに絞る） */
+  broadcast(message: ServerMessage): boolean {
+    this.hub?.broadcast(message);
+    return this.hub !== null;
+  }
+
+  /** 音声を鳴らせるクライアントが接続しているか */
+  hasPrimaryClient(): boolean {
+    return this.hub?.hasPrimaryClient() ?? false;
+  }
+
   /** hello に載せる現在のモデル情報（画面の表示用） */
   private modelSelection(): ModelSelection {
     const sttConfig = this.deps.config.getSTT();
@@ -144,6 +157,7 @@ export class AppServer {
       version: this.deps.version,
       serviceStatus: () => this.services.current,
       models: () => this.modelSelection(),
+      onAudioPlaybackDone: (utteranceId) => this.deps.playbackAck?.resolveDone(utteranceId),
     });
 
     await new Promise<void>((resolve, reject) => {

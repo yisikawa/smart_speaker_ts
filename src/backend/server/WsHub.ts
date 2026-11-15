@@ -9,6 +9,8 @@ import { CharacterService } from "../services/CharacterService";
 import { listAvatarModels } from "../services/avatarCatalog";
 import { AudioPayloadError, decodeAudioPayload } from "./audioPayload";
 import { buildAvatarPayload } from "./avatarPayload";
+import type { ClientIdentity, ClientRole } from "./clientRole";
+import { parseClientRole, pickPrimaryClientId } from "./clientRole";
 
 export interface WsHubDeps {
   server: http.Server;
@@ -20,6 +22,8 @@ export interface WsHubDeps {
   serviceStatus: () => ServiceStatus;
   /** 現在選択中のモデル（hello の表示用） */
   models: () => ModelSelection;
+  /** クライアントの再生完了通知を sink へ渡す */
+  onAudioPlaybackDone?: (utteranceId: string) => void;
   heartbeatMs?: number;
 }
 
@@ -34,12 +38,16 @@ export class WsHub {
   private readonly logger: Logger;
   private heartbeat: NodeJS.Timeout;
   private readonly offPipeline: () => void;
+  private nextClientId = 0;
+  private readonly clientIds = new WeakMap<WebSocket, string>();
+  private readonly clientRoles = new WeakMap<WebSocket, ClientRole>();
+  private primaryId: string | null = null;
 
   constructor(private readonly deps: WsHubDeps) {
     this.logger = new Logger("WS");
     this.wss = new WebSocketServer({ server: deps.server, path: deps.path ?? "/ws" });
 
-    this.wss.on("connection", (ws) => this.handleConnection(ws));
+    this.wss.on("connection", (ws, req) => this.handleConnection(ws, req.url ?? undefined));
     this.wss.on("error", (error) => this.logger.error("WebSocket サーバーエラー", error));
 
     this.offPipeline = deps.pipeline.on((event) => {
@@ -51,12 +59,20 @@ export class WsHub {
     this.heartbeat.unref?.();
   }
 
-  private handleConnection(ws: WebSocket): void {
+  private handleConnection(ws: WebSocket, url?: string): void {
     this.clients.add(ws);
     this.alive.set(ws, true);
+    const id = `c${++this.nextClientId}`;
+    this.clientIds.set(ws, id);
+    this.clientRoles.set(ws, parseClientRole(url));
+    this.refreshPrimary();
     this.logger.info(`クライアント接続 (${this.clients.size})`);
 
     ws.on("pong", () => this.alive.set(ws, true));
+    ws.on("close", () => {
+      this.clients.delete(ws);
+      this.refreshPrimary();
+    });
 
     const audioConfig = this.deps.config.getAudio();
     const conversationConfig = this.deps.config.getConversation();
@@ -77,6 +93,9 @@ export class WsHub {
         avatar: buildAvatarPayload(this.deps.config.getAvatar(), this.avatarModels()),
         audio: {
           inputMode: audioConfig.input_mode,
+          playbackTarget: audioConfig.playback_target,
+          isPrimary: this.clientIds.get(ws) === this.primaryId,
+          outputVolume: audioConfig.output_volume,
           sampleRate: audioConfig.sample_rate,
           noSpeechTimeoutMs: audioConfig.no_speech_timeout * 1000,
           followup: {
@@ -189,6 +208,9 @@ export class WsHub {
     ping: (_command, ws) => {
       ws.send(JSON.stringify({ type: "pong" }));
     },
+    audio_playback_done: (command) => {
+      this.deps.onAudioPlaybackDone?.(command.utteranceId);
+    },
   };
 
   private handleSubmitAudio(
@@ -222,12 +244,50 @@ export class WsHub {
   }
 
   broadcast(message: ServerMessage): void {
+    if (message.type === "event" && message.event.type === "tts_audio") {
+      this.sendToPrimary(message);
+      return;
+    }
     const payload = JSON.stringify(message);
     for (const client of this.clients) {
       if (client.readyState === WebSocket.OPEN) {
         client.send(payload);
       }
     }
+  }
+
+  /** primary（音声を鳴らす担当）にだけ送る。送れたら true */
+  sendToPrimary(message: ServerMessage): boolean {
+    const target = [...this.clients].find(
+      (client) => this.clientIds.get(client) === this.primaryId && client.readyState === WebSocket.OPEN
+    );
+    if (!target) {
+      return false;
+    }
+    target.send(JSON.stringify(message));
+    return true;
+  }
+
+  /** 音声を鳴らせるクライアントが接続しているか */
+  hasPrimaryClient(): boolean {
+    if (!this.primaryId) {
+      return false;
+    }
+    return [...this.clients].some(
+      (client) => this.clientIds.get(client) === this.primaryId && client.readyState === WebSocket.OPEN
+    );
+  }
+
+  /** 接続中のクライアントから primary を選び直す（display 優先） */
+  private refreshPrimary(): void {
+    const identities: ClientIdentity[] = [];
+    for (const client of this.clients) {
+      const id = this.clientIds.get(client);
+      if (id && client.readyState === WebSocket.OPEN) {
+        identities.push({ id, role: this.clientRoles.get(client) ?? "control" });
+      }
+    }
+    this.primaryId = pickPrimaryClientId(identities);
   }
 
   /** アバターのモデル候補（毎回の走査は軽い。失敗しても hello は返す） */

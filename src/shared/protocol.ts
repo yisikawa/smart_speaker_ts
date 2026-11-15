@@ -83,6 +83,8 @@ export type ClientCommand =
   | { type: "simulate_wakeword"; phrase?: string }
   | { type: "clear_history" }
   | { type: "get_state" }
+  /** ブラウザでの再生完了通知（サーバーが speaking を終えるために必要） */
+  | { type: "audio_playback_done"; utteranceId: string }
   | { type: "ping" };
 
 /** アバター描画に必要な設定（hello / avatar_config で配る） */
