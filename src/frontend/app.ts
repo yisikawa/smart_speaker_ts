@@ -6,6 +6,7 @@ import type {
   ServerMessage,
 } from "../shared/protocol";
 import { ChatView } from "./ChatView";
+import { AudioPlayer } from "./AudioPlayer";
 import { MicLoop } from "./MicLoop";
 import { SettingsPanel } from "./SettingsPanel";
 import { WsClient } from "./WsClient";
@@ -25,6 +26,8 @@ class SumikaApp {
   private readonly micLoop: MicLoop;
   /** 設定メニュー（STT / LLM のモデル切り替え） */
   private readonly settings: SettingsPanel;
+  /** ブラウザ再生（tts_audio）のキュー。`playbackTarget=browser` のときだけ作る */
+  private audioPlayer: AudioPlayer | null = null;
   /** 現在の音声入力方式（hello で更新。疎通表示に使う） */
   private inputMode: "browser" | "server" = "browser";
   /** 診断パネルを開いているか */
@@ -78,6 +81,7 @@ class SumikaApp {
   private bindEvents(): void {
     const view = this.view;
     view.btnListen.addEventListener("click", () => {
+      void this.audioPlayer?.prime();
       // ブラウザ入力モードでは、この画面がマイクを開いて発話単位で送信する
       if (this.micLoop.isBrowserMode) {
         void this.micLoop.start();
@@ -86,11 +90,16 @@ class SumikaApp {
       this.send({ type: "start_listening" });
     });
     view.btnStop.addEventListener("click", () => {
+      void this.audioPlayer?.prime();
+      this.audioPlayer?.stop();
       this.micLoop.stop();
       this.send({ type: "stop_listening" });
     });
     view.btnClear.addEventListener("click", () => this.send({ type: "clear_history" }));
-    view.btnSend.addEventListener("click", () => this.submitText());
+    view.btnSend.addEventListener("click", () => {
+      void this.audioPlayer?.prime();
+      this.submitText();
+    });
     view.btnMicTest.addEventListener("click", () => {
       void this.micLoop.checkMic();
     });
@@ -182,6 +191,12 @@ class SumikaApp {
     this.view.renderServices(hello.services, hello.audio.inputMode, hello.models);
     this.settings.updateSelection(hello.models);
     this.view.setState(hello.state);
+    if (hello.audio.playbackTarget === "browser") {
+      this.audioPlayer = new AudioPlayer({ send: (command) => this.send(command) });
+      this.audioPlayer.configure(hello.audio);
+    } else {
+      this.audioPlayer?.configure(hello.audio);
+    }
   }
 
   private handleEvent(event: PipelineEvent): void {
@@ -221,10 +236,14 @@ class SumikaApp {
         // ブラウザ入力モードでは、再生中の割り込み（バージイン）をブラウザ側で監視する
         this.micLoop.startBargeMonitor();
         break;
+      case "tts_audio":
+        this.audioPlayer?.enqueue(event);
+        break;
       case "speaking_finished":
         view.setFace("🌸");
         break;
       case "barge_in":
+        this.audioPlayer?.stop();
         view.addSystemNote("発話を検出したため再生を中断しました");
         break;
       case "followup_wait":
