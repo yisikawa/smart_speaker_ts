@@ -4,6 +4,7 @@ import { describeTransportError } from "../core/errors";
 import { Logger } from "../core/logger";
 import { LlmMessage } from "../core/messages";
 import { ChatOptions, LanguageModel } from "../core/ports";
+import { buildChatPayload, buildPreparePayload } from "./ollamaPayload";
 
 interface OllamaChatChunk {
   message?: { content?: string };
@@ -156,12 +157,7 @@ export class OllamaLlmService implements LanguageModel {
     const cfg = this.deps.config.getLLM();
     const target = model ?? cfg.model;
     const started = Date.now();
-    const body = JSON.stringify({
-      model: target,
-      prompt: "",
-      stream: false,
-      keep_alive: "10m",
-    });
+    const body = JSON.stringify(buildPreparePayload(cfg, model));
     await this.postJson("/api/generate", body, cfg.model_load_timeout_seconds * 1000);
     const elapsedMs = Date.now() - started;
     this.logger.info(`モデルを事前読み込みしました: ${target} (${elapsedMs}ms)`);
@@ -175,21 +171,7 @@ export class OllamaLlmService implements LanguageModel {
   ): Promise<string> {
     const cfg = this.deps.config.getLLM();
     const start = Date.now();
-    const payload: Record<string, unknown> = {
-      model: cfg.model,
-      messages,
-      stream: true,
-      think: false,
-      options: {
-        temperature: options.temperature ?? cfg.temperature,
-        num_predict: cfg.max_tokens,
-      },
-    };
-    if (options.tools && options.tools.length > 0) {
-      payload.tools = options.tools;
-    }
-
-    const body = JSON.stringify(payload);
+    const body = JSON.stringify(buildChatPayload(cfg, messages, options));
 
     const responseTimeoutMs = cfg.response_timeout_seconds * 1000;
     const loadTimeoutMs = Math.max(responseTimeoutMs, cfg.model_load_timeout_seconds * 1000);

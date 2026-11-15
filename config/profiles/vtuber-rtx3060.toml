@@ -1,0 +1,42 @@
+# この PC 用プロファイル（RTX 3060 12GB / i7-6700 / Edge 157 / OBS 30 系）
+# 適用: 必要な項目を config/settings.toml へコピーする（config:default は既定値の同期なので使わない）
+
+[audio]
+playback_target = "server"   # P1 完了後に "browser" へ変える
+output_volume = 0.9
+ffmpeg_path = ""             # PATH の C:\ffmpeg\bin を使う
+
+[conversation]
+followup_guard_ms = 400
+silence_duration = 1.2
+
+[stt]
+engine = "sherpa"            # CPU。GPU を LLM とアバターに空ける
+# 精度重視にする場合:
+# engine = "whisper"
+# model_path = "models/ggml-large-v3-turbo-q5_0.bin"
+# use_gpu = true
+
+[llm]
+model = "gemma4:e2b-it-qat"
+keep_alive = "30m"
+num_ctx = 4096
+
+[tts]
+split_sentences = true
+prefetch_depth = 1
+speed = 1.05
+
+[avatar]
+enabled = true
+model_path = "live2d-models/hiyori/hiyori.model3.json"
+lip_sync_smoothing = 0.45
+
+[avatar.emotion_styles]
+happy = "あまあま"
+angry = "ツンツン"
+sad = "ささやき"
+
+[gui]
+layout = "chat"
+caption_font_size = 40

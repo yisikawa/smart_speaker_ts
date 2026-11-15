@@ -19,3 +19,7 @@ whisper.cpp/_cpu-backup/
 config/settings.toml
 # PATCH /api/config で保存する前の退避ファイル
 config/settings.toml.bak
+
+# Live2D の Cubism Core とモデルは各自取得（ライセンスのため再配布しない）
+vendor/
+live2d-models/

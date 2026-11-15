@@ -123,13 +123,21 @@ src/backend/index.ts                                ← Composition Root（DI �
     - 判定は「最初のチャンクを受信したか」（`waitingForFirstChunk`）で行う。診断は
       `%LOCALAPPDATA%\Ollama\server.log` と `ollama ps`（`size_vram`）を見る
 
+18. **`tts_audio` は primary client（`role=display`）にだけ送る**。全配信すると複数タブで二重再生する。
+    クライアントの `audio_playback_done` が来なくても **`durationMs + 1500ms` で必ず resolve** する
+    （解かないと `speaking` のまま固まる）。
+19. **Live2D の Core とモデルはリポジトリに入れない**（`vendor/` と `live2d-models/` は gitignore）。
+    CI はモデル無しで通る前提（`renderer: "none"`）。
+
 ## 5. 環境前提（この PC）
 
-- Windows / Node.js v22 / ffmpeg・ffplay あり（`C:\ffmpeg-8.0.1\bin`）
-- Ollama 稼働・**`llama3.2:1b`**（小さいため日本語が崩れることがある。品質重視なら gemma3:4b 等へ）
+- Windows / Node.js v24.11 / ffmpeg・ffplay あり（`C:\ffmpeg\bin`・PATH 済み）
+- Ollama 稼働・**`gemma4:e2b-it-qat`**（導入済み: `llama3.2:3b` / `qwen2.5:7b` / `qwen2.5:14b` / `llama3.1:8b` / `nomic-embed-text`）
 - VOICEVOX ENGINE 0.26.1・`speaker_id = 2`（四国めたん）
-- whisper.cpp は CUDA 版（`whisper.cpp/`、CPU 版は `whisper.cpp/_cpu-backup/`）
-- マイク: `マイク配列 (Realtek(R) Audio)`（GTX 1650 Max-Q 4GB）
+- whisper.cpp は CUDA 版（`whisper.cpp/`、CPU 版は `whisper.cpp/_cpu-backup/`）。既定 STT は sherpa-onnx（CPU）
+- **GPU は RTX 3060 12GB**（CPU は i7-6700 / RAM 40GB）。`Win32_VideoController.AdapterRAM` は 32bit 丸めで 4GB と出るが誤り
+- OBS 30 系（`C:\Program Files\obs-studio\bin\64bit\obs64.exe`）/ Edge 157
+- マイク: `マイク配列 (Realtek(R) Audio)`
 
 ## 6. コーディング規約
 
