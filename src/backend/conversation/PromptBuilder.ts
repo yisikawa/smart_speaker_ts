@@ -53,6 +53,17 @@ export class PromptBuilder {
       );
     }
 
+    const avatar = this.deps.config.getAvatar();
+    if (avatar.emotion_tags_enabled) {
+      lines.push(
+        "",
+        "感情表現:",
+        "文中に [喜] [怒] [哀] [驚] [照] [考] のいずれかを、文の区切りに 1 つだけ置くこと。",
+        "例: 「おはよう！[喜] 今日もいい天気だね。」",
+        "使えるのはこの 6 つだけ。文中の単語として書かないこと。"
+      );
+    }
+
     // 末尾の指示は小規模モデルに効きやすいため、言語指定を最後にもう一度置く
     lines.push(LANGUAGE_RULE_SHORT);
 
