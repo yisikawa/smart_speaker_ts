@@ -52,6 +52,8 @@ export interface AudioConfig {
   device_settle_ms: number;
   /** 音声入力の方式: browser（ブラウザのマイク） / server（ffmpeg で録音） */
   input_mode: "browser" | "server";
+  /** 再生の出力先: server（ffplay）/ browser（WebAudio） */
+  playback_target: "server" | "browser";
 }
 
 export interface WakewordConfig {
@@ -142,6 +144,10 @@ export interface LLMConfig {
   model_load_timeout_seconds: number;
   /** プロンプトに含める直近ターン数 */
   history_turns: number;
+  /** Ollama の keep_alive（切替直後の再読み込みを避ける） */
+  keep_alive: string;
+  /** コンテキスト長（VRAM 使用量に直結する） */
+  num_ctx: number;
 }
 
 export interface TTSConfig {
@@ -153,6 +159,39 @@ export interface TTSConfig {
   volume: number;
   /** 音声合成タイムアウト（秒） */
   timeout_seconds: number;
+  /** 文単位でストリーミング合成する（P2 で使用） */
+  split_sentences: boolean;
+  /** 何文先まで合成を先読みするか */
+  prefetch_depth: number;
+  /** これ未満の文は次と結合する */
+  min_sentence_chars: number;
+  /** これ超の文は読点でも分割する */
+  max_sentence_chars: number;
+}
+
+/** アバター（Live2D / 立ち絵）の設定。P0 では設定と hello への配信のみ */
+export interface AvatarConfig {
+  enabled: boolean;
+  /** model3.json のパス（プロジェクトルート基準・`/` 区切り） */
+  model_path: string;
+  /** 拡大率とステージ内の相対位置（0..1） */
+  scale: number;
+  offset_x: number;
+  offset_y: number;
+  background: string;
+  /** 待機モーションの間隔（秒）。0 で無効 */
+  idle_motion_interval_seconds: number;
+  /** 口パクの追従（0..1）と開き量 */
+  lip_sync_smoothing: number;
+  lip_sync_gain: number;
+  emotion_tags_enabled: boolean;
+  emotion_heuristic_enabled: boolean;
+  /** 意味キー → モデルの表情名（空文字は「変えない」） */
+  expressions: Record<string, string>;
+  /** 意味キー → VOICEVOX のスタイル名（空なら tts.speaker_id） */
+  emotion_styles: Record<string, string>;
+  /** 意味キー → モデルのモーショングループ名 */
+  motions: Record<string, string>;
 }
 
 export interface RAGConfig {
@@ -184,6 +223,10 @@ export interface GUIConfig {
   debug_mode: boolean;
   trace_turns: boolean;
   outfit: string;
+  /** 画面レイアウト: chat（従来）/ stage（配信向け・P3） */
+  layout: "chat" | "stage";
+  caption_enabled: boolean;
+  caption_font_size: number;
 }
 
 export interface ProactiveCategory {
@@ -230,6 +273,7 @@ export interface AppConfig {
   stt: STTConfig;
   llm: LLMConfig;
   tts: TTSConfig;
+  avatar: AvatarConfig;
   rag: RAGConfig;
   recipe_db: RecipeDBConfig;
   music: MusicConfig;
@@ -267,6 +311,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     player: "auto",
     device_settle_ms: 250,
     input_mode: "browser",
+    playback_target: "server",
   },
   wakeword: {
     wakeword_path: [],
@@ -316,6 +361,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     response_timeout_seconds: 60,
     model_load_timeout_seconds: 180,
     history_turns: 6,
+    keep_alive: "30m",
+    num_ctx: 4096,
   },
   tts: {
     engine: "voicevox",
@@ -325,6 +372,26 @@ export const DEFAULT_CONFIG: AppConfig = {
     pitch: 0.0,
     volume: 1.0,
     timeout_seconds: 30,
+    split_sentences: true,
+    prefetch_depth: 1,
+    min_sentence_chars: 4,
+    max_sentence_chars: 60,
+  },
+  avatar: {
+    enabled: true,
+    model_path: "live2d-models/hiyori/hiyori.model3.json",
+    scale: 1.0,
+    offset_x: 0.5,
+    offset_y: 0.85,
+    background: "#0f1117",
+    idle_motion_interval_seconds: 20,
+    lip_sync_smoothing: 0.4,
+    lip_sync_gain: 1.0,
+    emotion_tags_enabled: true,
+    emotion_heuristic_enabled: true,
+    expressions: { happy: "", angry: "", sad: "", surprised: "", shy: "", thinking: "" },
+    emotion_styles: { happy: "", angry: "", sad: "" },
+    motions: { greeting: "", nod: "" },
   },
   rag: {
     enabled: true,
@@ -352,6 +419,9 @@ export const DEFAULT_CONFIG: AppConfig = {
     debug_mode: false,
     trace_turns: false,
     outfit: "home",
+    layout: "chat",
+    caption_enabled: true,
+    caption_font_size: 34,
   },
   apps: {
     proactive_speech: {

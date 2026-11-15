@@ -4,6 +4,7 @@ import { parse as parseToml } from "toml";
 import {
   AppConfig,
   AudioConfig,
+  AvatarConfig,
   ConversationConfig,
   DeepPartial,
   DEFAULT_CONFIG,
@@ -189,6 +190,10 @@ export class ConfigManager {
 
   getTTS(): TTSConfig {
     return this.config.tts;
+  }
+
+  getAvatar(): AvatarConfig {
+    return this.config.avatar;
   }
 
   /** 設定のみ（実装なし）: RAG */

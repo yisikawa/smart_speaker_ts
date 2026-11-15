@@ -44,6 +44,7 @@ device_settle_ms = 250
 # 音声入力の方式: browser（ブラウザのマイク） / server（ffmpeg で録音）
 # browser では画面の「聞き取り開始」から録音します（ffmpeg 不要）
 input_mode = "browser"
+playback_target = "server"
 
 [wakeword]
 # ウェイクワードモデル（将来のエンジン用・現在は未使用）
@@ -124,6 +125,8 @@ response_timeout_seconds = 60
 model_load_timeout_seconds = 180
 # プロンプトに含める直近ターン数
 history_turns = 6
+keep_alive = "30m"
+num_ctx = 4096
 
 [tts]
 engine = "voicevox"
@@ -133,6 +136,10 @@ speed = 1.0
 pitch = 0.0
 volume = 1.0
 timeout_seconds = 30
+split_sentences = true
+prefetch_depth = 1
+min_sentence_chars = 4
+max_sentence_chars = 60
 
 [rag]
 # 未実装（設定のみ・拡張ポイント）
@@ -163,6 +170,9 @@ user_name = "You"
 debug_mode = false
 trace_turns = false
 outfit = "home"
+layout = "chat"
+caption_enabled = true
+caption_font_size = 34
 
 [apps.proactive_speech.categories.briefing]
 enabled = true
@@ -207,3 +217,34 @@ news_new_only = true
 [apps.home_assistant]
 base_url = ""
 token = ""
+
+
+[avatar]
+enabled = true
+model_path = "live2d-models/hiyori/hiyori.model3.json"
+scale = 1
+offset_x = 0.5
+offset_y = 0.85
+background = "#0f1117"
+idle_motion_interval_seconds = 20
+lip_sync_smoothing = 0.4
+lip_sync_gain = 1
+emotion_tags_enabled = true
+emotion_heuristic_enabled = true
+
+[avatar.expressions]
+happy = ""
+angry = ""
+sad = ""
+surprised = ""
+shy = ""
+thinking = ""
+
+[avatar.emotion_styles]
+happy = ""
+angry = ""
+sad = ""
+
+[avatar.motions]
+greeting = ""
+nod = ""

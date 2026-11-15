@@ -1,7 +1,7 @@
 import { AppConfig, SherpaModelType } from "./schema";
 
 /** 数値項目を持つセクション */
-type NumericSection = "audio" | "conversation" | "stt" | "llm" | "tts";
+type NumericSection = "audio" | "conversation" | "stt" | "llm" | "tts" | "avatar" | "gui";
 
 interface ClampRule {
   section: NumericSection;
@@ -59,6 +59,19 @@ const CLAMP_RULES: ClampRule[] = [
   { section: "tts", key: "pitch", min: -1, max: 1 },
   { section: "tts", key: "volume", min: 0, max: 2 },
   { section: "tts", key: "timeout_seconds", min: 5, max: 300 },
+
+  { section: "avatar", key: "scale", min: 0.1, max: 5 },
+  { section: "avatar", key: "offset_x", min: -1, max: 1 },
+  { section: "avatar", key: "offset_y", min: -1, max: 2 },
+  { section: "avatar", key: "idle_motion_interval_seconds", min: 0, max: 600 },
+  { section: "avatar", key: "lip_sync_smoothing", min: 0, max: 1 },
+  { section: "avatar", key: "lip_sync_gain", min: 0, max: 3 },
+
+  { section: "llm", key: "num_ctx", min: 512, max: 32768 },
+  { section: "tts", key: "prefetch_depth", min: 0, max: 3 },
+  { section: "tts", key: "min_sentence_chars", min: 1, max: 40 },
+  { section: "tts", key: "max_sentence_chars", min: 10, max: 200 },
+  { section: "gui", key: "caption_font_size", min: 12, max: 120 },
 ];
 
 function clampField(
@@ -142,6 +155,20 @@ export function sanitizeConfig(config: AppConfig): string[] {
   if (!Array.isArray(config.wakeword.wakeword_path)) {
     warnings.push("wakeword.wakeword_path が配列ではありません（空として扱います）");
     config.wakeword.wakeword_path = [];
+  }
+
+  if (config.audio.playback_target !== "server" && config.audio.playback_target !== "browser") {
+    warnings.push(`audio.playback_target=${String(config.audio.playback_target)} は未対応のため "server" を使用します`);
+    config.audio.playback_target = "server";
+  }
+
+  if (config.gui.layout !== "chat" && config.gui.layout !== "stage") {
+    warnings.push(`gui.layout=${String(config.gui.layout)} は未対応のため "chat" を使用します`);
+    config.gui.layout = "chat";
+  }
+
+  if (!config.llm.keep_alive.trim()) {
+    config.llm.keep_alive = "30m";
   }
 
   return warnings;
