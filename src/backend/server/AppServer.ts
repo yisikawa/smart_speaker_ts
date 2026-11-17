@@ -8,6 +8,7 @@ import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
 import { AudioIO, LanguageModel, SpeechToText, TextToSpeech } from "../core/ports";
 import { CharacterService } from "../services/CharacterService";
+import { AVATAR_MODEL_DIRS } from "../services/avatarCatalog";
 import { createApiRouter } from "./ApiRouter";
 import { ServiceMonitor } from "./ServiceMonitor";
 import { WsHub } from "./WsHub";
@@ -123,6 +124,29 @@ export class AppServer {
         express.static(avatarAssets, { etag: false, lastModified: false })
       );
       this.logger.info(`アバター素材を配信します: ${path.relative(this.deps.config.rootDir, avatarAssets)}`);
+    }
+
+    // Live2D モデル（`live2d-models/` と `Live2DModels/`）を実際のディレクトリ名で配信する
+    for (const dirName of AVATAR_MODEL_DIRS) {
+      const modelDir = path.join(this.deps.config.rootDir, dirName);
+      if (!fs.existsSync(modelDir)) {
+        continue;
+      }
+      this.app.use(
+        `/${dirName}`,
+        express.static(modelDir, { etag: false, lastModified: false })
+      );
+      this.logger.info(`Live2D モデルを配信します: ${dirName}`);
+    }
+
+    // Cubism Core（`scripts/setup-live2d.ps1` で取得。無ければ 404 になり sprite へ落ちる）
+    const live2dCore = path.join(this.deps.config.rootDir, "vendor", "live2d");
+    if (fs.existsSync(live2dCore)) {
+      this.app.use(
+        "/live2d-core",
+        express.static(live2dCore, { etag: false, lastModified: false })
+      );
+      this.logger.info("Live2D Core を配信します: vendor/live2d");
     }
   }
 

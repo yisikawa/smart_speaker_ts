@@ -30,7 +30,11 @@ export function parseModel3Json(raw: unknown): { expressions: string[]; motions:
   if (!refs || typeof refs !== "object") {
     return null;
   }
-  const { Expressions, Motions } = refs as { Expressions?: unknown; Motions?: unknown };
+  const { Expressions, Motions, Moc } = refs as {
+    Expressions?: unknown;
+    Motions?: unknown;
+    Moc?: unknown;
+  };
   const expressions = Array.isArray(Expressions)
     ? Expressions.map((entry) =>
         entry && typeof entry === "object" ? (entry as { Name?: unknown }).Name : undefined
@@ -39,8 +43,10 @@ export function parseModel3Json(raw: unknown): { expressions: string[]; motions:
   const motions =
     Motions && typeof Motions === "object" ? Object.keys(Motions as Record<string, unknown>) : [];
 
-  // 表情もモーションも無い model3.json は「使えるモデル」とみなさない
-  if (expressions.length === 0 && motions.length === 0) {
+  // Moc だけでも有効なモデル（VTube Studio の書き出しは Expressions / Motions を持たないことがある）。
+  // どれも無い model3.json は「使えるモデル」とみなさない。
+  const hasMoc = typeof Moc === "string" && Moc.length > 0;
+  if (!hasMoc && expressions.length === 0 && motions.length === 0) {
     return null;
   }
   return { expressions, motions };

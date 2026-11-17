@@ -27,6 +27,7 @@
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
 | CUDA 版 whisper.cpp | `powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1`（`-Restore` で CPU 版へ） |
+| Live2D の Cubism Core | `powershell -ExecutionPolicy Bypass -File scripts\setup-live2d.ps1`（`-Force` で更新） |
 | sherpa-onnx の日本語モデル | `powershell -ExecutionPolicy Bypass -File scripts\setup-sherpa.ps1`（要 `npm install sherpa-onnx-node`） |
 
 ## 3. アーキテクチャ（依存方向は内向き）
@@ -109,9 +110,14 @@ src/backend/index.ts                                ← Composition Root（DI �
     文ごとの再生は `announce: false` で `PlaybackLoop` のイベントを抑止する。
     言語ガードで読み直すときは `speech_reset` を出し、`hooks.stopPlayback()` で再生だけ止める。
 
-12-12. **アバター描画は `AvatarRenderer` 抽象**（`frontend/avatar/`）。P3 は `sprite`（CSS 立ち絵）と `none` のみで、
-    `live2d` を要求されても sprite にフォールバックする。口パクは `mouthLevelAt()`（`shared/avatar/lipSync.ts`）に
-    再生位置と `volumes` を渡す。`StageView` は `?mode=stage&transparent=1` で body クラスを切り替える。
+12-12. **アバター描画は `AvatarRenderer` 抽象**（`frontend/avatar/`）。`AvatarStage` が
+    `live2d` → `sprite` → `none` の順に選ぶ。Live2D は `Live2DRenderer` が pixi + `pixi-live2d-display`
+    を **別バンドル `live2d.js`** として遅延ロードし、`vendor/live2d/live2dcubismcore.min.js`
+    （`/live2d-core/` で配信・gitignore）が無い/失敗したら sprite へフォールバックする。
+    モデルは `Live2DModels/` と `live2d-models/` の両方を見る（`AVATAR_MODEL_DIRS`）。
+    口パクは `mouthLevelAt()`（`shared/avatar/lipSync.ts`）に再生位置と `volumes` を渡す。
+    `StageView` は既定を **split（左: チャット / 右: アバター）** にし、`?mode=chat`（チャットのみ）と
+    `?mode=stage&transparent=1`（配信画面）で切り替える。字幕は `#stage` の中に置き、split / stage で表示する。
 
 12-13. **感情タグは TTS の前に必ず除去する**（`shared/avatar/emotion.ts` の `extractEmotion`）。
     タグ→表情名の対応は `avatar.expressions`（空文字は「変えない」）。タグが無ければ
@@ -144,8 +150,8 @@ src/backend/index.ts                                ← Composition Root（DI �
 18. **`tts_audio` は primary client（`role=display`）にだけ送る**。全配信すると複数タブで二重再生する。
     クライアントの `audio_playback_done` が来なくても **`durationMs + 1500ms` で必ず resolve** する
     （解かないと `speaking` のまま固まる）。
-19. **Live2D の Core とモデルはリポジトリに入れない**（`vendor/` と `live2d-models/` は gitignore）。
-    CI はモデル無しで通る前提（`renderer: "none"`）。
+19. **Live2D の Core とモデルはリポジトリに入れない**（`vendor/`・`live2d-models/`・`Live2DModels/` は gitignore）。
+    CI はモデル無しで通る前提（`renderer: "sprite"` または `none`、`npm run verify` は vendor 無しでも緑）。
 
 ## 5. 環境前提（この PC）
 
@@ -169,6 +175,8 @@ src/backend/index.ts                                ← Composition Root（DI �
 ## 7. 現在の状態 / TODO
 
 - 動作確認済み: ブラウザ録音 → STT → LLM → TTS → 再生、連続会話、バージイン（既定 OFF）、履歴、設定 API、診断
+- **Live2D アバター（P4）**: `Live2DModels/hiyori_vts/hiyori.model3.json` を表示。Cubism Core は
+  `scripts\setup-live2d.ps1` で `vendor/live2d/` へ取得（gitignore）。モデル/Core が無ければ sprite へ落ちる
 - バージョン表記は `0.3.0`（`package.json`）。リファクタリング（P0〜P6）完了に伴い 0.2.0 から更新。
 - 未実装（設定のみ）: `[rag]` / `[recipe_db]` / `[music]` / `[apps.proactive_speech]` / `[apps.home_assistant]` / ウェイクワード
   （真実源は `ConfigManager.UNSUPPORTED_SECTIONS`）

@@ -8,8 +8,18 @@ cd /d "%APP_DIR%"
 
 if not defined PORT set "PORT=3000"
 set "OPEN_BROWSER=1"
+set "LAYOUT=split"
+:parse_args
+if "%~1"=="" goto :args_done
 if /i "%~1"=="/nobrowser" set "OPEN_BROWSER=0"
 if /i "%~1"=="--no-browser" set "OPEN_BROWSER=0"
+if /i "%~1"=="/chat" set "LAYOUT=chat"
+if /i "%~1"=="/stage" set "LAYOUT=stage"
+if /i "%~1"=="/split" set "LAYOUT=split"
+shift
+goto :parse_args
+:args_done
+set "APP_URL=http://localhost:%PORT%/?mode=%LAYOUT%"
 
 echo.
 echo ========================================
@@ -109,10 +119,12 @@ if not errorlevel 1 (
 :: 起動
 :: ---------------------------------------------------------------
 echo.
-echo アプリを起動します: http://localhost:%PORT%
+echo アプリを起動します: %APP_URL%
+echo   %LAYOUT% : split=チャット + アバター（2画面） / chat=チャットのみ / stage=配信画面
 if "%OPEN_BROWSER%"=="1" (
-    echo 3 秒後にブラウザを開きます（ブラウザを開かない場合は start.bat /nobrowser）
-    start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process 'http://localhost:%PORT%'" >nul 2>&1
+    echo 3 秒後にブラウザで %LAYOUT% レイアウトを開きます
+    echo （ブラウザを開かない場合は start.bat /nobrowser、レイアウト指定は /chat または /stage）
+    start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process '%APP_URL%'" >nul 2>&1
 )
 echo 終了するには Ctrl+C を押してください。
 echo.

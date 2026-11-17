@@ -80,6 +80,25 @@ powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1 -Restore
   生成後、`config/settings.toml` の `stt.model_path` を `models/ggml-large-v3-turbo-q5_0.bin` に変更します（本リポジトリの設定は q5_0 を指しています）。
 - GPU を使わない場合は `stt.use_gpu = false`（アプリが `-ng` を付与）にすると CPU 版 DLL で動作します。
 
+### Live2D アバター（任意）
+
+```powershell
+# Cubism Core（公式 CDN）を vendor\live2d\live2dcubismcore.min.js へ取得（gitignore 対象）
+powershell -ExecutionPolicy Bypass -File scripts\setup-live2d.ps1
+```
+
+- モデル一式は `Live2DModels/<name>/<name>.model3.json`（または `live2d-models/<name>/...`）へ置きます
+- `config/settings.toml` の `[avatar]` で使用モデルを指定します:
+
+```toml
+[avatar]
+enabled = true
+model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
+```
+
+- Cubism Core / モデルが無い場合は CSS 立ち絵（sprite）へ自動フォールバックします（`npm run verify` も vendor 無しで通ります）
+
+
 ## 起動
 
 Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama/VOICEVOX・モデルの有無を確認してから起動し、ブラウザを開きます）。
@@ -88,9 +107,13 @@ Windows では `start.bat` をダブルクリックするのが簡単です（�
 > LAN の IP・PC 名（例 `http://192.168.0.5:3000`）で開いた場合のみ、ブラウザがマイクを許可しません。
 
 ```powershell
-.\start.bat              # 起動（3 秒後にブラウザを開く）
+.\start.bat              # 2画面（左: チャット / 右: アバター）で起動
+.\start.bat /chat        # チャットのみ
+.\start.bat /stage       # 配信画面（アバター + 字幕）
 .\start.bat /nobrowser   # ブラウザを自動で開かない
 ```
+
+`start.bat` は既定で `http://localhost:3000/?mode=split` を開きます（`PORT` を変えた場合はそのポート）。
 
 コマンドラインから直接起動する場合:
 
@@ -99,7 +122,7 @@ npm start              # node dist/backend/index.js
 # または scripts\run.bat（start.bat へ委譲）
 ```
 
-ブラウザで <http://localhost:3000> を開きます。
+ブラウザで <http://localhost:3000>（既定は2画面）を開きます。
 
 - 「聞き取り開始」で発話待ちに入ります（`conversation.auto_start = true` なら起動直後から待機）
 - テキスト欄からも会話できます（STT をスキップ）
@@ -132,23 +155,29 @@ npm start              # node dist/backend/index.js
   直近の破棄理由・録音結果・VAD しきい値を 1 箇所で確認できる
 - レベル付きロガー（コンソール + `logs/app.log`）
 
-## VTuber モード（準備中: P0/P1 実装済み）
+## VTuber モード（P0〜P5 実装済み）
 
 - 設定: `config/profiles/vtuber-rtx3060.toml` の内容を `config/settings.toml` へコピーする
-- アバター: `live2d-models/<name>/<name>.model3.json` を置くと `GET /api/avatar/models` に現れ、
-  `hello.avatar` で画面へ配られる（描画は P3 で実装）
+- アバター: `Live2DModels/<name>/<name>.model3.json`（または `live2d-models/`）を置くと
+  `GET /api/avatar/models` に現れ、`hello.avatar` で画面へ配られる。Cubism Core があれば
+  Live2D（pixi + `pixi-live2d-display`）で描画し、無い/読めない場合は CSS 立ち絵（sprite）へ自動フォールバックする
+- `model3.json` は `FileReferences.Moc` があれば有効（VTube Studio の書き出しは Expressions / Motions を
+  持たないことがある）。`Expressions[].Name` / `Motions` のキーは `avatar.expressions` / `avatar.motions` の対応に使う
+- 口パク: `Groups[].Name = "LipSync"` のパラメータ（無ければ `ParamMouthOpenY`）を `volumes` に合わせて動かす
 - 音声: `audio.playback_target = "browser"` でブラウザ再生（WebAudio）。表示担当タブは
   `http://localhost:3000/?role=display`。未接続なら自動で ffplay に戻る
 - 読み上げは**文単位**（`tts.split_sentences = true`）。1 文目が確定した時点で話し始める。
   文の区切りは `min_sentence_chars` / `max_sentence_chars` で調整できる（`false` で従来動作）
-- 画面: `http://localhost:3000/?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
+- 画面: 既定の `http://localhost:3000/` は **左にチャット、右にアバター** の 2 画面レイアウト。
+  `?mode=chat` で従来のチャットのみ、`?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
   OBS のブラウザソース（1920×1080 / 30fps）にそのまま入れられる
 - アバター: モデルが無いときは CSS 立ち絵（`renderer: "sprite"`）で表示し、`volumes` に合わせて口が動く
+  （チャットのみ `?mode=chat` ではアバターを描画しないため、Live2D のランタイムも読み込まない）
 - 立ち絵画像を使う場合: `assets/avatar/sakura.png` を置き、`[avatar] sprite_image = "assets/avatar/sakura.png"`。
   `/avatar-assets/sakura.png` で配信され、`?mode=stage` では下中央に大きく表示される（口は画像の上 22% に重なる）
 - 感情: LLM に `[喜]` `[怒]` `[哀]` `[驚]` `[照]` `[考]` を出させ、読み上げからは除去して表情だけに使う。
   タグが無い文は語彙から推定する（`avatar.emotion_tags_enabled` / `emotion_heuristic_enabled`）
-- ライセンス: Live2D の Cubism Core とモデルは**各自取得**（`vendor/` と `live2d-models/` は gitignore）
+- ライセンス: Live2D の Cubism Core とモデルは**各自取得**（`vendor/`・`live2d-models/`・`Live2DModels/` は gitignore）
 
 ## 設定
 
@@ -267,7 +296,7 @@ src/
 │   └── server/                # Express + WebSocket
 └── frontend/                  # index.html / style.css / app.ts（組立）・WsClient・ChatView・MicLoop・mic
 config/                        # settings.toml, settings.default.toml, characters/
-scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js, setup-whisper-cuda.ps1
+scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js, setup-whisper-cuda.ps1, setup-live2d.ps1
 start.bat                      # Windows 用ランチャー（依存/ビルド/外部サービス確認 → 起動）
 docs/                          # DESIGN.md（As-Is）, REDESIGN.md（To-Be）
 models/, whisper.cpp/          # Whisper 本体とモデル

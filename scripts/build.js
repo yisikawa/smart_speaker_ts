@@ -41,6 +41,18 @@ esbuild.buildSync({
   logLevel: "warning",
 });
 
+// Live2D は pixi を含むため別バンドルにする（アプリ本体は Core / モデルが無くても動く）
+esbuild.buildSync({
+  entryPoints: [path.join(srcDir, "avatar", "live2d", "vendor.ts")],
+  outfile: path.join(outDir, "live2d.js"),
+  bundle: true,
+  format: "iife",
+  target: ["es2020"],
+  platform: "browser",
+  sourcemap: true,
+  logLevel: "warning",
+});
+
 console.log(
-  `[build] 静的ファイル ${copied} 件をコピーし、app.js をバンドルしました -> ${path.relative(root, outDir)}`
+  `[build] 静的ファイル ${copied} 件をコピーし、app.js / live2d.js をバンドルしました -> ${path.relative(root, outDir)}`
 );

@@ -617,11 +617,14 @@ TurnRunner ── meta（utteranceId / text / volumes / sliceMs / durationMs）�
 
 ### 13.3 アバター情報
 
-- `GET /api/avatar/models` は `live2d-models/<dir>/*.model3.json` を列挙し、
-  `Expressions[].Name` と `Motions` のキーを返す（壊れた JSON も候補として残す）。
+- `GET /api/avatar/models` は `live2d-models/<dir>/*.model3.json` と
+  `Live2DModels/<dir>/*.model3.json` を列挙し、`Expressions[].Name` と `Motions` のキーを返す
+  （壊れた JSON も候補として残す。`FileReferences.Moc` だけのモデルも有効）。
 - `hello.avatar` は `buildAvatarPayload()`（`server/avatarPayload.ts`）が組み立てる。
-  `renderer` は現状 `live2d` / `none`（P3 で `sprite` を追加）。
-- `vendor/`（Cubism Core）と `live2d-models/` は gitignore。CI はモデル無しで通る。
+  `renderer` は `live2d` / `sprite` / `none`。
+- モデルディレクトリは実際の名前（`/Live2DModels` または `/live2d-models`）で静的配信し、
+  Cubism Core は `/live2d-core/`（`vendor/live2d/`）で配信する。
+- `vendor/`・`live2d-models/`・`Live2DModels/` は gitignore。CI はモデル無しで通る。
 
 ### 13.4 文単位ストリーミング（P2）
 
@@ -640,15 +643,23 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 
 
 
-### 13.5 アバター描画とステージ（P3）
+### 13.5 アバター描画とステージ（P3 / P4）
 
 - `frontend/avatar/AvatarRenderer`（`mount` / `setMouth` / `setExpression` / `playMotion` / `destroy`）を
-  `AvatarStage` が選ぶ。P3 は `sprite`（CSS 立ち絵）と `none`。`live2d` を要求されても sprite へ落とす（P4）。
+  `AvatarStage` が選ぶ。`live2d` → `sprite`（CSS 立ち絵）→ `none` の順にフォールバックする。
+- `Live2DRenderer` は pixi 6 + `pixi-live2d-display` 0.4（Cubism 4）を使う。pixi を含むため
+  **`dist/frontend/live2d.js` の別バンドル**にし、`?mode=stage` のときだけ遅延ロードする
+  （チャット表示では pixi を読み込まない）。Cubism Core は `/live2d-core/live2dcubismcore.min.js`。
+- 読み込み失敗（Core 無し・モデル不正・WebGL 不可）は warn を出して sprite へ落ちる。
+  成功時は canvas に `data-live2d="ready"` を付け、ヘッドレスの DOM 検査でも判定できる。
 - 口パクは `shared/avatar/lipSync.ts` の `mouthLevelAt(volumes, sliceMs, elapsedMs, { previous, smoothing })`。
   `audio_tts` の `volumes` と `AudioPlayer.elapsedMs()` を `LipSyncDriver` が毎フレーム渡す。
-- `StageView` は `?mode=stage&transparent=1`（`shared/ui/stageMode.ts` で解釈）に応じて
-  `body.stage-mode` / `body.transparent` を切り替え、チャット UI を隠して `#stage` と `#caption` を出す。
-- 字幕は `llm_delta` で伸ばし、`llm_complete` で確定する（OBS 側のテキストソース不要）。
+  Live2D は `Groups[].Name = "LipSync"` のパラメータ（無ければ `ParamMouthOpenY`）を更新する。
+- `StageView` は既定を **split**（左: チャット / 右: ステージ）にし、`?mode=chat`（チャットのみ）と
+  `?mode=stage&transparent=1`（配信画面）を切り替える。`body.split-mode` は CSS Grid で 2 カラムにし、
+  1100px 以下では縦積みにする。字幕は `#stage` の中に置き、split / stage で表示する
+  （`llm_delta` で伸ばし、`llm_complete` で確定。OBS 側のテキストソース不要）。
+- チャットのみ（`?mode=chat`）ではアバターを描画しない（pixi を読み込まない）。
 
 
 ### 13.6 感情タグと表情（P5）

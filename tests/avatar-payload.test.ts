@@ -38,6 +38,24 @@ test("立ち絵画像が未設定なら空文字", () => {
   assert.equal(buildAvatarPayload(DEFAULT_CONFIG.avatar, []).spriteUrl, "");
 });
 
+test("Live2DModels のパスは /Live2DModels の URL で live2d になる", () => {
+  const models: AvatarModelInfo[] = [
+    {
+      path: "Live2DModels/hiyori_vts/hiyori.model3.json",
+      url: "/Live2DModels/hiyori_vts/hiyori.model3.json",
+      label: "hiyori_vts",
+      expressions: [],
+      motions: [],
+    },
+  ];
+  const payload = buildAvatarPayload(
+    { ...DEFAULT_CONFIG.avatar, model_path: "Live2DModels\\hiyori_vts\\hiyori.model3.json" },
+    models
+  );
+  assert.equal(payload.renderer, "live2d");
+  assert.equal(payload.modelUrl, "/Live2DModels/hiyori_vts/hiyori.model3.json");
+});
+
 test("無効ならモデルがあっても none", () => {
   const payload = buildAvatarPayload({ ...DEFAULT_CONFIG.avatar, enabled: false }, [model]);
   assert.equal(payload.renderer, "none");

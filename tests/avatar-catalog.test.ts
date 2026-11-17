@@ -71,6 +71,32 @@ test("ディレクトリが無ければ空配列", () => {
   }
 });
 
+test("Moc だけの model3.json も有効なモデルとして扱う（VTube Studio の書き出し）", () => {
+  assert.deepEqual(parseModel3Json({ FileReferences: { Moc: "hiyori.moc3" } }), {
+    expressions: [],
+    motions: [],
+  });
+});
+
+test("Live2DModels 配下も列挙する", () => {
+  const temp = createTempDir("sumika-avatar-");
+  try {
+    const dir = path.join(temp.dir, "Live2DModels", "hiyori_vts");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "hiyori.model3.json"),
+      JSON.stringify({ FileReferences: { Moc: "hiyori.moc3", Textures: ["t.png"] } })
+    );
+    const models = listAvatarModels(temp.dir);
+    assert.equal(models.length, 1);
+    assert.equal(models[0].path, "Live2DModels/hiyori_vts/hiyori.model3.json");
+    assert.equal(models[0].url, "/Live2DModels/hiyori_vts/hiyori.model3.json");
+    assert.deepEqual(models[0].expressions, []);
+  } finally {
+    temp.cleanup();
+  }
+});
+
 test("壊れた JSON でも候補として残し、表情は空にする", () => {
   const temp = createTempDir("sumika-avatar-");
   try {

@@ -23,6 +23,7 @@ config/settings.toml.bak
 # Live2D の Cubism Core とモデルは各自取得（ライセンスのため再配布しない）
 vendor/
 live2d-models/
+Live2DModels/
 
 # 立ち絵などのユーザー素材（各自用意）
 assets/avatar/*
