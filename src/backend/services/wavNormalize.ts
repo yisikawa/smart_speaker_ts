@@ -6,8 +6,9 @@ import { readWavInfo } from "../../shared/audio/pcm";
  *
  * ブラウザ再生・サーバー再生は任意の WAV を鳴らせるが、口パクの
  * `buildVolumeEnvelope()` は **16bit PCM** しか解析できない。
- * マルチリンガル TTS や RVC は 24bit / 32bit float / 44.1kHz を返すことが
- * あるため、再生前にここで 16bit PCM モノラルへ落とす。
+ * マルチリンガル TTS は 24bit / 32bit float を返すことがあるため、
+ * 再生前にここで 16bit PCM モノラルへ落とす（**サンプルレートはそのまま**。
+ * 口パクは WAV のサンプルレートを使うので、40kHz でも正しく動く）。
  */
 
 function toBytes(buffer: Buffer): Uint8Array {
@@ -67,6 +68,14 @@ function convertWithFfmpeg(wav: Buffer, options: NormalizeWavOptions): Promise<B
       "error",
       "-i",
       "pipe:0",
+      // LIST メタデータを付けない（付くと readWavInfo の固定オフセット読みが崩れ、
+      // durationMs が 1ms になって speaking が早く解除される）
+      "-map_metadata",
+      "-1",
+      "-fflags",
+      "+bitexact",
+      "-flags:a",
+      "+bitexact",
       "-ac",
       "1",
       "-c:a",

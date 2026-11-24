@@ -383,7 +383,7 @@ B 案で声質が足りない場合に、`[tts.voice_conversion]` で RVC を挟
   `clampVoiceConversion()` が守る（`index_rate` 0..1 / `protect` 0..0.5 / `pitch` -24..24）
 - API: `POST /convert` `{ wav_base64, index_rate, pitch, f0_method, protect, model, index }`
   → `{ wav_base64 }` / `GET /health` の `warm` でウォームアップ済みを判定 / `POST /model` で切替
-- 出力は **40kHz**（RVC ネイティブ）。`normalizeWav` で 16kHz/16bit/mono に戻す
+- 出力は **40kHz**（RVC ネイティブ）のまま返す（口パクの `buildVolumeEnvelope` はサンプルレートを見る）
 - 失敗時は**元の WAV を返す**（無音にしない）
 - 実測（RTX 3060 / `imadaMio` / 1 秒音声・ウォームアップ済み）: `index_rate=0` で **234–257ms**、
   `0.75` で **535ms**（初回のみ index のロードで +650ms）。既定は **0**

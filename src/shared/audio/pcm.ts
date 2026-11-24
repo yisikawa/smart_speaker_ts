@@ -158,12 +158,38 @@ export function readWavInfo(bytes: Uint8Array): WavInfo | null {
     return null;
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return {
-    channels: view.getUint16(22, true),
-    sampleRate: view.getUint32(24, true),
-    bitsPerSample: view.getUint16(34, true),
-    dataSize: view.getUint32(40, true),
-  };
+  // RIFF ヘッダ（12 バイト）以降をチャンク走査する。
+  // ffmpeg は `fact` や `LIST` を挟むことがあり、固定オフセット（22/24/34/40）では壊れる。
+  let offset = 12;
+  let channels = 0;
+  let sampleRate = 0;
+  let bitsPerSample = 0;
+  let dataSize: number | null = null;
+  while (offset + 8 <= bytes.byteLength) {
+    const id = String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3)
+    );
+    const size = view.getUint32(offset + 4, true);
+    const body = offset + 8;
+    if (id === "fmt " && body + 16 <= bytes.byteLength) {
+      channels = view.getUint16(body + 2, true);
+      sampleRate = view.getUint32(body + 4, true);
+      bitsPerSample = view.getUint16(body + 14, true);
+    } else if (id === "data") {
+      // 未完の WAV でもはみ出さないように実バイト数でクランプする
+      dataSize = Math.min(size, Math.max(0, bytes.byteLength - body));
+      break;
+    }
+    // チャンクは 2 バイト境界へパディングされる
+    offset = body + size + (size % 2);
+  }
+  if (dataSize === null || sampleRate === 0) {
+    return null;
+  }
+  return { channels, sampleRate, bitsPerSample, dataSize };
 }
 
 /** 音声の長さ（ms） */

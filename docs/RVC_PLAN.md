@@ -61,8 +61,7 @@
 
 - 実装後の既定は **`index_rate = 0`**（`src/backend/config/schema.ts`）
 - `0.75` に切り替えると初回だけ index のロードで +650ms、以降は **+280ms/文**
-- RVC の出力は **40kHz**。`VoiceConversionService` が `normalizeWav` で 16kHz/16bit/mono に揃える
-  （口パクの `volumes` と再生の前提を崩さないため）
+- RVC の出力は **40kHz** のまま返す（`buildVolumeEnvelope` が WAV のサンプルレートを使うため口パクは正しい）
 
 ---
 

@@ -169,7 +169,8 @@ src/backend/index.ts                                ← Composition Root（DI �
       （`index_rate` 0..1 / `protect` 0..0.5 / `pitch` -24..24 / `f0_method` は rmvpe・harvest・crepe・pm）
     - **無効・失敗時は元の WAV を返す**（無音にしない）。`enabled=true` でも `model_path` が空なら
       1 回だけ警告して素通しする（既定 ON なので、モデル未選択は正常な初期状態）
-    - RVC の出力は **40kHz**。`normalizeWav` で 16kHz/16bit/mono に戻す（口パクの `volumes` の前提）
+    - RVC の出力は **40kHz**。そのまま返す（`buildVolumeEnvelope` は WAV のサンプルレートを使うので
+      口パクの `volumes` も正しい）。16kHz へ落とす必要はない
     - ワーカーは**常駐 + ウォームアップ**が前提（`rvc_python` の初回推論は 22.7 秒）。起動は
       `scripts\start-rvc-worker.bat`（`RVCMultilingual\venv` を使う）。`/health` の `warm=true` を確認する
     - `index_path` を空にすると index なし（`index_rate` が効かない）。**`imadaMio` は `.pth` と `_v2.index` で

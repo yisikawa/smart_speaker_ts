@@ -1,7 +1,6 @@
 import { ConfigManager } from "../config/ConfigManager";
 import { Logger } from "../core/logger";
 import { isWav } from "./wav";
-import { normalizeWav, type NormalizeWavOptions } from "./wavNormalize";
 
 export interface VoiceConversionOptions {
   signal?: AbortSignal;
@@ -28,8 +27,6 @@ export class VoiceConversionService {
       logger?: Logger;
       /** テストで差し替える（既定はグローバルの fetch） */
       fetchImpl?: typeof fetch;
-      /** 変換後の正規化（RVC は 40kHz で返すため 16kHz/16bit/mono に揃える） */
-      normalize?: (wav: Buffer, options: NormalizeWavOptions) => Promise<Buffer>;
     }
   ) {
     this.logger = deps.logger ?? new Logger("RVC");
@@ -91,14 +88,9 @@ export class VoiceConversionService {
       if (!isWav(converted)) {
         throw new Error("変換後の音声が WAV ではありません");
       }
-      // RVC は 40kHz で返す。口パク（volumes）と再生の前提を揃えるため 16kHz/16bit/mono へ戻す
-      const normalize = this.deps.normalize ?? normalizeWav;
-      return await normalize(converted, {
-        ffmpegPath: this.deps.config.getAudio().ffmpeg_path,
-        signal: options.signal,
-        onError: (error) =>
-          this.logger.warn("変換後の WAV を 16kHz に揃えられませんでした", error),
-      });
+      // RVC の出力（40kHz/16bit/mono）をそのまま返す。
+      // 口パク（buildVolumeEnvelope）は WAV のサンプルレートを使うため、16kHz へ落とす必要はない
+      return converted;
     } catch (error) {
       if (options.signal?.aborted) {
         return wav;

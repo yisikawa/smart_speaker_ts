@@ -81,14 +81,11 @@ test("VoiceConversionService は設定の index_rate などをそのまま /conv
     },
   });
   try {
-    const service = new VoiceConversionService({
-      config: project.config,
-      normalize: async (wav) => wav, // 正規化の有無は別テストで担保
-    });
+    const service = new VoiceConversionService({ config: project.config });
     const input = makeWav({ ms: 30 });
     const result = await service.convert(input);
 
-    assert.deepEqual(result, converted, "変換後の WAV を返す");
+    assert.deepEqual(result, converted, "変換後の WAV をそのまま返す（40kHz のまま）");
     assert.equal(bodies.length, 1);
     assert.equal(bodies[0].index_rate, 0.42, "設定の index_rate をそのまま送る（ハードコードしない）");
     assert.equal(bodies[0].pitch, 3);

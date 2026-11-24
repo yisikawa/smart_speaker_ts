@@ -8,6 +8,7 @@ import {
   rmsLevel,
   wavDurationMs,
 } from "../src/backend/services/wav";
+import { readWavInfo } from "../src/shared/audio/pcm";
 
 test("encodeWav は 44 バイトのヘッダを付与する", () => {
   const pcm = Buffer.alloc(3200, 1); // 100ms @16kHz / 16bit / モノラル
@@ -58,6 +59,24 @@ test("wavDurationMs は byteRate と data サイズから長さを求める", ()
 
   const rawPcm = Buffer.alloc(16000 * 2);
   assert.equal(wavDurationMs(rawPcm, 16000), 1000);
+});
+
+test("readWavInfo は fact チャンクが挟まっても data を読める（ffmpeg 対策）", () => {
+  const base = encodeWav(Buffer.alloc(640, 1), 16000);
+  // data チャンクの直前に fact（12 バイト）を挿入した WAV を作る
+  const fact = Buffer.alloc(12);
+  fact.write("fact", 0, "ascii");
+  fact.writeUInt32LE(4, 4);
+  const shifted = Buffer.concat([base.subarray(0, 36), fact, base.subarray(36)]);
+  shifted.writeUInt32LE(shifted.length - 8, 4);
+
+  const info = readWavInfo(new Uint8Array(shifted));
+  assert.ok(info, "WAV として読める");
+  assert.equal(info.sampleRate, 16000);
+  assert.equal(info.channels, 1);
+  assert.equal(info.bitsPerSample, 16);
+  assert.equal(info.dataSize, 640, "320 サンプル × 2 バイト");
+  assert.equal(wavDurationMs(shifted), 20, "長さが 1ms に壊れない");
 });
 
 test("applyGain は振幅をスケーリングし、クリップする", () => {
