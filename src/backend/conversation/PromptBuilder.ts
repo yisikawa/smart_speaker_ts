@@ -48,7 +48,7 @@ export class PromptBuilder {
     if (character.catchphrases.length > 0) {
       const phrases = character.catchphrases
         .slice(0, 4)
-        .map((phrase) => `「${phrase}」`)
+        .map((phrase) => (mode === "en" ? `"${phrase}"` : `「${phrase}」`))
         .join(" ");
       lines.push(
         "",

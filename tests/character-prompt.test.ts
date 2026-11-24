@@ -33,6 +33,29 @@ test("キャラクターファイルが無い場合は既定プロファイル�
   }
 });
 
+test("英語モードは sakura.en.toml（英語教師）を読み、口癖を二重引用符で示す", () => {
+  const project = createTempProject({ prefix: "sumika-char-", copyConfig: true });
+  try {
+    const config = project.config;
+    config.update({
+      conversation: { language: "en" },
+      llm: { character_file_en: "config/characters/sakura.en.toml" },
+    });
+    const character = new CharacterService({ config }).get("en");
+    assert.equal(character.name, "Sakura");
+    assert.equal(character.label, "English tutor");
+    assert.match(character.personality, /English teacher/i);
+
+    const prompt = new PromptBuilder({ config, character: { get: () => character } }).build("en");
+    assert.match(prompt, /English teacher/i);
+    assert.match(prompt, /"Good job!"/, "英語の口癖は二重引用符で示す");
+    assert.doesNotMatch(prompt, /「Good job!」/, "英語モードで日本語の鉤括弧は使わない");
+    assert.match(prompt, /User name: /);
+  } finally {
+    project.cleanup();
+  }
+});
+
 test("PromptBuilder は人格・応答ルール・ユーザー名・日時を含む", () => {
   const project = createTempProject({ prefix: "sumika-char-", copyConfig: true });
   try {

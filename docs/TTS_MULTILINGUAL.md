@@ -313,6 +313,26 @@ tts_audio #1 "こんにちは。今日はとてもいい天気なので、一緒
 - 英語モードでは英語のみ。日本語を混ぜると再生成される
 - 混在した**音声入力**は片方の言語モードに寄せる必要がある（VAD で分割して言語判定を繰り返す実装をしない限り不可）
 
+### 英語モードの人格（`config/characters/sakura.en.toml`）
+
+既定の英語モードは **「日本にいる英語教師」ペルソナ**です（`llm.character_file_en`）。日本語モード
+（`sakura.toml`）とは独立していて、言語モードの切替に追従します。
+
+- 短く簡単な語彙（音声で聞き取りやすい）・2〜4 文
+- 誤りは**1 回だけ**優しく直す（`A small tip: we say "I went" instead of "I goed."`）
+- 励まし ＋ 簡単な質問で会話を続ける・長い文法講義はしない
+- **日本語は混ぜない**（言語ガードが CJK を検出して再生成するため）
+
+実機の応答例（`I goed to Kyoto last week.` を送った場合）:
+
+```
+That sounds like a wonderful trip! [happy] Did you have a nice time in Kyoto?
+A small tip: we say "I went" instead of "I goed." What was your favorite thing you did there?
+```
+
+人格を変えるときは TOML の `personality` / `response_rules` / `catchphrases` を書き換え、
+`POST /api/config/reload` か再起動で反映します（`catchphrases` は英語モードでは `"..."` で表示されます）。
+
 判定の目安:
 
 | RTF | 意味 | 対応 |

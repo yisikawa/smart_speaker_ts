@@ -160,6 +160,8 @@ scripts\start-gpt-sovits.bat   # :9880 で待受（モデルのロードに数�
   文分割・破棄判定がまとめて追従する（次の発話から有効）。詳細は [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md)
 - **日英で同じ声（B 案・実測済み）**: `[tts.ja]` と `[tts.en]` に**同じ GPT-SoVITS（MIT）と同じ参照音声**を書くと、
   ja/en が同じ声になる（RTX 3060 12GB で RTF 0.45 / 0.49・ja↔en の話者類似度 1.000）。手順は同ドキュメントの §2-B
+- **英語モードの人格**: `config/characters/sakura.en.toml`（既定は**「日本にいる英語教師」**。短く簡単な英語で話し、
+  誤りは 1 回だけ優しく直す）。`llm.character_file_en` で差し替えられる
 - **応答言語ガード**: 目標言語以外の文字が混入した応答は 1 回だけ再生成（ja: ハングル / en: 日本語・中国語・韓国語）
 - **幻聴（hallucination）対策**: whisper.cpp の非音声トークン抑制・文脈抑制・信頼度フィルタで、
   無音や雑音に対する「ご視聴ありがとうございました。」等の誤認識を破棄（[docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md)）
