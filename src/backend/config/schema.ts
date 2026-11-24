@@ -244,9 +244,17 @@ export interface TTSConfig {
   max_sentence_chars: number;
   /** 英語モードの音声プロファイル */
   en: TtsProfile;
+  /**
+   * 日本語モードの上書き（`[tts]` 直下の既存キーが既定値）。
+   * B 案（日英で同じエンジン・同じ声）にするときは、ここに en と同じ設定を書く。
+   */
+  ja: TtsProfileOverride;
   /** 読み上げ後の声質変換（任意） */
   voice_conversion: VoiceConversionConfig;
 }
+
+/** `[tts.ja]` の上書き（未指定キーは `[tts]` 直下の値を使う） */
+export type TtsProfileOverride = Partial<TtsProfile>;
 
 
 /** アバター（Live2D / 立ち絵）の設定。P0 では設定と hello への配信のみ */
@@ -481,6 +489,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       reference_text: "",
       prompt_lang: "en",
     },
+    ja: {},
     voice_conversion: {
       enabled: false,
       endpoint: "http://127.0.0.1:9890",

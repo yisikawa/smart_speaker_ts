@@ -32,11 +32,31 @@ test("deepMerge はネスト設定を部分上書きし、配列は置換する"
 
 test("stringifyToml は DEFAULT_CONFIG を往復変換できる", () => {
   const text = stringifyToml(DEFAULT_CONFIG as unknown as Record<string, unknown>);
-  // toml パーサは null プロトタイプのオブジェクトを返すため JSON 経由で正規化して比較する
-  const parsed = JSON.parse(JSON.stringify(parseToml(text))) as unknown;
+  // toml パーサは null プロトタイプのオブジェクトを返すため JSON 経由で正規化して比較する。
+  // 空テーブル（例: [tts.ja]）は意図的に出力しないため、比較時は取り除く
+  const parsed = stripEmptyTables(JSON.parse(JSON.stringify(parseToml(text))) as unknown);
 
-  assert.deepEqual(parsed, JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as unknown);
+  assert.deepEqual(parsed, stripEmptyTables(JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as unknown));
 });
+
+/** 空のプレーンオブジェクトを再帰的に取り除く（空テーブルは TOML へ書かない仕様のため） */
+function stripEmptyTables(value: unknown): unknown {
+  if (Array.isArray(value) || value === null || typeof value !== "object") {
+    return value;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (child !== null && typeof child === "object" && !Array.isArray(child)) {
+      const nested = stripEmptyTables(child) as Record<string, unknown>;
+      if (Object.keys(nested).length > 0) {
+        out[key] = nested;
+      }
+      continue;
+    }
+    out[key] = child;
+  }
+  return out;
+}
 
 test("stringifyToml は空テーブルを出力しない", () => {
   const text = stringifyToml({

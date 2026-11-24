@@ -239,7 +239,7 @@ sherpa_provider = "cpu"
 | `[conversation]` | `language`, `reset_history_on_language_change`, `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language`, `[stt.en]`（英語モードの上書き） |
 | `[llm]` | `endpoint`, `model`, `character_file`, `character_file_en`, `temperature`, `max_tokens`, `history_turns`, `response_timeout_seconds`, `model_load_timeout_seconds` |
-| `[tts]` | `engine`, `endpoint`, `speaker_id`, `speed`, `pitch`, `volume`, `split_sentences`, `prefetch_depth`, `[tts.en]`（英語の音声プロファイル）, `[tts.voice_conversion]`（任意の RVC） |
+| `[tts]` | `engine`, `endpoint`, `speaker_id`, `speed`, `pitch`, `volume`, `split_sentences`, `prefetch_depth`, `[tts.ja]`（日本語の上書き）, `[tts.en]`（英語の音声プロファイル）, `[tts.voice_conversion]`（任意の RVC） |
 
 設定の反映:
 

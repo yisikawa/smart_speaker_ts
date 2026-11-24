@@ -127,7 +127,11 @@ async function main(): Promise<void> {
     );
   }
   if (!services.tts) {
-    bootLogger.warn(`VOICEVOX に接続できません (${config.getTTS().endpoint})。VOICEVOX を起動してください。`);
+    const engine = config.getTtsEngineName();
+    const endpoint = config.getLanguage() === "en" ? config.getTTS().en.endpoint : config.getTTS().endpoint;
+    bootLogger.warn(
+      `TTS（${engine}）に接続できません (${endpoint})。[tts.ja] / [tts.en] の設定とサーバーの起動状態を確認してください。`
+    );
   }
   if (!services.stt) {
     const sttConfig = config.getSTT();

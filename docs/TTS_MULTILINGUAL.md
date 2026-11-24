@@ -27,10 +27,18 @@ engine = "whisper"              # 日本語専用モデル（nemo_ctc）を避�
 language = "en"
 sherpa_language = "en"
 
-[tts]                           # 日本語（VOICEVOX）
+[tts]                           # 日本語の既定（後方互換のため残す）
 engine = "voicevox"
 endpoint = "http://127.0.0.1:50021"
 speaker_id = 2
+
+[tts.ja]                        # 日本語の上書き（未指定キーは [tts] 直下）
+# B 案（日英で同じ声）にするときは、ここを [tts.en] と同じ設定にする
+# engine = "gpt_sovits"
+# endpoint = "http://127.0.0.1:9880"
+# reference_wav = "assets/voices/ref.wav"
+# reference_text = "参照音声の書き起こし"
+# prompt_lang = "ja"
 
 [tts.en]                        # 英語（B 案のエンジン）
 engine = "openai_speech"        # openai_speech | gpt_sovits | voicevox（非推奨）
@@ -49,6 +57,30 @@ endpoint = "http://127.0.0.1:9890"
 model_path = ""
 index_path = ""
 ```
+
+### B 案（日英で同じ声）にする設定例
+
+`[tts.ja]` と `[tts.en]` に**同じエンジン・同じ参照音声**を書くと、どちらのモードでも同じ TTS で読み上げます。
+
+```toml
+[tts.ja]
+engine = "gpt_sovits"
+endpoint = "http://127.0.0.1:9880"
+reference_wav = "assets/voices/ref.wav"
+reference_text = "参照音声の書き起こし"
+prompt_lang = "ja"          # 参照音声の言語
+
+[tts.en]
+engine = "gpt_sovits"
+endpoint = "http://127.0.0.1:9880"
+reference_wav = "assets/voices/ref.wav"   # ja と同じ参照音声 → 同じ声
+reference_text = "参照音声の書き起こし"
+prompt_lang = "ja"
+```
+
+- 何も書かなければ **ja は VOICEVOX**（従来どおり）、en のみ新エンジンという併用になる
+- 「B 案 = 日英を 1 エンジンに統一」は上記のように `[tts.ja]` を設定して実現する
+- 画面の TTS 🟢/🔴 は**現在のモードのエンジン**を見る（ja なら `[tts.ja]`、en なら `[tts.en]`）
 
 `llm.character_file_en`（既定 `config/characters/sakura.en.toml`）を設定すると、
 英語モードの人格・口癖を別ファイルにできます（無ければ日本語の定義を共有）。
@@ -76,6 +108,7 @@ voice = "af_heart"
 
 - `api_v2.py` を起動（既定 port 9880）。`/tts` に `ref_audio_path` を渡す
 - 参照音声は **1〜5 秒**。日本語の参照音声のまま英語を読ませられる（cross-lingual）
+- **日英で同じ声にするには `[tts.ja]` と `[tts.en]` の両方に同じ設定を書く**（上記「B 案の設定例」）
 - 声質を寄せたい相手の音声を使う（**自分の声 / 許諾済みの声**。VOICEVOX 音源の学習は規約を確認）
 
 ```toml
@@ -136,6 +169,7 @@ npm run spike:tts -- --lang en --runs 5 # en だけ 5 回
 
 - [ ] ヘッダの `日本語 / English` で切替でき、**次の発話から** STT・プロンプト・TTS が追従する
 - [ ] en モードで英語の質問 → 英語の応答 → **英語の音声**（`tts.en` のエンジン）で再生される
+- [ ] **ja / en が同じ声に聴こえる**（B 案。`[tts.ja]` と `[tts.en]` に同じエンジン・参照音声を設定した場合）
 - [ ] en モードで日本語・韓国語が混ざった応答は 1 回だけ再生成される（`speech_reset`）
 - [ ] 口パクが動く（`tts_audio.volumes` が空でない = 16bit PCM へ正規化できている）
 - [ ] 初声 p50 < 1.5 秒 / p95 < 3 秒（en）

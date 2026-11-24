@@ -1,5 +1,6 @@
 import * as http from "http";
 import { ConfigManager } from "../config/ConfigManager";
+import type { TtsProfile } from "../config/schema";
 import { Logger } from "../core/logger";
 import { TextToSpeech, TtsOptions, TtsSpeaker } from "../core/ports";
 
@@ -17,8 +18,39 @@ interface HttpResult {
 export class VoicevoxTtsService implements TextToSpeech {
   private readonly logger: Logger;
 
-  constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
+  constructor(
+    private readonly deps: {
+      config: ConfigManager;
+      logger?: Logger;
+      /**
+       * 言語プロファイル（`[tts.ja]` / `[tts.en]`）。指定すると
+       * endpoint / speaker_id / speed をそちらから読む（未指定キーは `[tts]` 直下）。
+       */
+      profile?: () => Pick<TtsProfile, "endpoint" | "speaker_id" | "speed">;
+    }
+  ) {
     this.logger = deps.logger ?? new Logger("TTS");
+  }
+
+  /** `[tts]` の値にプロファイルを重ねた実効設定 */
+  private settings(): {
+    endpoint: string;
+    timeoutSeconds: number;
+    speakerId: number;
+    speed: number;
+    pitch: number;
+    volume: number;
+  } {
+    const cfg = this.deps.config.getTTS();
+    const profile = this.deps.profile?.();
+    return {
+      endpoint: profile?.endpoint?.trim() ? profile.endpoint : cfg.endpoint,
+      timeoutSeconds: cfg.timeout_seconds,
+      speakerId: profile?.speaker_id ?? cfg.speaker_id,
+      speed: profile?.speed ?? cfg.speed,
+      pitch: cfg.pitch,
+      volume: cfg.volume,
+    };
   }
 
   private request(
@@ -28,8 +60,9 @@ export class VoicevoxTtsService implements TextToSpeech {
     signal?: AbortSignal
   ): Promise<HttpResult> {
     const cfg = this.deps.config.getTTS();
+    const settings = this.settings();
     return new Promise((resolve, reject) => {
-      const url = new URL(cfg.endpoint.replace(/\/$/, ""));
+      const url = new URL(settings.endpoint.replace(/\/$/, ""));
       const options: http.RequestOptions = {
         hostname: url.hostname,
         port: url.port || 80,
@@ -82,12 +115,12 @@ export class VoicevoxTtsService implements TextToSpeech {
   }
 
   async synthesize(text: string, options: TtsOptions = {}): Promise<Buffer> {
-    const cfg = this.deps.config.getTTS();
+    const settings = this.settings();
     const trimmed = text.trim();
     if (!trimmed) {
       throw new Error("音声合成するテキストが空です");
     }
-    const speaker = String(options.speakerId ?? cfg.speaker_id);
+    const speaker = String(options.speakerId ?? settings.speakerId);
 
     const queryResponse = await this.request(
       "POST",
@@ -104,9 +137,9 @@ export class VoicevoxTtsService implements TextToSpeech {
     }
 
     const audioQuery = JSON.parse(queryResponse.body.toString("utf-8")) as Record<string, unknown>;
-    audioQuery.speedScale = cfg.speed;
-    audioQuery.pitchScale = cfg.pitch;
-    audioQuery.volumeScale = cfg.volume;
+    audioQuery.speedScale = settings.speed;
+    audioQuery.pitchScale = settings.pitch;
+    audioQuery.volumeScale = settings.volume;
 
     const body = Buffer.from(JSON.stringify(audioQuery), "utf-8");
     const synthesisResponse = await this.request(

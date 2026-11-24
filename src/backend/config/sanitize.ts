@@ -201,6 +201,17 @@ export function sanitizeConfig(config: AppConfig): string[] {
     config.tts.en.prompt_lang = "en";
   }
 
+  // 日本語モードの上書き（[tts.ja]。未指定なら [tts] 直下＝VOICEVOX）
+  if (!config.tts.ja || typeof config.tts.ja !== "object") {
+    config.tts.ja = {};
+  }
+  if (config.tts.ja.engine !== undefined && !ttsEngines.includes(config.tts.ja.engine)) {
+    warnings.push(
+      `tts.ja.engine=${String(config.tts.ja.engine)} は未対応のため [tts].engine を使用します`
+    );
+    delete config.tts.ja.engine;
+  }
+
   // 声質変換（既定は無効。有効なのにモデルが空なら警告して無効へ戻す）
   const vc = config.tts.voice_conversion;
   if (!vc || typeof vc !== "object") {

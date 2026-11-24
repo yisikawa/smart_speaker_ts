@@ -698,8 +698,9 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 
 **TTS の切替**: `TtsRouter`（`SttSwitcher` と同型）。
 
-- ja: `VoicevoxTtsService`（従来どおり）
+- ja: `[tts.ja]`（未指定キーは `[tts]` 直下。既定は VOICEVOX）
 - en: `[tts.en].engine` により `OpenAiSpeechTtsService`（`/v1/audio/speech`）または `GptSovitsTtsService`（`/tts`）
+- **B 案（日英で同じ声）**: `[tts.ja]` と `[tts.en]` に同じエンジン・同じ参照音声を書けば、両モードとも同じ TTS を使う
 - **合成後は必ず 16bit PCM モノラルへ正規化**（`services/wavNormalize.ts`）。口パクの `buildVolumeEnvelope()` は
   16bit 以外を解析できず `volumes=[]` になるため
 - 言語ガードは「目標言語以外のスクリプト」を検出（ja: ハングル / en: 日本語・中国語・韓国語）

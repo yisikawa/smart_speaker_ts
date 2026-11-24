@@ -154,6 +154,15 @@ prefetch_depth = 1
 min_sentence_chars = 4
 max_sentence_chars = 60
 
+# --- 日本語モードの上書き（未指定キーは [tts] 直下の値を使う） ---
+# 既定は VOICEVOX。B 案（日英で同じ声）にするときは、[tts.en] と同じエンジン・参照音声を書く。
+# [tts.ja]
+# engine = "gpt_sovits"
+# endpoint = "http://127.0.0.1:9880"
+# reference_wav = "assets/voices/ref.wav"
+# reference_text = "参照音声の書き起こし"
+# prompt_lang = "ja"
+
 # --- 英語モードの読み上げ（conversation.language = "en" のとき使う） ---
 # engine: openai_speech（OpenAI 互換 /v1/audio/speech） | gpt_sovits（api_v2） | voicevox
 # 同じ声質で日英を読み上げたい場合は gpt_sovits + 参照音声を推奨（docs/TTS_MULTILINGUAL.md）
