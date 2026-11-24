@@ -101,7 +101,8 @@ model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
 
 ## 起動
 
-Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama/VOICEVOX・モデルの有無を確認してから起動し、ブラウザを開きます）。
+Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama / TTS サーバー・モデルの有無を確認してから起動し、ブラウザを開きます）。
+TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちらか**が動いていれば OK です。
 
 > ブラウザのマイクは **`http://localhost:3000`（または `http://127.0.0.1:3000`）** で開けば使えます（localhost は「安全なコンテキスト」扱いのため **https は不要**）。
 > LAN の IP・PC 名（例 `http://192.168.0.5:3000`）で開いた場合のみ、ブラウザがマイクを許可しません。
@@ -123,6 +124,21 @@ npm start              # node dist/backend/index.js
 ```
 
 ブラウザで <http://localhost:3000>（既定は2画面）を開きます。
+
+### B 案（日英で同じ声）を使う場合
+
+`[tts.ja]` / `[tts.en]` を `gpt_sovits` にしたときは、**GPT-SoVITS の API サーバーを先に起動**します。
+
+```powershell
+scripts\start-gpt-sovits.bat   # :9880 で待受（モデルのロードに数十秒かかる）
+.\start.bat                    # 続けてアプリを起動
+```
+
+- パスは環境変数 `GPT_SOVITS_HOME`（既定 `D:\LLMProjects\GPT-SoVITS`）で変えられます
+- セットアップ手順は [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md) の §2-B
+- **`config/settings.toml` を編集したらアプリを再起動してから `npm run smoke`**。`smoke` は `PATCH /api/config`
+  を含むため、古いプロセスが残っているとそのメモリ上の設定で `settings.toml` が上書きされます
+  （`SMOKE_NO_PATCH=1 npm run smoke` で PATCH をスキップできます）
 
 - 「聞き取り開始」で発話待ちに入ります（`conversation.auto_start = true` なら起動直後から待機）
 - テキスト欄からも会話できます（STT をスキップ）

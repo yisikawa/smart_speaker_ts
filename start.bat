@@ -86,13 +86,23 @@ if errorlevel 1 (
 )
 
 :: ---------------------------------------------------------------
-:: 5. VOICEVOX ENGINE
+:: 5. TTS サーバー（VOICEVOX 50021 / GPT-SoVITS 9880）
 :: ---------------------------------------------------------------
+set "TTS_OK=0"
 curl -s -f --max-time 3 http://127.0.0.1:50021/version >nul 2>&1
-if errorlevel 1 (
-    echo [5/6] 警告: VOICEVOX に接続できません。VOICEVOX を起動してください。
-) else (
-    echo [5/6] VOICEVOX: OK
+if not errorlevel 1 (
+    echo [5/6] VOICEVOX: OK ^(50021^)
+    set "TTS_OK=1"
+)
+curl -s -f --max-time 6 http://127.0.0.1:9880/docs >nul 2>&1
+if not errorlevel 1 (
+    echo [5/6] GPT-SoVITS: OK ^(9880^)
+    set "TTS_OK=1"
+)
+if "!TTS_OK!"=="0" (
+    echo [5/6] 警告: TTS サーバーに接続できません。
+    echo        - 日本語（VOICEVOX）: VOICEVOX を起動してください
+    echo        - B 案（GPT-SoVITS）: scripts\start-gpt-sovits.bat を実行してください
 )
 
 :: ---------------------------------------------------------------

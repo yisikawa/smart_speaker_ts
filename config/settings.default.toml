@@ -148,11 +148,11 @@ speaker_id = 2
 speed = 1.0
 pitch = 0.0
 volume = 1.0
-timeout_seconds = 30
+timeout_seconds = 60
 split_sentences = true
-prefetch_depth = 1
+prefetch_depth = 2
 min_sentence_chars = 4
-max_sentence_chars = 60
+max_sentence_chars = 24
 
 # --- 日本語モードの上書き（未指定キーは [tts] 直下の値を使う） ---
 # 既定は VOICEVOX。B 案（日英で同じ声）にするときは、[tts.en] と同じエンジン・参照音声を書く。

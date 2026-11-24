@@ -473,11 +473,15 @@ export const DEFAULT_CONFIG: AppConfig = {
     speed: 1.0,
     pitch: 0.0,
     volume: 1.0,
-    timeout_seconds: 30,
+    // GPT-SoVITS は長文で 3〜10 秒かかる。30 秒だと初回の warmup で切れることがある
+    timeout_seconds: 60,
     split_sentences: true,
-    prefetch_depth: 1,
+    // 再生中に次文を合成しておく（2 にすると文の間で止まりにくい）
+    prefetch_depth: 2,
     min_sentence_chars: 4,
-    max_sentence_chars: 60,
+    // 初声は「1 文目の長さ」で決まる（実測: 11 字 0.75s / 25 字 1.37s / 45 字 3.36s）。
+    // 24 にすると長い文は読点で割られ、初声が約 1.4 秒に収まる
+    max_sentence_chars: 24,
     en: {
       engine: "openai_speech",
       endpoint: "http://127.0.0.1:8880",

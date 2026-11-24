@@ -256,6 +256,22 @@ npm run spike:tts -- --lang en --runs 5 # en だけ 5 回
 | `scripts/spike-gpt-sovits.py` | GPT-SoVITS v2（api_v2） | 0.60 | 0.61 | **1.000** |
 | `scripts/spike-qwen-tts.py` | Qwen3-TTS 0.6B Base | 3.45 | 3.53 | 0.999 |
 
+### 1 文目の長さと合成時間（初声の決まり方）
+
+初声 = **「LLM が最初の文（または読点）を出すまで」＋「その文の合成時間」**。GPT-SoVITS の実測:
+
+| 文字数 | 合成時間（p50） | 例 |
+|---|---|---|
+| 11 字 | 0.75〜1.31 秒 | 「今日はいい天気ですね。」 |
+| 14 字 | 0.89 秒（読点止め） | 「今日はとてもいい天気なので、」 |
+| 25 字 | 1.37 秒 | |
+| 45 字 | 3.36 秒 | |
+
+- 切片（固定オーバーヘッド）は約 0.2 秒、傾きは約 0.07 秒/字
+- そのため **`tts.max_sentence_chars = 24`（既定）** にすると、文末が 24 文字を超える場合は
+  `SentenceSplitter` が**手前の読点で切る**（14 字前後で確定 → 合成 1 秒未満）
+- 文末が 24 文字以内なら従来どおり句点で切る（不自然に細切れにしない）。読点が無い長文は文末で切る
+
 判定の目安:
 
 | RTF | 意味 | 対応 |
@@ -278,12 +294,15 @@ npm run spike:tts -- --lang en --runs 5 # en だけ 5 回
 
 - [x] **ja / en が同じ声**（ja↔en の MFCC 類似度 1.000・F0 も近い。§3）
 - [x] **RTF < 0.5**（ja 0.45 / en 0.49。先読み 1 文で隠せる）
+- [x] **初声の土台**（`max_sentence_chars = 24` で 1 文目が最大 24 文字 → 合成 1.3 秒前後。§3 の実測表）
+- [x] **口パクの前提**（`TtsRouter` が GPT-SoVITS の WAV を 16bit PCM モノラルへ正規化することを
+      `tests/tts-adapters.test.ts` で担保。`volumes` が空にならない）
+- [x] **アプリからの疎通**（`GET /api/health` の `services.tts = true`、`tts.ja.engine = gpt_sovits`）
 - [ ] ヘッダの `日本語 / English` で切替でき、**次の発話から** STT・プロンプト・TTS が追従する
 - [ ] en モードで英語の質問 → 英語の応答 → **英語の音声**（`tts.en` のエンジン）で再生される
 - [ ] en モードで日本語・韓国語が混ざった応答は 1 回だけ再生成される（`speech_reset`）
-- [ ] 口パクが動く（`tts_audio.volumes` が空でない = 16bit PCM へ正規化できている）
-- [ ] 初声 p50 < 1.5 秒 / p95 < 3 秒（en）— **実測は合成 2.5 秒**。`tts.prefetch_depth` を上げるか、
-      1 文目を短く割る（`tts.split_sentences` は既定で有効）
+- [ ] 実画面での口パク（`tts_audio.volumes` を受けて Live2D / 立ち絵が動く）
+- [ ] 実アプリでの初声（LLM が最初の読点を出すまでの時間 + 合成 1.3 秒。マイク入力での体感確認が必要）
 - [ ] `npm run verify` が緑
 
 ---

@@ -41,3 +41,19 @@ test("チャンク境界が文の途中でも壊れない", () => {
   ];
   assert.deepEqual(pieces, ["今日はいい天気ですね。"]);
 });
+
+test("文末が maxChars を超えるときは手前の読点で切る（初声を短くする）", () => {
+  const splitter = new SentenceSplitter({ minChars: 4, maxChars: 24 });
+  const pieces = splitter.push("今日はとても良い天気なので、近くの公園まで一緒に散歩しに行きませんか。");
+  assert.deepEqual(pieces, [
+    "今日はとても良い天気なので、",
+    "近くの公園まで一緒に散歩しに行きませんか。",
+  ]);
+  assert.deepEqual(splitter.flush(), []);
+});
+
+test("maxChars 以内に読点が無ければ文末で切る（分割しすぎない）", () => {
+  const splitter = new SentenceSplitter({ minChars: 4, maxChars: 10 });
+  const sentence = `${"あ".repeat(30)}。`;
+  assert.deepEqual(splitter.push(sentence), [sentence]);
+});

@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { OpenAiSpeechTtsService } from "../src/backend/services/OpenAiSpeechTtsService";
 import { TtsRouter } from "../src/backend/services/TtsRouter";
 import { isPcm16MonoWav, normalizeWav } from "../src/backend/services/wavNormalize";
+import { buildVolumeEnvelope } from "../src/shared/audio/envelope";
 import { Logger } from "../src/backend/core/logger";
 import { createTempProject, makeWav } from "./helpers/project";
 
@@ -220,4 +221,47 @@ test("normalizeWav は 16bit PCM モノラルをそのまま返す", async () =>
   const result = await normalizeWav(wav);
   assert.equal(result, wav, "変換不要なら同一 Buffer を返す");
   assert.equal(isPcm16MonoWav(Buffer.from("not a wav")), false);
+});
+
+test("TtsRouter は GPT-SoVITS の WAV を 16bit PCM モノラルへ正規化する（口パクの前提）", async () => {
+  // GPT-SoVITS は 32kHz などで返すことがある。16bit PCM モノラルでないと volumes が空になり口パクが死ぬ
+  const wav = makeWav({ ms: 60, sampleRate: 32000 });
+  const server = await startStubServer((req, res) => {
+    if (req.url === "/docs") {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end("ok");
+      return;
+    }
+    if (req.url === "/tts") {
+      res.writeHead(200, { "Content-Type": "audio/wav" });
+      res.end(wav);
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  const project = createTempProject({
+    patch: {
+      conversation: { language: "en" },
+      tts: {
+        en: {
+          engine: "gpt_sovits",
+          endpoint: `http://127.0.0.1:${server.port}`,
+          reference_wav: "assets/voices/ref.wav",
+          reference_text: "hello",
+          prompt_lang: "ja",
+        },
+      },
+    },
+  });
+  try {
+    const router = new TtsRouter({ config: project.config });
+    const audio = await router.synthesize("Hello world");
+    assert.equal(isPcm16MonoWav(audio), true, "口パクの前提（16bit PCM モノラル）");
+    const volumes = buildVolumeEnvelope(audio);
+    assert.ok(volumes.length > 0, "volumes が空だと口パクが動かない");
+  } finally {
+    await server.close();
+    project.cleanup();
+  }
 });

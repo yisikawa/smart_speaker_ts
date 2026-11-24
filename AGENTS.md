@@ -67,6 +67,9 @@ src/backend/index.ts                                ← Composition Root（DI �
 8. **server（ffmpeg）モードはマイクを直列化**（`device_settle_ms=250` + 孤児プロセス防止）。
    バージイン監視とフォローアップが同時にマイクを開かないようにしている。
 9. **`PATCH /api/config` は `settings.toml` を正規化**して保存する（コメントは失われる）。
+   **設定ファイルを編集したらアプリを再起動してから `npm run smoke`**。`smoke` は PATCH を含むため、
+   古いプロセスが残っているとそのメモリ上の設定で `settings.toml` が上書きされ、手書きの `[tts.ja]` などが
+   消える（実際に踏んだ）。設定を触りたくないときは `SMOKE_NO_PATCH=1 npm run smoke`。
 10. **フォローアップ上限で勝手に止めない**（`conversation.keep_listening = true`）。
 11. テストは**ハング防止**のため `--test-timeout` 必須。無限ループしうる設定（keep_listening）に注意。
 12. 設定の既定値は `src/backend/config/schema.ts` が単一の真実源。`settings.default.toml` は

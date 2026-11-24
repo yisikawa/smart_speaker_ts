@@ -75,6 +75,7 @@ export class SentenceSplitter {
   }
 
   private findCut(from: number): number {
+    const limit = from + this.options.maxChars;
     for (let i = from; i < this.buffer.length; i += 1) {
       const char = this.buffer[i];
       if (!this.endChars.has(char)) {
@@ -89,21 +90,33 @@ export class SentenceSplitter {
       while (end < this.buffer.length && this.endChars.has(this.buffer[end])) {
         end += 1;
       }
+      // 文末が遠すぎるときは手前の読点で切る（1 文目が長いと初声が遅くなるため）
+      if (end - from > this.options.maxChars) {
+        const comma = this.lastCommaWithin(from, limit);
+        if (comma > 0) {
+          return comma;
+        }
+      }
       return end;
     }
 
-    if (this.buffer.length <= this.options.maxChars) {
+    if (this.buffer.length - from <= this.options.maxChars) {
       return 0;
     }
 
-    // 長すぎる: maxChars 以内の最後の読点で切る
-    let lastComma = -1;
-    for (let i = 0; i < Math.min(this.buffer.length, this.options.maxChars); i += 1) {
+    // 長すぎる: maxChars 以内の最後の読点で切る（読点も無ければ maxChars で切る）
+    return this.lastCommaWithin(from, limit) || limit;
+  }
+
+  /** [from, limit) にある最後の読点の直後（無ければ -1） */
+  private lastCommaWithin(from: number, limit: number): number {
+    let last = -1;
+    for (let i = from; i < Math.min(this.buffer.length, limit); i += 1) {
       if (this.commaChars.has(this.buffer[i])) {
-        lastComma = i + 1;
+        last = i + 1;
       }
     }
-    return lastComma > 0 ? lastComma : this.options.maxChars;
+    return last;
   }
 
 }

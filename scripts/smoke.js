@@ -125,16 +125,24 @@ function waitForWebSocket() {
   console.log("[smoke] history messages:", history.messages?.length ?? 0);
 
   // 設定の往復（PATCH は現在値と同じ値を書き戻すだけで、挙動は変えない）
-  const patched = await requestJson("PATCH", "/api/config", {
-    llm: { temperature: config.llm?.temperature },
-  });
-  if (patched.status !== 200) {
-    throw new Error(`PATCH /api/config が ${patched.status} を返しました`);
+  // 注意: PATCH は settings.toml を正規化して保存するため、コメントや手書きの構成は失われる。
+  //       設定ファイルを編集した直後は**サーバーを再起動してから**実行すること
+  //       （古いプロセスが残っていると、そのメモリ上の設定で上書きされ [tts.ja] などが消える）。
+  //       設定を触りたくないときは SMOKE_NO_PATCH=1 でスキップできる。
+  if (process.env.SMOKE_NO_PATCH === "1") {
+    console.log("[smoke] config patch: skip (SMOKE_NO_PATCH=1)");
+  } else {
+    const patched = await requestJson("PATCH", "/api/config", {
+      llm: { temperature: config.llm?.temperature },
+    });
+    if (patched.status !== 200) {
+      throw new Error(`PATCH /api/config が ${patched.status} を返しました`);
+    }
+    console.log(
+      "[smoke] config patch:",
+      JSON.stringify({ temperature: patched.body?.llm?.temperature, warnings: patched.body?.warnings?.length ?? 0 })
+    );
   }
-  console.log(
-    "[smoke] config patch:",
-    JSON.stringify({ temperature: patched.body?.llm?.temperature, warnings: patched.body?.warnings?.length ?? 0 })
-  );
   const reloaded = await requestJson("POST", "/api/config/reload");
   if (reloaded.status !== 200) {
     throw new Error(`POST /api/config/reload が ${reloaded.status} を返しました`);
