@@ -110,6 +110,8 @@
 | 変更 | `src/backend/server/ApiRouter.ts` | `PUT /api/models/rvc`（設定保存 + ワーカーへ再ロード指示） |
 | 変更 | `src/frontend/SettingsPanel.ts` | 「RVC モデル」セレクトと ON/OFF トグル |
 | 新規 | `tests/rvc-model-catalog.test.ts` | ペアリング（`imadaMio.pth` ↔ `imadaMio_v2.index`）のテスト |
+| 新規 | `scripts/start-rvc-worker.bat` | ワーカー起動（`RVCMultilingual/venv` を使う。GPT-SoVITS の起動バッチと同じ形） |
+| 変更 | `start.bat` | TTS チェックに **RVC ワーカー（9890）** を追加（未起動なら警告） |
 
 ### 4.1 モデル切替の仕様
 
@@ -189,10 +191,9 @@
 
 ```powershell
 # 1) ワーカー起動（ウォームアップ込みで 30〜40 秒かかる）
-D:\LLMProjects\RVCMultilingual\venv\Scripts\python.exe scripts\rvc_worker.py `
-  --model D:\LLMProjects\RVCMultilingual\models\imadaMio.pth `
-  --index D:\LLMProjects\RVCMultilingual\models\imadaMio_v2.index `
-  --port 9890
+scripts\start-rvc-worker.bat
+#   中身: D:\LLMProjects\RVCMultilingual\venv\Scripts\python.exe scripts\rvc_worker.py ^
+#           --model ...\imadaMio.pth --index ...\imadaMio_v2.index --port 9890
 
 # 2) 状態確認（warm=true になるまで待つ）
 curl http://127.0.0.1:9890/health
@@ -200,7 +201,7 @@ curl http://127.0.0.1:9890/health
 # 3) 変換込みの実測（GPT-SoVITS → RVC）
 npm run spike:tts -- --rvc
 
-# 4) アプリで確認（tts.voice_conversion.enabled = true にして再起動）
+# 4) アプリで確認（既定で enabled=true。画面のトグルでモデルを切り替えられる）
 ```
 
 確認すること:
