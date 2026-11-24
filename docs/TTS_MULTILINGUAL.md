@@ -31,6 +31,24 @@
 - 無料で商用可・日本語・クローン可の条件を満たすのは **GPT-SoVITS（MIT）** と
   Qwen3-TTS / Chatterbox（Apache-2.0 / MIT）です。このうち**速度が実用域（RTF < 0.5）なのは GPT-SoVITS**
 
+### GPT-SoVITS は有料か（2026-11 に一次情報で確認）
+
+**無料です。コードもモデルも商用利用できます。** 内訳:
+
+| 構成要素 | ライセンス | 商用 | 根拠 |
+|---|---|---|---|
+| コード（`RVC-Boss/GPT-SoVITS`） | **MIT** | 可 | リポジトリの `LICENSE` |
+| 事前学習モデル 4.3GB（`XXXXRT/GPT-SoVITS-Pretrained`） | **MIT** | 可 | モデルカードに `License: mit` |
+| 公式の重み（`lj1995/GPT-SoVITS`） | **MIT** | 可 | モデルカードに `License: mit` |
+| 日本語 G2P（`pyopenjtalk` 0.4.1） | MIT（Expat） | 可 | `METADATA` の License 欄 |
+| Open JTalk 辞書（`open_jtalk_dic_utf_8-1.11`） | 修正 BSD（NAIST） | 可 | 同梱の `COPYING` |
+
+- **かかる費用は GPU の電気代だけ**。クラウド API・サブスク・従量課金はありません（すべて localhost 完結）
+- MIT の義務は「著作権表示とライセンス文の同梱」。**再配布したり製品に組み込む場合**に必要で、
+  ローカルで自分が使うだけなら実質不要です
+- **参照音声そのものの権利は別問題**。GPT-SoVITS が無料でも、声（VOICEVOX 音源・実在の人物など）の
+  使用許諾は別途必要です（§2-B の注意書きを参照）
+
 ---
 
 ## 1. 設定（これだけで言語モードが切り替わる）
