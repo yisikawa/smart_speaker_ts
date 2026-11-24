@@ -13,10 +13,11 @@ Logger.configure({ level: "error" });
 
 const wav = encodeWav(Buffer.alloc(4800, 1), 24000);
 
-function setup(options: { replies: string[]; split?: boolean }) {
+function setup(options: { replies: string[]; split?: boolean; language?: "ja" | "en" }) {
   const project = createTempProject({
     patch: {
       tts: { split_sentences: options.split ?? true, min_sentence_chars: 4, max_sentence_chars: 60 },
+      ...(options.language ? { conversation: { language: options.language } } : {}),
     },
   });
   const synthCalls: string[] = [];
@@ -113,6 +114,27 @@ test("ハングルを検出したら読み直す（speech_reset）", async () =>
     assert.equal(ctx.events.filter((e) => e.type === "speech_reset").length, 1);
     assert.ok(!ctx.synthCalls.some((text) => text.includes("안녕")));
     assert.ok(ctx.synthCalls.includes("こんにちは。"));
+  } finally {
+    ctx.project.cleanup();
+  }
+});
+
+test("英語モードで日本語が混ざったら読み直す（speech_reset）", async () => {
+  const ctx = setup({
+    replies: ["こんにちは。Hello there.", "Hello there! How are you?"],
+    language: "en",
+  });
+  try {
+    await ctx.runner.run("Hi", ctx.hooks, new AbortController().signal);
+    assert.equal(ctx.events.filter((e) => e.type === "speech_reset").length, 1, "1 回だけ再生成");
+    assert.ok(
+      !ctx.synthCalls.some((text) => /[\u3040-\u30FF\u4E00-\u9FFF]/.test(text)),
+      "日本語の文は読み上げない"
+    );
+    assert.ok(
+      ctx.synthCalls.some((text) => text.includes("Hello")),
+      "英語で読み直す"
+    );
   } finally {
     ctx.project.cleanup();
   }

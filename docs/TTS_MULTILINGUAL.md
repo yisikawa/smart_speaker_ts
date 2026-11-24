@@ -359,12 +359,15 @@ A small tip: we say "I went" instead of "I goed." What was your favorite thing y
 - [x] **口パクの前提**（`TtsRouter` が GPT-SoVITS の WAV を 16bit PCM モノラルへ正規化することを
       `tests/tts-adapters.test.ts` で担保。`volumes` が空にならない）
 - [x] **アプリからの疎通**（`GET /api/health` の `services.tts = true`、`tts.ja.engine = gpt_sovits`）
-- [ ] ヘッダの `日本語 / English` で切替でき、**次の発話から** STT・プロンプト・TTS が追従する
-- [ ] en モードで英語の質問 → 英語の応答 → **英語の音声**（`tts.en` のエンジン）で再生される
-- [ ] en モードで日本語・韓国語が混ざった応答は 1 回だけ再生成される（`speech_reset`）
-- [ ] 実画面での口パク（`tts_audio.volumes` を受けて Live2D / 立ち絵が動く）
-- [ ] 実アプリでの初声（LLM が最初の読点を出すまでの時間 + 合成 1.3 秒。マイク入力での体感確認が必要）
-- [ ] `npm run verify` が緑
+- [x] ヘッダの `日本語 / English` で切替でき、**次の発話から** STT・プロンプト・TTS が追従する
+      （`tests/app-server.test.ts`: PATCH → `language` 通知 + `character.reload()` 後の名前が配られる）
+- [x] en モードで英語の質問 → 英語の応答 → **英語の音声**（`tts.en` のエンジン）で再生される
+      （実機: 英語の 2 ターンを `submit_audio` で検証し `tts_audio` が返ることを確認）
+- [x] en モードで日本語・韓国語が混ざった応答は 1 回だけ再生成される（`speech_reset`）
+      （`tests/turn-runner-streaming.test.ts`: ja はハングル、en は CJK の検出を検証）
+- [ ] 実画面での口パク（`tts_audio.volumes` を受けて Live2D / 立ち絵が動く）— 人が目視で確認する
+- [ ] 実アプリでの初声（LLM が最初の読点を出すまでの時間 + 合成 1.3 秒）— マイク入力での体感確認が必要
+- [x] `npm run verify` が緑（240 tests / 0 fail）
 
 ---
 

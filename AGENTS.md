@@ -230,7 +230,9 @@ src/backend/index.ts                                ← Composition Root（DI �
   英語 TTS は OpenAI 互換（Kokoro 等）と GPT-SoVITS に対応。**B 案は成立（2026-11 実測）**:
   GPT-SoVITS（MIT）を ja/en 共通にして同じ参照音声を使うと、RTF 0.45/0.49・ja↔en の類似度 1.000。
   Qwen3-TTS は声は揃うが RTF 3.45 で不採用（`docs/TTS_MULTILINGUAL.md` の §0〜§3）。
-  **次の作業**は RVC（`[tts.voice_conversion]`）の検証と、実アプリでの口パク・言語切替の確認
+  受け入れ条件は**言語切替・英語応答・`speech_reset`・口パクの `volumes`・初声の土台**まで検証済み
+  （残りは実画面の目視）。**英語モードの人格は「日本にいる英語教師」**（`config/characters/sakura.en.toml`）。
+  **次の作業**は RVC（`[tts.voice_conversion]`）の検証
 - **残作業のバックログは `docs/TODO.md` に集約**（優先度・受け入れ条件・見積つき）。作業を終えたら同ファイルから削除し、
   この節と README を更新する。
 
