@@ -82,6 +82,11 @@ class RvcWorker:
             "device": self._device,
         }
 
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        """`/` と `\\` の違いで「モデルが変わった」と誤判定しないように正規化する。"""
+        return os.path.normcase(os.path.realpath(path)) if path else ""
+
     def _ensure_model(self, model: str, index: str) -> None:
         if self._rvc is None:
             from rvc_python.infer import RVCInference
@@ -90,7 +95,10 @@ class RvcWorker:
             self._rvc = RVCInference(device=self._device)
         if not model:
             raise ValueError("model が未指定です（tts.voice_conversion.model_path）")
-        if model == self._model and index == self._index:
+        same = self._normalize_path(model) == self._normalize_path(
+            self._model
+        ) and self._normalize_path(index) == self._normalize_path(self._index)
+        if same:
             return
         with _patch_torch_load():
             logger.info("モデルを読み込みます: %s（index=%s）", model, index or "なし")
@@ -149,6 +157,8 @@ class RvcWorker:
                     self._rvc.infer_file(input_path=src, output_path=dst)
                 if not os.path.exists(dst):
                     raise RuntimeError("RVC が出力を生成しませんでした")
+                # 推論を 1 回通せば内部の遅延ロードは済んでいる
+                self._warm = True
                 with open(dst, "rb") as handle:
                     return handle.read()
 
