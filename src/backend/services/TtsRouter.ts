@@ -38,6 +38,8 @@ export class TtsRouter implements TextToSpeech {
       logger?: Logger;
       /** 正規化の差し替え（テスト用） */
       normalize?: (wav: Buffer, options: NormalizeWavOptions) => Promise<Buffer>;
+      /** 声質変換（RVC）の差し替え（テスト用）。未指定なら変換しない */
+      voiceConversion?: { convert(wav: Buffer, options?: { signal?: AbortSignal }): Promise<Buffer> };
     }
   ) {
     this.logger = deps.logger ?? new Logger("TTS");
@@ -76,12 +78,18 @@ export class TtsRouter implements TextToSpeech {
     const impl = this.current.impl;
     const wav = await impl.synthesize(text, options);
     const normalize = this.deps.normalize ?? normalizeWav;
-    return normalize(wav, {
+    const normalized = await normalize(wav, {
       ffmpegPath: this.deps.config.getAudio().ffmpeg_path,
       signal: options.signal,
       onError: (error) =>
         this.logger.warn("WAV を 16bit PCM へ変換できませんでした（口パクが無効になります）", error),
     });
+    const convert = this.deps.voiceConversion;
+    if (!convert) {
+      return normalized;
+    }
+    // 声質変換（RVC）。無効・失敗時は元の音声がそのまま返る
+    return convert.convert(normalized, { signal: options.signal });
   }
 
   /** 言語とプロファイルから実装を作る（署名が変わらなければ再利用する） */

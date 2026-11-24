@@ -181,13 +181,13 @@ prompt_lang = "en"
 # --- 声質変換（任意。B 案が成功した後に検証する） ---
 # RVC などの変換ワーカー（POST /convert, base64 WAV）へ読み上げを通す。
 [tts.voice_conversion]
-enabled = false
+enabled = true
 endpoint = "http://127.0.0.1:9890"
 model_path = ""
 index_path = ""
 pitch = 0
 f0_method = "rmvpe"
-index_rate = 0.75
+index_rate = 0
 protect = 0.33
 timeout_seconds = 60
 

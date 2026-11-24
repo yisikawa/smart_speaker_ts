@@ -98,6 +98,45 @@ function clampField(
  * 設定値を検証し、危険な値は既定レンジへ補正する。
  * 補正内容は警告メッセージとして返す（起動時にログ出力される）。
  */
+/** RVC の f0 推定方式（`rvc_python` が受け付ける値） */
+const F0_METHODS = ["rmvpe", "harvest", "crepe", "pm"] as const;
+
+/**
+ * `tts.voice_conversion` を RVC の仕様範囲へ補正する。
+ *
+ * 範囲外の値はワーカー（rvc_python）側で落ちるため、設定ファイルに何が書かれていても
+ * ここで必ず収める。真実源は `schema.ts`（既定値）とこの関数（範囲）。
+ */
+function clampVoiceConversion(
+  vc: AppConfig["tts"]["voice_conversion"],
+  warnings: string[]
+): void {
+  const defaults = DEFAULT_CONFIG.tts.voice_conversion;
+
+  if (!Number.isFinite(vc.index_rate)) {
+    vc.index_rate = defaults.index_rate;
+  } else if (vc.index_rate < 0 || vc.index_rate > 1) {
+    vc.index_rate = Math.min(1, Math.max(0, vc.index_rate));
+    warnings.push(`tts.voice_conversion.index_rate を ${vc.index_rate} に補正しました`);
+  }
+
+  if (!Number.isFinite(vc.protect) || vc.protect < 0 || vc.protect > 0.5) {
+    const value = Number.isFinite(vc.protect) ? vc.protect : defaults.protect;
+    vc.protect = Math.min(0.5, Math.max(0, value));
+    warnings.push(`tts.voice_conversion.protect を ${vc.protect} に補正しました`);
+  }
+
+  if (!Number.isInteger(vc.pitch) || vc.pitch < -24 || vc.pitch > 24) {
+    vc.pitch = 0;
+    warnings.push("tts.voice_conversion.pitch を 0 に補正しました");
+  }
+
+  if (!F0_METHODS.includes(vc.f0_method as (typeof F0_METHODS)[number])) {
+    vc.f0_method = defaults.f0_method;
+    warnings.push(`tts.voice_conversion.f0_method を ${vc.f0_method} に補正しました`);
+  }
+}
+
 export function sanitizeConfig(config: AppConfig): string[] {
   const warnings: string[] = [];
 
@@ -212,13 +251,12 @@ export function sanitizeConfig(config: AppConfig): string[] {
     delete config.tts.ja.engine;
   }
 
-  // 声質変換（既定は無効。有効なのにモデルが空なら警告して無効へ戻す）
+  // 声質変換（既定は有効。モデル未設定なら実行時にスキップするので、ここでは無効化しない）
   const vc = config.tts.voice_conversion;
   if (!vc || typeof vc !== "object") {
     config.tts.voice_conversion = { ...DEFAULT_CONFIG.tts.voice_conversion };
-  } else if (config.tts.voice_conversion.enabled && !config.tts.voice_conversion.model_path.trim()) {
-    warnings.push("tts.voice_conversion.enabled=true ですが model_path が空のため無効にします");
-    config.tts.voice_conversion.enabled = false;
+  } else {
+    clampVoiceConversion(vc, warnings);
   }
 
   return warnings;

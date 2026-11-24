@@ -15,6 +15,7 @@ import { OllamaLlmService } from "./services/OllamaLlmService";
 import { ServerPlaybackSink } from "./services/ServerPlaybackSink";
 import { SttSwitcher } from "./services/SttSwitcher";
 import { TtsRouter } from "./services/TtsRouter";
+import { VoiceConversionService } from "./services/VoiceConversionService";
 
 function readVersion(rootDir: string): string {
   try {
@@ -53,7 +54,9 @@ async function main(): Promise<void> {
   const stt = new SttSwitcher({ config, logger: new Logger("STT") });
   const llm = new OllamaLlmService({ config, logger: new Logger("LLM") });
   // 読み上げは言語モードで実装を切り替える（ja: VOICEVOX / en: [tts.en] のプロファイル）
-  const tts = new TtsRouter({ config, logger: new Logger("TTS") });
+  // 声質変換（RVC）は `tts.voice_conversion` に従い、正規化の後に挟む（無効・失敗時は素通し）
+  const voiceConversion = new VoiceConversionService({ config, logger: new Logger("RVC") });
+  const tts = new TtsRouter({ config, logger: new Logger("TTS"), voiceConversion });
 
   // 3. 会話パイプライン
   // 読み上げの出力先（ブラウザ再生が本命。表示クライアントが居なければ ffplay へ落ちる）

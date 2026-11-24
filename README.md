@@ -140,6 +140,28 @@ scripts\start-gpt-sovits.bat   # :9880 で待受（モデルのロードに数�
   を含むため、古いプロセスが残っているとそのメモリ上の設定で `settings.toml` が上書きされます
   （`SMOKE_NO_PATCH=1 npm run smoke` で PATCH をスキップできます）
 
+### 声質変換（RVC・任意）
+
+GPT-SoVITS の声を RVC のモデルでさらに寄せられます（`[tts.voice_conversion]`）。
+**既定は有効**で、モデル未設定なら自動でスキップします（素の GPT-SoVITS の声で読みます）。
+
+```powershell
+scripts\start-rvc-worker.bat   # :9890 で待受（初回はモデルのロード + ウォームアップで 25 秒ほど）
+```
+
+```toml
+[tts.voice_conversion]
+enabled = true
+endpoint = "http://127.0.0.1:9890"
+model_path = "D:/LLMProjects/RVCMultilingual/models/imadaMio.pth"
+index_path = "D:/LLMProjects/RVCMultilingual/models/imadaMio_v2.index"
+index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms）。品質優先なら 0.75
+```
+
+- ⚠️ **モデルの権利は自分で確認してください**。実在の人物の声を学習したモデルを公開・配布すると権利侵害になります
+  （このリポジトリはモデルを同梱しません）
+- 設計・実測・`index_rate` の比較: [docs/RVC_PLAN.md](docs/RVC_PLAN.md)
+
 - 「聞き取り開始」で発話待ちに入ります（`conversation.auto_start = true` なら起動直後から待機）
 - テキスト欄からも会話できます（STT をスキップ）
 - 発話が終わると自動で区切られ、認識 → 応答生成 → 読み上げまで進みます

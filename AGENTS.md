@@ -146,8 +146,8 @@ src/backend/index.ts                                ← Composition Root（DI �
     - **`TtsRouter.synthesize()` は必ず 16bit PCM モノラルへ正規化してから返す**（口パクの `buildVolumeEnvelope()` は
       16bit 以外を解析できず、`volumes=[]` になる）。RVC / 44.1kHz / 32bit float を挟むときは特に注意
     - `tts.en.engine=gpt_sovits` は参照音声（1〜5 秒）とその書き起こしが必要。声の権利（VOICEVOX 音源の学習可否）は規約を確認する
-    - 実測は `npm run spike:tts`（合成時間・RTF・VRAM）。**B 案（多言語 TTS で声質統一）→ RVC 検証**の順で進める
-      （手順: `docs/TTS_MULTILINGUAL.md`）
+    - 実測は `npm run spike:tts`（合成時間・RTF・VRAM）。B 案（多言語 TTS で声質統一）は成立し、
+      **RVC も実装済み**（12-17）（手順: `docs/TTS_MULTILINGUAL.md`）
 
 12-16. **B 案（日英で同じ声）は GPT-SoVITS で成立（2026-11 実測）**。RTF 0.45（ja）/ 0.49（en）・
     ja↔en の MFCC 類似度 1.000。**`npm run spike:tts` も `[tts.ja]` を見る**ようにした（以前は ja=VOICEVOX 固定）。
@@ -160,6 +160,21 @@ src/backend/index.ts                                ← Composition Root（DI �
       venv に torch を入れて torchaudio と不整合になる → `pip uninstall -y torch torchvision torchaudio` で
       system（2.7.1+cu126）を使わせる
     - 参照音声は `assets/voices/`（gitignore 済み）。**権利が確認できる音声のみ**使う（VOICEVOX 音源は規約を確認）
+
+12-17. **声質変換（RVC）は `VoiceConversionService` + 常駐ワーカー（`scripts/rvc_worker.py`）**
+    `TtsRouter.synthesize()` が**正規化の後**に `tts.voice_conversion` を見て挟む（文単位）。
+    - **変換条件はすべて設定から渡す**（`index_rate` / `pitch` / `f0_method` / `protect` / `model_path` /
+      `index_path`）。ワーカーに既定値を埋め込まない。既定は **`index_rate = 0`**（実測で 0.75 の約 2 倍速い）
+    - `sanitize.ts` の `clampVoiceConversion()` が範囲を守る
+      （`index_rate` 0..1 / `protect` 0..0.5 / `pitch` -24..24 / `f0_method` は rmvpe・harvest・crepe・pm）
+    - **無効・失敗時は元の WAV を返す**（無音にしない）。`enabled=true` でも `model_path` が空なら
+      1 回だけ警告して素通しする（既定 ON なので、モデル未選択は正常な初期状態）
+    - RVC の出力は **40kHz**。`normalizeWav` で 16kHz/16bit/mono に戻す（口パクの `volumes` の前提）
+    - ワーカーは**常駐 + ウォームアップ**が前提（`rvc_python` の初回推論は 22.7 秒）。起動は
+      `scripts\start-rvc-worker.bat`（`RVCMultilingual\venv` を使う）。`/health` の `warm=true` を確認する
+    - `index_path` を空にすると index なし（`index_rate` が効かない）。**`imadaMio` は `.pth` と `_v2.index` で
+      名前が違う**ので明示する（`.pth` → `.index` の自動ペアリングは未実装）
+    - **モデルは権利を確認したものだけ使う**（`imadaMio` は実在の人物。ローカル検証のみで公開しない）
 
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
@@ -232,7 +247,8 @@ src/backend/index.ts                                ← Composition Root（DI �
   Qwen3-TTS は声は揃うが RTF 3.45 で不採用（`docs/TTS_MULTILINGUAL.md` の §0〜§3）。
   受け入れ条件は**言語切替・英語応答・`speech_reset`・口パクの `volumes`・初声の土台**まで検証済み
   （残りは実画面の目視）。**英語モードの人格は「日本にいる英語教師」**（`config/characters/sakura.en.toml`）。
-  **次の作業**は RVC（`[tts.voice_conversion]`）の検証
+  **RVC（`[tts.voice_conversion]`）は実装済み**（12-17。既定 ON・`index_rate=0`）。
+  残りは実画面での口パクと初声の体感確認
 - **残作業のバックログは `docs/TODO.md` に集約**（優先度・受け入れ条件・見積つき）。作業を終えたら同ファイルから削除し、
   この節と README を更新する。
 

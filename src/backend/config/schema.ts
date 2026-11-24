@@ -495,13 +495,17 @@ export const DEFAULT_CONFIG: AppConfig = {
     },
     ja: {},
     voice_conversion: {
-      enabled: false,
+      // RVC は既定で有効。モデル未設定・ワーカー未起動なら自動でスキップして素の声で読む
+      enabled: true,
       endpoint: "http://127.0.0.1:9890",
       model_path: "",
+      // 空なら `.pth` から自動ペアリング（<name>.index → <name>_v2.index → <name>*.index）
       index_path: "",
       pitch: 0,
       f0_method: "rmvpe",
-      index_rate: 0.75,
+      // index は「学習データの声にさらに寄せる」補助。実測: 0 は 0.75 の約 2 倍速い
+      // （RTF 0.053 vs 0.106）。0.5〜1.0 の速度差はほぼない。品質優先なら 0.75
+      index_rate: 0,
       protect: 0.33,
       timeout_seconds: 60,
     },

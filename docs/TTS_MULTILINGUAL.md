@@ -371,15 +371,23 @@ A small tip: we say "I went" instead of "I goed." What was your favorite thing y
 
 ---
 
-## 5. RVC の検証（B の成功後）
+## 5. RVC（声質変換・実装済み）
 
-B 案で声質が足りない場合のみ、`[tts.voice_conversion]` を有効化して RVC を挟みます。
+B 案で声質が足りない場合に、`[tts.voice_conversion]` で RVC を挟めます。**既定は有効**で、
+モデル未設定・ワーカー未起動なら自動でスキップします。
 
-- ワーカーは **常駐**（参考実装は 1 回ごとに `RVCInference` を生成してモデルをロードするため 1〜3 秒/文損する）
-- API: `POST /convert` `{ "wav_base64": "...", "pitch": 0, "index_rate": 0.75 }` → `{ "wav_base64": "..." }`
-- 出力は **16bit PCM モノラル**（口パクの前提）。44.1kHz のままで良い（再生側は任意レート対応）
-- 固定ファイル名（`rvc_input.wav`）を使わない（同時発話・複数タブで競合する）
-- 計測は `npm run spike:tts` と `nvidia-smi` で、変換込みの RTF を測る
+- 実装: `VoiceConversionService` + 常駐ワーカー `scripts/rvc_worker.py`（FastAPI。起動は
+  `scripts\start-rvc-worker.bat`）。`TtsRouter.synthesize()` が**正規化の後**（文単位）に挟む
+- 変換条件（`index_rate` / `pitch` / `f0_method` / `protect` / `model_path` / `index_path`）は
+  **すべて設定から渡す**（ワーカーに既定値を埋めない）。範囲は `sanitize.ts` の
+  `clampVoiceConversion()` が守る（`index_rate` 0..1 / `protect` 0..0.5 / `pitch` -24..24）
+- API: `POST /convert` `{ wav_base64, index_rate, pitch, f0_method, protect, model, index }`
+  → `{ wav_base64 }` / `GET /health` の `warm` でウォームアップ済みを判定 / `POST /model` で切替
+- 出力は **40kHz**（RVC ネイティブ）。`normalizeWav` で 16kHz/16bit/mono に戻す
+- 失敗時は**元の WAV を返す**（無音にしない）
+- 実測（RTX 3060 / `imadaMio` / 1 秒音声・ウォームアップ済み）: `index_rate=0` で **234–257ms**、
+  `0.75` で **535ms**（初回のみ index のロードで +650ms）。既定は **0**
+- 詳細は [RVC_PLAN.md](RVC_PLAN.md)
 
 ---
 

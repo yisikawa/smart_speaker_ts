@@ -1,6 +1,6 @@
 # 残作業（TODO / バックログ）
 
-最終更新: 2026-11-24（v0.3.0 / B 案＝GPT-SoVITS による日英同一音声を実装・実測。次は RVC）
+最終更新: 2026-11-24（v0.3.0 / B 案＝GPT-SoVITS と RVC 声質変換を実装・実測。`index_rate` の既定は 0）
 
 このファイルは「**まだ終わっていない作業**」の一覧です。完了した項目は削除し、
 `AGENTS.md` の「現在の状態」と README を更新してください（履歴は Git のコミットに残します）。
@@ -25,8 +25,6 @@
 | 1-3 | **エコー対策の本命（WebAudio 再生）** | **ブラウザ再生（`audio.playback_target = "browser"`）を実装済み**。`getUserMedia` の `echoCancellation` が効く構成になった。残りは実測（3 往復で誤検知 0）と `barge_in_enabled` の既定 ON 化 | `config/profiles/vtuber-rtx3060.toml` で既定 ON にして 3 往復の誤検知 0 を確認し、README / `AGENTS.md` を更新 | 0.5 日 |
 | 1-4 | **CI（`npm run verify` の自動実行）** | 手元実行のみ。壊れた状態が main に入り得る | GitHub Actions で push/PR 時に `npm ci && npm run verify` が走る。Windows ランナーか ubuntu（ネイティブ依存なしで通ること）を確認 | 0.5 日 |
 | 1-5 | **リリース手順の自動化** | バージョン更新は `package.json` / `package-lock.json` / ドキュメントを手で直している | `npm version` 相当のスクリプト（または手順書）で 4 箇所が一括更新される。`tests` でバージョン整合を検証 | 0.5 日 |
-| 1-6 | **RVC（声質変換）の検証**（**提案: `docs/RVC_PLAN.md`**） | B 案（GPT-SoVITS）は成立: ja/en 同一音声・RTF 0.45/0.49。`[tts.voice_conversion]` は設定だけで未実装。**実測済み**: `imadaMio` で load 2.6s / 初回 22.7s / 2回目以降 RTF 0.11 / 出力 40kHz / VRAM +0.7GB | 常駐ワーカー `scripts/rvc_worker.py`（起動時ウォームアップ）を作り、`TtsRouter` の後段で変換。`spike:tts --rvc` で変換込み RTF < 0.7 を確認。**権利**: 実在の人物の声はローカル検証のみ | 2 日 |
-
 ### P2: 余裕があれば
 
 | # | 項目 | 現状 / 理由 | 受け入れ条件 | 見積 |
