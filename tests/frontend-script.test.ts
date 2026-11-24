@@ -398,6 +398,21 @@ test("設定メニューで STT を sherpa に切り替えるとエンジンと�
   });
 });
 
+test("応答中（thinking/speaking など）は言語切替を送らない", async () => {
+  const { elements, ws, fetchCalls } = bootApp();
+  ws?.onopen?.();
+  ws?.onmessage?.({ data: JSON.stringify({ ...HELLO, state: "speaking" }) });
+
+  elements.get("languageSelect")!.value = "en";
+  elements.get("languageSelect")!.trigger("change");
+  await flush();
+
+  const patch = fetchCalls.find((call) => call.method === "PATCH" && call.path === "/api/config");
+  assert.equal(patch, undefined, "応答中は PATCH しない");
+  assert.equal(elements.get("languageSelect")!.value, "ja", "表示は元に戻る");
+  assert.match(elements.get("toast")!.textContent, /応答中は言語を切り替えられません/);
+});
+
 test("言語セレクトの変更で PATCH /api/config が送られる（言語モード切替）", async () => {
   const { elements, ws, fetchCalls } = bootApp();
   ws?.onopen?.();

@@ -143,6 +143,19 @@ test("TtsRouter は英語モードで合成結果を正規化して返す", asyn
   }
 });
 
+test("normalizeWav は変換失敗を onError で通知し、元の Buffer を返す", async () => {
+  const bad = Buffer.from("not a wav");
+  let captured: unknown = null;
+  const result = await normalizeWav(bad, {
+    timeoutMs: 5000,
+    onError: (error) => {
+      captured = error;
+    },
+  });
+  assert.equal(result, bad, "失敗時は元の Buffer を返す（無音にしない）");
+  assert.ok(captured instanceof Error, "失敗は握りつぶさず通知する");
+});
+
 test("normalizeWav は 16bit PCM モノラルをそのまま返す", async () => {
   const wav = makeWav({ ms: 30 });
   assert.equal(isPcm16MonoWav(wav), true);

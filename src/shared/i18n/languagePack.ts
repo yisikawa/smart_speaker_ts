@@ -232,6 +232,10 @@ export function isAbbreviationAt(text: string, endIndex: number, abbreviations: 
   if (!segment) {
     return false;
   }
+  // 「1st.」のように数字に続く語尾は略語ではない
+  if (start > 0 && /[0-9]/.test(text[start - 1])) {
+    return false;
+  }
   if (abbreviations.includes(segment)) {
     return true;
   }

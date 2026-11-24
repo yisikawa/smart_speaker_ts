@@ -6,7 +6,7 @@ import { GptSovitsTtsService } from "./GptSovitsTtsService";
 import { OpenAiSpeechTtsService } from "./OpenAiSpeechTtsService";
 import { VoicevoxTtsService } from "./VoicevoxTtsService";
 import { describeProfile, resolveJaProfile } from "./ttsProfiles";
-import { normalizeWav } from "./wavNormalize";
+import { normalizeWav, NormalizeWavOptions } from "./wavNormalize";
 
 interface ResolvedTts {
   signature: string;
@@ -36,7 +36,7 @@ export class TtsRouter implements TextToSpeech {
       config: ConfigManager;
       logger?: Logger;
       /** 正規化の差し替え（テスト用） */
-      normalize?: (wav: Buffer, options: { ffmpegPath?: string; signal?: AbortSignal }) => Promise<Buffer>;
+      normalize?: (wav: Buffer, options: NormalizeWavOptions) => Promise<Buffer>;
     }
   ) {
     this.logger = deps.logger ?? new Logger("TTS");
@@ -78,6 +78,8 @@ export class TtsRouter implements TextToSpeech {
     return normalize(wav, {
       ffmpegPath: this.deps.config.getAudio().ffmpeg_path,
       signal: options.signal,
+      onError: (error) =>
+        this.logger.warn("WAV を 16bit PCM へ変換できませんでした（口パクが無効になります）", error),
     });
   }
 

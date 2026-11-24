@@ -1,4 +1,5 @@
 import type {
+  AssistantState,
   ClientCommand,
   DiagnosticsReport,
   HelloPayload,
@@ -42,6 +43,8 @@ class SumikaApp {
   private inputMode: "browser" | "server" = "browser";
   /** 現在の応答言語（hello / language 通知で更新） */
   private language: LanguageMode = "ja";
+  /** 現在の状態（言語切替を禁止する判定に使う） */
+  private assistantState: AssistantState = "idle";
   /** 診断パネルを開いているか */
   private diagnosticsOpen = false;
 
@@ -160,6 +163,12 @@ class SumikaApp {
    * 全クライアントへ `language` 通知を配る（ここでは楽観的に表示も更新する）。
    */
   private async changeLanguage(language: LanguageMode): Promise<void> {
+    // 応答中に切り替えると、残りの文が新しい言語の声で読まれてしまう
+    if (this.assistantState !== "idle") {
+      this.view.languageSelect.value = this.language;
+      this.view.showToast("応答中は言語を切り替えられません（停止してから切り替えてください）", "info");
+      return;
+    }
     try {
       const res = await fetch("/api/config", {
         method: "PATCH",
@@ -211,6 +220,7 @@ class SumikaApp {
         this.applyHello(message);
         break;
       case "state":
+        this.assistantState = message.state;
         this.view.setState(message.state);
         break;
       case "history":
@@ -246,6 +256,7 @@ class SumikaApp {
     this.view.renderHistory(hello.history);
     this.view.renderServices(hello.services, hello.audio.inputMode, hello.models);
     this.settings.updateSelection(hello.models);
+    this.assistantState = hello.state;
     this.view.setState(hello.state);
     if (hello.audio.playbackTarget === "browser") {
       this.audioPlayer = new AudioPlayer({ send: (command) => this.send(command) });
@@ -271,6 +282,7 @@ class SumikaApp {
     const view = this.view;
     switch (event.type) {
       case "state":
+        this.assistantState = event.state;
         view.setState(event.state);
         // 中断（停止ボタン等）で llm_complete が来なかった場合、途中までの吹き出しが残る。
         // そのままにすると次の応答が古い吹き出しへ追記されるため、ここで切り離す。

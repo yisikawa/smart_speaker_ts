@@ -222,7 +222,8 @@ export class AppServer {
         return;
       }
       this.lastLanguage = language;
-      this.notifyLanguage();
+      // character.reload() が終わってから配る（PATCH /api/config は update → reload の順のため）
+      setImmediate(() => this.notifyLanguage());
     });
 
     await new Promise<void>((resolve, reject) => {

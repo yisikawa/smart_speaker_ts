@@ -73,6 +73,12 @@ test("isAbbreviationAt は語尾の略語だけを検出する", () => {
   assert.equal(isAbbreviationAt(text, text.length - 1, abbreviations), false);
 });
 
+test("isAbbreviationAt は数字に続く語尾を略語扱いしない", () => {
+  const text = "He finished 1st. Then he left.";
+  const dot = text.indexOf("st.") + 2;
+  assert.equal(isAbbreviationAt(text, dot, ["st"]), false);
+});
+
 test("言語ガードはモードに応じて禁止文字が変わる", () => {
   assert.equal(containsDisallowedScript("こんにちは", "ja"), false);
   assert.equal(containsDisallowedScript("안녕하세요", "ja"), true);

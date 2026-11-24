@@ -26,11 +26,14 @@ export interface NormalizeWavOptions {
   /** 変換タイムアウト（ms） */
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** 変換に失敗したときの通知（口パクが無効になるため、呼び出し側でログに出す） */
+  onError?: (error: unknown) => void;
 }
 
 /**
  * 16bit PCM モノラルでなければ ffmpeg で変換する。
  * 変換に失敗した場合は元の Buffer を返す（無音にはせず、口パクだけ諦める）。
+ * 失敗は `options.onError` で通知する（握りつぶすと原因が追えない）。
  */
 export async function normalizeWav(
   wav: Buffer,
@@ -41,7 +44,8 @@ export async function normalizeWav(
   }
   try {
     return await convertWithFfmpeg(wav, options);
-  } catch {
+  } catch (error) {
+    options.onError?.(error);
     return wav;
   }
 }
