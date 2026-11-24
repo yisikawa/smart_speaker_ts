@@ -13,10 +13,13 @@
    - 起動時にモデルをロードし、**ウォームアップまで済ませる**
    - `POST /convert` で **base64 WAV を受けて base64 WAV を返す**（同期・直列）
    - 出力は **16kHz / 16bit / モノラル** に整える（口パク・VAD の前提）
-2. Node 側は `VoiceConversionService` を追加し、**`TtsRouter.synthesize()` の後段**に挟む
-   （`tts.voice_conversion.enabled = true` のときだけ）
-3. 失敗時は**元の WAV を返す**（無音にしない）＋ warn ログ
-4. テストは **`imadaMio.pth` + `imadaMio_v2.index`**（`D:\LLMProjects\RVCMultilingual\models`）
+2. **変換は文単位**（`TtsRouter.synthesize()` の後段）。理由は §3.1 の比較を参照
+3. **RVC を既定 ON**（`tts.voice_conversion.enabled = true`）。B 案（GPT-SoVITS）の声を
+   RVC で寄せる構成を標準にする（モデル未設定・ワーカー未起動なら自動でスキップして素の声で読む）
+4. **画面から RVC モデルを切り替えるトグル**を追加する（§4 の `GET /api/models` の `rvc` +
+   `PUT /api/models/rvc`）。切替時はワーカーに再ロードを指示する（2.6 秒 + 再ウォームアップ）
+5. 失敗時は**元の WAV を返す**（無音にしない）＋ warn ログ
+6. テストは **`imadaMio.pth` + `imadaMio_v2.index`**（`D:\LLMProjects\RVCMultilingual\models`）
 
 ---
 
@@ -68,6 +71,26 @@
 - ワーカーは **`RVCMultilingual/venv`** を使う（`fastapi` / `uvicorn` / `rvc-python` / `torch 2.5.1` 導入済み）
 - Node 側は既存の `NormalizeWavOptions` と同じ流儀（失敗時は元を返す）
 
+### 3.1 文単位 vs ターン単位（どちらで変換するか）
+
+| 観点 | **文単位（採用）** | ターン単位 |
+|---|---|---|
+| **初声** | **約 1.85 秒**（24 字の合成 1.3s + 変換 0.55s） | **約 5〜12 秒**（全文合成 + 全文変換） |
+| 変換回数 | 文の数（3 文なら 3 回） | 1 回 |
+| 固定オーバーヘッド | 3 回 × 約 50ms = 150ms（HTTP + tempfile） | 50ms |
+| 文間の待ち | **`prefetch_depth=2` で隠せる**（再生中に次を合成＋変換） | 発生しない（全部先に変換） |
+| 声質の一貫性 | 文ごとに F0 推定（短い文は揺れやすい） | **完全に一貫**（長い音声で F0 が安定） |
+| 中断（停止・バージイン） | **即座に止まる**（残りは変換しない） | 全文変換が終わるまで始められない |
+| 実装 | `TtsRouter` の後段に足すだけ | 全文を連結して変換し、再分割する必要がある |
+
+**数字の根拠**（実測）: GPT-SoVITS 24 字 = 1.3 秒 / 45 字 = 3.36 秒、RVC は 5.06 秒の音声で 0.55 秒（RTF 0.11）。
+`max_sentence_chars = 24` は**約 5 秒の音声**になるため、RVC の F0 推定にも十分な長さ（品質面でも有利）。
+
+**結論**: **文単位**。初声の差（1.85 秒 vs 5〜12 秒）が決定的で、会話では 5 秒の無音は成立しない。
+ターン単位が有利なのは「録音・配信で品質最優先」「中断しない」場合なので、必要になったら
+`tts.voice_conversion.mode = "turn"` を追加する（今回のスコープ外）。
+
+
 ---
 
 ## 4. 変更ファイル
@@ -81,6 +104,41 @@
 | 変更 | `config/settings.default.toml` | `[tts.voice_conversion]` のコメントにモデル例を追記 |
 | 変更 | `scripts/spike-tts.js` | `--rvc` で変換込みの RTF を測れるようにする（任意） |
 | 変更 | `docs/TTS_MULTILINGUAL.md` §5 | 手順と実測を追記 |
+| 変更 | `src/backend/config/schema.ts` | `voice_conversion.enabled` の既定を **true** に。`models_dir` を追加 |
+| 変更 | `src/shared/protocol.ts` | `ModelCatalog` に `rvc`（`current` / `models[]`）を追加 |
+| 変更 | `src/backend/services/modelCatalog.ts` | `.pth` と `.index` の**ペア列挙**（純粋関数 + テスト） |
+| 変更 | `src/backend/server/ApiRouter.ts` | `PUT /api/models/rvc`（設定保存 + ワーカーへ再ロード指示） |
+| 変更 | `src/frontend/SettingsPanel.ts` | 「RVC モデル」セレクトと ON/OFF トグル |
+| 新規 | `tests/rvc-model-catalog.test.ts` | ペアリング（`imadaMio.pth` ↔ `imadaMio_v2.index`）のテスト |
+
+### 4.1 モデル切替の仕様
+
+**既定**: `tts.voice_conversion.enabled = true`（RVC を標準構成にする）。
+モデル未設定・ワーカー未起動なら**自動でスキップ**し、素の TTS の声で読む（警告 1 回）。
+
+`GET /api/models` に追加する `rvc`:
+
+```json
+{
+  "rvc": {
+    "enabled": true,
+    "current": { "modelPath": "D:\\LLMProjects\\RVCMultilingual\\models\\imadaMio.pth",
+                 "indexPath": "D:\\LLMProjects\\RVCMultilingual\\models\\imadaMio_v2.index" },
+    "models": [
+      { "path": "...\\imadaMio.pth", "indexPath": "...\\imadaMio_v2.index", "label": "imadaMio", "sizeBytes": 55224320 }
+    ]
+  }
+}
+```
+
+**ペアリング規則**（`modelCatalog.ts` の純粋関数）: `<name>.pth` に対して
+`<name>.index` → `<name>_v2.index` → `<name>*.index` の順に探す（`imadaMio` は `_v2` のみ存在）。
+
+**切替**: `PUT /api/models/rvc` `{ "modelPath": "...", "enabled": true }`
+→ `tts.voice_conversion.model_path` / `enabled` を保存し、ワーカーへ `POST /model` で再ロードを指示する。
+再ロードは 2.6 秒 + 再ウォームアップ（22.7 秒）なので、**画面は「読み込み中」を出して `/health` の
+`warm=true` を待つ**（次の発話から新しい声）。
+
 
 ## 5. API 仕様（ワーカー）
 
@@ -102,6 +160,16 @@
 - 一時ファイルは `tempfile.NamedTemporaryFile(suffix=".wav")`（**固定名を使わない**）
 - 出力（40kHz）は librosa で 16kHz へリサンプルし、16bit PCM モノラルで返す
 - 起動時に **1 回ダミー変換**して `warm=true` にする（22.7 秒を起動時に吸収）
+
+`POST /model`（モデル切替）
+
+```json
+{ "model": "...\\imadaMio.pth", "index": "...\\imadaMio_v2.index" }
+```
+
+→ `200 { "ok": true, "warm": false }`（バックグラウンドで再ロード + 再ウォームアップし、
+`/health` が `warm=true` になったら使える）。切替中は `503` を返し、Node 側は素の声へフォールバックする。
+
 
 ## 6. 実装ステップ（TDD）
 
@@ -142,6 +210,9 @@ npm run spike:tts -- --rvc
 - [ ] 出力 WAV が 16kHz / 16bit / モノラル（`isPcm16MonoWav` が true）
 - [ ] `volumes` が空でない（口パク）
 - [ ] 声が imadaMio になっている（聴いて確認）
+- [ ] 画面の「RVC モデル」で切り替えると、再ロード後に声が変わる
+- [ ] `enabled=false` にすると素の TTS の声に戻る
+- [ ] ワーカーを止めても**無音にならず**、素の声で読む
 
 ## 8. リスクと対策
 
@@ -160,6 +231,8 @@ npm run spike:tts -- --rvc
 ## 9. 受け入れ条件
 
 - [ ] `tts.voice_conversion.enabled = true` で**読み上げの声が変わる**
+- [ ] **既定で RVC が有効**（`enabled = true`）。ワーカー未起動でも素の声で動く（無音にしない）
+- [ ] 画面のトグルで**モデルを切り替えられ**、再ロード後に声が変わる
 - [ ] 変換込みの **RTF < 0.7**（ja / en）
 - [ ] 出力が 16bit PCM モノラルで `volumes` が空でない
 - [ ] 変換失敗時も**無音にならない**（元の WAV にフォールバック）
@@ -172,10 +245,12 @@ npm run spike:tts -- --rvc
 |---|---|---|
 | 1 | `VoiceConversionService` + テスト | 0.5 日 |
 | 2 | `TtsRouter` 統合 + 回帰 | 0.25 日 |
-| 3 | `rvc_worker.py`（常駐・ウォームアップ・16kHz 化） | 0.5 日 |
-| 4 | `spike:tts --rvc` と実測・docs | 0.5 日 |
-| 5 | 権利の注意・README 更新 | 0.25 日 |
-| **合計** | | **2 日** |
+| 3 | `rvc_worker.py`（常駐・ウォームアップ・16kHz 化・`POST /model`） | 0.75 日 |
+| 4 | **モデル列挙（ペアリング）+ `GET /api/models` の `rvc` + `PUT /api/models/rvc`** | 0.5 日 |
+| 5 | **設定 UI（「RVC モデル」セレクト + ON/OFF トグル）** | 0.5 日 |
+| 6 | `spike:tts --rvc` と実測・docs | 0.5 日 |
+| 7 | 権利の注意・README 更新 | 0.25 日 |
+| **合計** | | **3.25 日** |
 
 ## 11. 代替案（採用しない）
 
