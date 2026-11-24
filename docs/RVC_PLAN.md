@@ -104,7 +104,7 @@
 | 変更 | `config/settings.default.toml` | `[tts.voice_conversion]` のコメントにモデル例を追記 |
 | 変更 | `scripts/spike-tts.js` | `--rvc` で変換込みの RTF を測れるようにする（任意） |
 | 変更 | `docs/TTS_MULTILINGUAL.md` §5 | 手順と実測を追記 |
-| 変更 | `src/backend/config/schema.ts` | `voice_conversion.enabled` の既定を **true** に。`models_dir` を追加 |
+| 変更 | `src/backend/config/schema.ts` | `voice_conversion.enabled` の既定を **true**、`models_dir` を追加。`index_path` は「空なら自動ペアリング」に |
 | 変更 | `src/shared/protocol.ts` | `ModelCatalog` に `rvc`（`current` / `models[]`）を追加 |
 | 変更 | `src/backend/services/modelCatalog.ts` | `.pth` と `.index` の**ペア列挙**（純粋関数 + テスト） |
 | 変更 | `src/backend/server/ApiRouter.ts` | `PUT /api/models/rvc`（設定保存 + ワーカーへ再ロード指示） |
@@ -135,6 +135,12 @@
 
 **ペアリング規則**（`modelCatalog.ts` の純粋関数）: `<name>.pth` に対して
 `<name>.index` → `<name>_v2.index` → `<name>*.index` の順に探す（`imadaMio` は `_v2` のみ存在）。
+
+- **UI はモデル（`.pth`）だけを選ばせる**。index は `.pth` から自動で探す
+- `tts.voice_conversion.index_path` は**上書き用の任意項目**（空なら自動ペアリングに従う）
+- 名前が一致しない（`imadaMio.pth` ↔ `imadaMio_v2.index`）ため、2 つを別々に選ばせると**取り違え**が起きる
+- index は無くても動く（`index_rate` が効かなくなるだけ）。公開モデルは `.pth` だけのことも多い
+- **index を効かせたくないときは `index_rate = 0`** にする（ファイル指定では制御しない）
 
 **切替**: `PUT /api/models/rvc` `{ "modelPath": "...", "enabled": true }`
 → `tts.voice_conversion.model_path` / `enabled` を保存し、ワーカーへ `POST /model` で再ロードを指示する。
