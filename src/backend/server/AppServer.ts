@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as http from "http";
 import * as path from "path";
 import type { ModelSelection, ServerMessage, ServiceStatus } from "../../shared/protocol";
+import type { LanguageMode } from "../../shared/i18n/languagePack";
 import { ConfigManager } from "../config/ConfigManager";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
 import { Logger } from "../core/logger";
@@ -43,6 +44,9 @@ export class AppServer {
   private hub: WsHub | null = null;
   /** 依存サービスの疎通（定期更新） */
   private readonly services: ServiceMonitor;
+  /** 言語切り替えの検出用（config.onChange の購読） */
+  private lastLanguage: LanguageMode = "ja";
+  private offConfig: (() => void) | null = null;
 
   constructor(private readonly deps: AppServerDeps) {
     this.logger = deps.logger ?? new Logger("Server");
@@ -174,10 +178,26 @@ export class AppServer {
   /** hello に載せる現在のモデル情報（画面の表示用） */
   private modelSelection(): ModelSelection {
     const sttConfig = this.deps.config.getSTT();
+    const ttsEngine = this.deps.config.getTtsEngineName();
     return {
       stt: { engine: sttConfig.engine, label: this.deps.stt.describe?.() ?? sttConfig.engine },
       llm: { model: this.deps.config.getLLM().model },
+      tts: {
+        engine: ttsEngine,
+        label: this.deps.tts.describe?.() ?? ttsEngine,
+      },
     };
+  }
+
+  /** 言語切り替えを全クライアントへ通知する（キャラクター表示も更新する） */
+  private notifyLanguage(): void {
+    const language = this.deps.config.getLanguage();
+    const character = this.deps.character.get(language);
+    this.broadcast({
+      type: "language",
+      language,
+      character: { name: character.name, label: character.label },
+    });
   }
 
   async start(): Promise<void> {
@@ -192,6 +212,17 @@ export class AppServer {
       serviceStatus: () => this.services.current,
       models: () => this.modelSelection(),
       onAudioPlaybackDone: (utteranceId) => this.deps.playbackAck?.resolveDone(utteranceId),
+    });
+
+    // 言語モードの変更を全クライアントへ通知する（UI の切替表示・キャラクター名の更新）
+    this.lastLanguage = this.deps.config.getLanguage();
+    this.offConfig = this.deps.config.onChange(() => {
+      const language = this.deps.config.getLanguage();
+      if (language === this.lastLanguage) {
+        return;
+      }
+      this.lastLanguage = language;
+      this.notifyLanguage();
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -213,6 +244,8 @@ export class AppServer {
 
   async stop(): Promise<void> {
     this.services.stop();
+    this.offConfig?.();
+    this.offConfig = null;
     if (this.hub) {
       await this.hub.dispose();
       this.hub = null;

@@ -1,9 +1,12 @@
 import type { SkipStats } from "../../shared/protocol";
+import type { LanguageMode } from "../../shared/i18n/languagePack";
 import {
+  hallucinationPatterns,
   isEchoOfReply,
   isHallucination,
   isTooShortFragment,
   normalizeTranscript,
+  shortAllowlist,
 } from "../services/transcriptFilter";
 
 /** 破棄理由（`turn_skipped.reason` としてクライアントへ渡す） */
@@ -37,6 +40,37 @@ export class SpeechGate {
   private readonly skipCounts: SkipStats = { hallucination: 0, short: 0, echo: 0, repeat: 0 };
   /** 直近に破棄した内容 */
   private lastSkipped: { reason: SkipReason; text: string; at: number } | null = null;
+  /** 言語モード別の判定テーブル（毎回作り直さない） */
+  private readonly patterns = new Map<LanguageMode, RegExp[]>();
+  private readonly allowlists = new Map<LanguageMode, Set<string>>();
+
+  /**
+   * @param options.language 現在の言語モード（実行中に切り替わるため関数で受け取る）
+   */
+  constructor(private readonly options: { language?: () => LanguageMode } = {}) {}
+
+  /** 現在の言語モード（未指定なら日本語） */
+  private get language(): LanguageMode {
+    return this.options.language?.() ?? "ja";
+  }
+
+  private patternsFor(mode: LanguageMode): RegExp[] {
+    let value = this.patterns.get(mode);
+    if (!value) {
+      value = hallucinationPatterns(mode);
+      this.patterns.set(mode, value);
+    }
+    return value;
+  }
+
+  private allowlistFor(mode: LanguageMode): Set<string> {
+    let value = this.allowlists.get(mode);
+    if (!value) {
+      value = shortAllowlist(mode);
+      this.allowlists.set(mode, value);
+    }
+    return value;
+  }
 
   /** 破棄の内訳（`/api/diagnostics` とログで同じ数字を使う） */
   get stats(): SkipStats {
@@ -76,12 +110,13 @@ export class SpeechGate {
 
   /** 実際の判定（破棄理由を返す） */
   private judge(text: string): GateDecision {
+    const language = this.language;
     // 定型句の幻聴（STT 実装に依存しない二重の保険）
-    if (isHallucination(text)) {
+    if (isHallucination(text, this.patternsFor(language))) {
       return { kind: "skip", reason: "hallucination", message: `幻聴と判定したため破棄します: ${text}` };
     }
     // 意味のない短い断片（環境音・自分の声の拾い）
-    if (isTooShortFragment(text)) {
+    if (isTooShortFragment(text, this.allowlistFor(language))) {
       return { kind: "skip", reason: "short", message: `短すぎる認識結果のため破棄します: ${text}` };
     }
     // 自分の声（スピーカー出力）を拾った場合

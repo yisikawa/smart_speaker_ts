@@ -112,6 +112,7 @@ const ELEMENT_IDS = [
   "inputDevice",
   "toast",
   "btnSettings",
+  "languageSelect",
   "settingsPanel",
   "sttEngine",
   "sttModel",
@@ -219,6 +220,7 @@ const HELLO = {
   state: "idle",
   history: [],
   character: { name: "さくら", label: "明るい" },
+  language: "ja",
   user: "You",
   version: "0.3.0",
   services: { llm: true, tts: true, stt: true },
@@ -394,4 +396,25 @@ test("設定メニューで STT を sherpa に切り替えるとエンジンと�
     sherpa_model_dir: "models/sherpa-ctc",
     sherpa_model_type: "nemo_ctc",
   });
+});
+
+test("言語セレクトの変更で PATCH /api/config が送られる（言語モード切替）", async () => {
+  const { elements, ws, fetchCalls } = bootApp();
+  ws?.onopen?.();
+  ws?.onmessage?.({ data: JSON.stringify(HELLO) });
+  assert.equal(elements.get("languageSelect")!.value, "ja", "hello の言語が選択される");
+
+  elements.get("languageSelect")!.value = "en";
+  elements.get("languageSelect")!.trigger("change");
+  await flush();
+
+  const patch = fetchCalls.find((call) => call.method === "PATCH" && call.path === "/api/config");
+  assert.deepEqual(patch?.body, { conversation: { language: "en" } });
+  assert.match(elements.get("toast")!.textContent, /English/);
+
+  // サーバーからの language 通知で表示（セレクト・キャラクター名）が更新される
+  ws?.onmessage?.({
+    data: JSON.stringify({ type: "language", language: "en", character: { name: "Sakura", label: "Cheerful" } }),
+  });
+  assert.equal(elements.get("characterName")!.textContent, "Sakura");
 });

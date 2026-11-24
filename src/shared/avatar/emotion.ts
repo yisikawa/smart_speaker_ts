@@ -1,3 +1,5 @@
+import type { EmotionVocabulary } from "../i18n/languagePack";
+
 export type EmotionKey = "happy" | "angry" | "sad" | "surprised" | "shy" | "thinking";
 
 /** プロンプトに出すタグ → 意味キー */
@@ -12,8 +14,8 @@ export const EMOTION_TAGS: Record<string, EmotionKey> = {
 
 const TAG_PATTERN = /\[([^\]]{1,12})\]/g;
 
-/** 推定に使う語彙（上から順に判定する） */
-const HEURISTICS: { key: EmotionKey; words: string[] }[] = [
+/** 推定に使う語彙（上から順に判定する）。言語パックから差し替えられる */
+const HEURISTICS: EmotionVocabulary[] = [
   { key: "surprised", words: ["えっ", "まさか", "本当", "びっくり", "！？", "?!"] },
   { key: "angry", words: ["むかつ", "ふざけ", "ダメ", "だめ", "怒"] },
   { key: "sad", words: ["ごめん", "残念", "悲し", "つらい", "寂し"] },
@@ -21,6 +23,7 @@ const HEURISTICS: { key: EmotionKey; words: string[] }[] = [
   { key: "happy", words: ["ありがとう", "うれし", "嬉し", "楽しい", "やった", "すごい", "いいね"] },
   { key: "thinking", words: ["どうしよ", "たぶん", "かな", "考え"] },
 ];
+
 
 export interface EmotionExtraction {
   /** タグを除去した読み上げ用テキスト */
@@ -39,7 +42,7 @@ export interface EmotionExtraction {
 export function extractEmotion(
   text: string,
   expressions: Record<string, string>,
-  options: { heuristic?: boolean } = {}
+  options: { heuristic?: boolean; vocabulary?: EmotionVocabulary[] } = {}
 ): EmotionExtraction {
   let key: EmotionKey | null = null;
   const stripped = text.replace(TAG_PATTERN, (_match, raw: string) => {
@@ -51,7 +54,7 @@ export function extractEmotion(
   });
 
   if (!key && options.heuristic) {
-    key = inferEmotion(stripped);
+    key = inferEmotion(stripped, options.vocabulary);
   }
 
   const expression = key ? expressions[key] || null : null;
@@ -68,8 +71,11 @@ export function resolveKey(raw: string): EmotionKey | null {
 }
 
 /** 文から感情を推定する（見つからなければ null） */
-export function inferEmotion(text: string): EmotionKey | null {
-  for (const rule of HEURISTICS) {
+export function inferEmotion(
+  text: string,
+  vocabulary: EmotionVocabulary[] = HEURISTICS
+): EmotionKey | null {
+  for (const rule of vocabulary) {
     if (rule.words.some((word) => text.includes(word))) {
       return rule.key;
     }

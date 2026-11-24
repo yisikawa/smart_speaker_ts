@@ -2,9 +2,11 @@ import type {
   ClientCommand,
   DiagnosticsReport,
   HelloPayload,
+  LanguageMode,
   PipelineEvent,
   ServerMessage,
 } from "../shared/protocol";
+import { getLanguagePack, isLanguageMode } from "../shared/i18n/languagePack";
 import { ChatView } from "./ChatView";
 import { AudioPlayer } from "./AudioPlayer";
 import { LipSyncDriver } from "./avatar/LipSyncDriver";
@@ -38,6 +40,8 @@ class SumikaApp {
   private caption = "";
   /** 現在の音声入力方式（hello で更新。疎通表示に使う） */
   private inputMode: "browser" | "server" = "browser";
+  /** 現在の応答言語（hello / language 通知で更新） */
+  private language: LanguageMode = "ja";
   /** 診断パネルを開いているか */
   private diagnosticsOpen = false;
 
@@ -115,6 +119,12 @@ class SumikaApp {
     view.btnDiagnostics.addEventListener("click", () => {
       void this.showDiagnostics();
     });
+    view.languageSelect.addEventListener("change", () => {
+      const next = view.languageSelect.value;
+      if (isLanguageMode(next)) {
+        void this.changeLanguage(next);
+      }
+    });
     view.inputEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
@@ -141,6 +151,38 @@ class SumikaApp {
     if (!this.ws.send(command)) {
       this.view.showToast("サーバーに接続されていません", "error");
     }
+  }
+
+  /**
+   * 言語モードを切り替える（設定へ保存し、次回以降の発話から有効）。
+   *
+   * サーバーは config 変更を検知して STT / TTS を再構成し、
+   * 全クライアントへ `language` 通知を配る（ここでは楽観的に表示も更新する）。
+   */
+  private async changeLanguage(language: LanguageMode): Promise<void> {
+    try {
+      const res = await fetch("/api/config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation: { language } }),
+      });
+      if (!res.ok) {
+        throw new Error(`/api/config が ${res.status} を返しました`);
+      }
+      this.applyLanguage(language);
+      const pack = getLanguagePack(language);
+      this.view.showToast(pack.ui.switchedToast(pack.label), "info");
+    } catch (error) {
+      // 失敗したら表示を元へ戻す
+      this.view.languageSelect.value = this.language;
+      this.view.showToast(`言語を切り替えられませんでした: ${errorText(error)}`, "error");
+    }
+  }
+
+  /** 言語表示（セレクト・キャラクター名）を反映する */
+  private applyLanguage(language: LanguageMode): void {
+    this.language = language;
+    this.view.languageSelect.value = language;
   }
 
   /** 診断情報（/api/diagnostics）を取得して表示する。もう一度押すと閉じる */
@@ -174,6 +216,10 @@ class SumikaApp {
       case "history":
         this.view.renderHistory(message.messages);
         break;
+      case "language":
+        this.applyLanguage(message.language);
+        this.view.setCharacter(message.character.name, message.character.label);
+        break;
       case "event":
         this.handleEvent(message.event);
         break;
@@ -188,6 +234,7 @@ class SumikaApp {
   private applyHello(hello: HelloPayload): void {
     this.ws.helloReceived();
     this.view.setServicesText("");
+    this.applyLanguage(hello.language ?? "ja");
     this.view.setNames(hello.character.name, hello.user);
     this.view.setCharacter(hello.character.name, hello.character.label);
     this.view.setVersion(hello.version);
@@ -270,7 +317,7 @@ class SumikaApp {
         this.audioPlayer?.enqueue(event);
         break;
       case "speech_reset":
-        view.addSystemNote("日本語で生成し直しています…");
+        view.addSystemNote(getLanguagePack(this.language).prompt.speechResetNote);
         break;
       case "speaking_finished":
         view.setFace("🌸");

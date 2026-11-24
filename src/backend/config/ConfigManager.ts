@@ -10,6 +10,7 @@ import {
   DEFAULT_CONFIG,
   GUIConfig,
   HomeAssistantConfig,
+  LanguageMode,
   LLMConfig,
   MusicConfig,
   ProactiveSpeechConfig,
@@ -17,6 +18,7 @@ import {
   RecipeDBConfig,
   STTConfig,
   TTSConfig,
+  TtsEngineName,
   WakewordConfig,
 } from "./schema";
 import { stringifyToml } from "./tomlSerializer";
@@ -180,8 +182,30 @@ export class ConfigManager {
     return this.config.conversation;
   }
 
+  /** 現在の応答言語（ja / en） */
+  getLanguage(): LanguageMode {
+    return this.config.conversation.language;
+  }
+
+  /**
+   * 現在の言語モードに合わせた STT 設定。
+   *
+   * 英語モードでは `[stt.en]` の指定を上書きとして合成する。
+   * ここを唯一の入口にすることで、Whisper / Sherpa の実装は
+   * 言語モードを意識せずに済む（`SttSwitcher` の署名もこれで変わる）。
+   */
   getSTT(): STTConfig {
-    return this.config.stt;
+    if (this.config.conversation.language !== "en") {
+      return this.config.stt;
+    }
+    const { en, ...base } = this.config.stt;
+    const merged: STTConfig = { ...base, en };
+    for (const [key, value] of Object.entries(en ?? {})) {
+      if (value !== undefined && value !== null) {
+        (merged as unknown as Record<string, unknown>)[key] = value;
+      }
+    }
+    return merged;
   }
 
   getLLM(): LLMConfig {
@@ -190,6 +214,11 @@ export class ConfigManager {
 
   getTTS(): TTSConfig {
     return this.config.tts;
+  }
+
+  /** 現在の言語モードに対応する読み上げエンジン名（診断・hello 表示用） */
+  getTtsEngineName(): TtsEngineName {
+    return this.config.conversation.language === "en" ? this.config.tts.en.engine : this.config.tts.engine;
   }
 
   getAvatar(): AvatarConfig {

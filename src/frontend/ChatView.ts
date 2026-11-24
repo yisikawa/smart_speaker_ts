@@ -46,6 +46,7 @@ export class ChatView {
   readonly deviceSelect = must<HTMLSelectElement>("inputDevice");
   readonly toastEl = must<HTMLElement>("toast");
   readonly btnSettings = must<HTMLButtonElement>("btnSettings");
+  readonly languageSelect = must<HTMLSelectElement>("languageSelect");
   readonly settingsPanel = must<HTMLElement>("settingsPanel");
   readonly sttEngine = must<HTMLSelectElement>("sttEngine");
   readonly sttModel = must<HTMLSelectElement>("sttModel");

@@ -4,21 +4,30 @@
  * Whisper 系モデルは無音・雑音・BGM に対して定型句（「ご視聴ありがとうございました」等）を
  * 出力する「幻聴（hallucination）」を起こす。ここではテキスト側からそれを判定する。
  * 音響側の判定（no_speech_prob / avg_logprob）は WhisperSttService が行う。
+ *
+ * パターン・相槌の一覧は言語パック（`shared/i18n/languagePack.ts`）が真実源。
  */
 
-/** 日本語 Whisper が無音・雑音に対して出しがちな定型句（会話では意味を持たないもの） */
-const HALLUCINATION_PATTERNS: RegExp[] = [
-  /^ご視聴(いただき)?ありがとうございました[。．.!！]?$/,
-  /^(チャンネル)?登録(を)?(お願いします|よろしくお願いします)[。．.!！]?$/,
-  /^字幕(は)?.*$/,
-  /^おやすみなさい[。．.!！]?$/,
-  /^おわり[。．.!！]?$/,
-  /^[（(][^）)]{1,12}[）)]$/, // （拍手）（笑）（音楽）など効果音のみ
-  /^thank you[.!\s]*$/i,
-  /^thanks for watching[.!\s]*$/i,
-  /^subscribe.*$/i,
-  /^[\s.。…、,]+$/,
-];
+import {
+  LanguageMode,
+  SHARED_HALLUCINATION_PATTERNS,
+  SHARED_SHORT_ALLOWLIST,
+  getLanguagePack,
+} from "../../shared/i18n/languagePack";
+
+/** 言語モード別の幻聴パターン（共通＋言語固有） */
+export function hallucinationPatterns(mode: LanguageMode): RegExp[] {
+  return [...SHARED_HALLUCINATION_PATTERNS, ...getLanguagePack(mode).gate.extraHallucinationPatterns];
+}
+
+/** 言語モード別の短い相槌の許可リスト */
+export function shortAllowlist(mode: LanguageMode): Set<string> {
+  return new Set([...SHARED_SHORT_ALLOWLIST, ...getLanguagePack(mode).gate.shortAllowlist]);
+}
+
+/** 既定（日本語）の幻聴パターン。既存の呼び出しとの互換用 */
+const DEFAULT_HALLUCINATION_PATTERNS = hallucinationPatterns("ja");
+
 
 /** 比較用の正規化（全角/半角・記号・空白の揺れを吸収する） */
 export function normalizeTranscript(text: string): string {
@@ -33,12 +42,12 @@ export function normalizeTranscript(text: string): string {
  * 定型句の幻聴か。
  * 空文字・記号のみ・同じ文の単純な繰り返しも「幻聴」として扱う。
  */
-export function isHallucination(text: string): boolean {
+export function isHallucination(text: string, patterns: RegExp[] = DEFAULT_HALLUCINATION_PATTERNS): boolean {
   const trimmed = text.normalize("NFKC").trim();
   if (!trimmed || !normalizeTranscript(trimmed)) {
     return true;
   }
-  if (HALLUCINATION_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+  if (patterns.some((pattern) => pattern.test(trimmed))) {
     return true;
   }
   // 「ありがとうございました。ありがとうございました。」のような単純な 2 回繰り返し
@@ -99,23 +108,12 @@ function bigramCoverage(target: string, reference: string): number {
  * 意味を持たない短すぎる断片か（環境音・自分の声の拾い・息遣いなど）。
  * 「はい」「うん」のような正当な相槌は許可する。
  */
-const SHORT_REPLY_ALLOWLIST = new Set([
-  "はい",
-  "うん",
-  "ええ",
-  "そう",
-  "いや",
-  "いいえ",
-  "いえ",
-  "うんうん",
-  "そうだね",
-  "ちがう",
-  "ない",
-  "ある",
-  "ok",
-]);
+const DEFAULT_SHORT_REPLY_ALLOWLIST = shortAllowlist("ja");
 
-export function isTooShortFragment(text: string): boolean {
+export function isTooShortFragment(
+  text: string,
+  allowlist: Set<string> = DEFAULT_SHORT_REPLY_ALLOWLIST
+): boolean {
   const normalized = normalizeTranscript(text);
   if (!normalized) {
     return true;
@@ -124,8 +122,9 @@ export function isTooShortFragment(text: string): boolean {
   if (normalized.length > 2) {
     return false;
   }
-  return !SHORT_REPLY_ALLOWLIST.has(normalized);
+  return !allowlist.has(normalized);
 }
+
 
 /** 同じ発話の繰り返しか（連続して同一結果が返る幻聴・エコーの抑制） */
 export function isRepeatedTranscript(text: string, previous: string): boolean {

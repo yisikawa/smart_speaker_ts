@@ -68,6 +68,8 @@ keep_listening = true
 barge_in_enabled = false
 # バージイン判定の RMS しきい値（0..1）
 barge_in_min_score = 0.08
+language = "ja"
+reset_history_on_language_change = false
 
 [stt]
 # 既定は f16（高精度・1.5GB）。GPU の VRAM が少ない場合は q5_0（約 550MB）を推奨。
@@ -113,7 +115,16 @@ sherpa_provider = "cpu"
 # SenseVoice の言語指定（auto / ja / en / zh / ko / yue）
 sherpa_language = "ja"
 
+# --- 英語モード（conversation.language = "en"）の上書き ---
+# 日本語専用モデル（nemo_ctc など）を避け、whisper の多言語モデルへ切り替える。
+# 未指定のキーは日本語モードと同じ値を使います。
+[stt.en]
+engine = "whisper"
+language = "en"
+sherpa_language = "en"
+
 [llm]
+
 endpoint = "http://127.0.0.1:11434"
 model = "gemma4:e2b-it-qat"
 character_file = "config/characters/sakura.toml"
@@ -127,6 +138,8 @@ model_load_timeout_seconds = 180
 history_turns = 6
 keep_alive = "30m"
 num_ctx = 4096
+# 英語モードのキャラクター定義（空なら日本語と同じファイルを使う）
+character_file_en = "config/characters/sakura.en.toml"
 
 [tts]
 engine = "voicevox"
@@ -140,6 +153,34 @@ split_sentences = true
 prefetch_depth = 1
 min_sentence_chars = 4
 max_sentence_chars = 60
+
+# --- 英語モードの読み上げ（conversation.language = "en" のとき使う） ---
+# engine: openai_speech（OpenAI 互換 /v1/audio/speech） | gpt_sovits（api_v2） | voicevox
+# 同じ声質で日英を読み上げたい場合は gpt_sovits + 参照音声を推奨（docs/TTS_MULTILINGUAL.md）
+[tts.en]
+engine = "openai_speech"
+endpoint = "http://127.0.0.1:8880"
+model = "kokoro"
+voice = "af_heart"
+speaker_id = 0
+speed = 1.0
+# GPT-SoVITS 用（engine = "gpt_sovits" のとき）。1〜5 秒の参照音声とその書き起こし
+reference_wav = ""
+reference_text = ""
+prompt_lang = "en"
+
+# --- 声質変換（任意。B 案が成功した後に検証する） ---
+# RVC などの変換ワーカー（POST /convert, base64 WAV）へ読み上げを通す。
+[tts.voice_conversion]
+enabled = false
+endpoint = "http://127.0.0.1:9890"
+model_path = ""
+index_path = ""
+pitch = 0
+f0_method = "rmvpe"
+index_rate = 0.75
+protect = 0.33
+timeout_seconds = 60
 
 [rag]
 # 未実装（設定のみ・拡張ポイント）

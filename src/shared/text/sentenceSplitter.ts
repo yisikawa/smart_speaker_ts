@@ -1,3 +1,5 @@
+import { isAbbreviationAt } from "../i18n/languagePack";
+
 /** 文末とみなす文字（連続する「…」「!?」も 1 つの区切りとして扱う） */
 const END_CHARS = new Set(["。", "．", ".", "！", "!", "？", "?", "…", "\n"]);
 
@@ -9,6 +11,12 @@ export interface SentenceSplitterOptions {
   minChars: number;
   /** これ超の文は読点でも分割する */
   maxChars: number;
+  /** 文末とみなす文字（未指定なら日本語・英語の既定セット） */
+  endChars?: string[];
+  /** 長すぎるときに使う区切り（未指定なら読点・カンマ） */
+  commaChars?: string[];
+  /** 誤分割を避ける略語（例: "mr", "e.g"。英語モードのみ指定する） */
+  abbreviations?: string[];
 }
 
 /**
@@ -16,12 +24,19 @@ export interface SentenceSplitterOptions {
  *
  * 文末の直後で切り、`minChars` 未満は次の文と結合する。句点が来ないまま
  * `maxChars` を超えたら読点で切る（読点も無ければ `maxChars` で切る）。
- * 感情タグの抽出は P5 で足す（P2 ではタグを送らない）。
+ * 英語の `Mr.` などの略語は `abbreviations` を渡すと分割しない。
  */
 export class SentenceSplitter {
   private buffer = "";
+  private readonly endChars: Set<string>;
+  private readonly commaChars: Set<string>;
+  private readonly abbreviations: string[];
 
-  constructor(private readonly options: SentenceSplitterOptions) {}
+  constructor(private readonly options: SentenceSplitterOptions) {
+    this.endChars = new Set(options.endChars ?? [...END_CHARS]);
+    this.commaChars = new Set(options.commaChars ?? [...COMMA_CHARS]);
+    this.abbreviations = options.abbreviations ?? [];
+  }
 
   /** 差分を食わせ、確定した文だけを返す（未確定は内部バッファに残る） */
   push(delta: string): string[] {
@@ -62,12 +77,16 @@ export class SentenceSplitter {
   private findCut(from: number): number {
     for (let i = from; i < this.buffer.length; i += 1) {
       const char = this.buffer[i];
-      if (!END_CHARS.has(char)) {
+      if (!this.endChars.has(char)) {
+        continue;
+      }
+      // 英語の略語（Mr. / e.g. など）は文末として扱わない
+      if (char === "." && isAbbreviationAt(this.buffer, i, this.abbreviations)) {
         continue;
       }
       // 「……」「!?」のような連続をまとめる
       let end = i + 1;
-      while (end < this.buffer.length && END_CHARS.has(this.buffer[end])) {
+      while (end < this.buffer.length && this.endChars.has(this.buffer[end])) {
         end += 1;
       }
       return end;
@@ -80,10 +99,11 @@ export class SentenceSplitter {
     // 長すぎる: maxChars 以内の最後の読点で切る
     let lastComma = -1;
     for (let i = 0; i < Math.min(this.buffer.length, this.options.maxChars); i += 1) {
-      if (COMMA_CHARS.has(this.buffer[i])) {
+      if (this.commaChars.has(this.buffer[i])) {
         lastComma = i + 1;
       }
     }
     return lastComma > 0 ? lastComma : this.options.maxChars;
   }
+
 }

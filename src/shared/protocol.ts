@@ -6,8 +6,10 @@
  */
 
 import type { AvatarModelInfo } from "./avatar/modelCatalog";
+import type { LanguageMode } from "./i18n/languagePack";
 
 export type { AvatarModelInfo } from "./avatar/modelCatalog";
+export type { LanguageMode } from "./i18n/languagePack";
 
 /** アシスタントの全体状態（UI のステータス表示と 1:1 で対応する） */
 export type AssistantState =
@@ -180,6 +182,15 @@ export interface ModelCatalog {
 export interface ModelSelection {
   stt: { engine: SttEngineName; label: string };
   llm: { model: string };
+  /** 読み上げ（言語モードで決まる実効値） */
+  tts?: { engine: string; label: string };
+}
+
+/** 言語切り替えの通知（config 更新時に全クライアントへ配る） */
+export interface LanguagePayload {
+  type: "language";
+  language: LanguageMode;
+  character: { name: string; label: string };
 }
 
 /** PUT /api/models/stt・PUT /api/models/llm のレスポンス */
@@ -197,6 +208,8 @@ export interface HelloPayload {
   state: AssistantState;
   history: ChatMessage[];
   character: { name: string; label: string };
+  /** 現在の応答言語（ja / en） */
+  language: LanguageMode;
   user: string;
   version: string;
   services: ServiceStatus;
@@ -248,8 +261,10 @@ export type ServerMessage =
   | { type: "event"; event: PipelineEvent }
   | { type: "state"; state: AssistantState }
   | { type: "history"; messages: ChatMessage[] }
+  | LanguagePayload
   | { type: "error"; message: string }
   | { type: "pong" };
+
 
 /** 認識結果の破棄理由ごとの回数（SpeechGate が数える） */
 export interface SkipStats {

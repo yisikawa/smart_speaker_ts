@@ -671,3 +671,52 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 - 表情は `PlaybackMeta.expression` → `tts_audio.expression` → `AvatarStage.setExpression()` で反映し、
   `speaking_finished` で解除する。
 
+### 13.7 日英モード切替（P6）
+
+**目的**: 1 つのアプリで「日本語モード / 英語モード」を切り替え、聞き取り・応答・読み上げを揃える。
+同一声質での読み上げ（B 案）を先に成立させ、その後に RVC（C 案）を任意で検証する。
+
+**真実源**: `conversation.language`（ja / en）。
+
+- 切替はヘッダのセレクト → `PATCH /api/config { conversation: { language } }` → `ConfigManager.onChange`
+- `SttSwitcher.reconfigure()` / `TtsRouter.reconfigure()` が署名の変化を検知して実装を作り直す（次の発話から有効）
+- `AppServer` は言語の変化を検知して全クライアントへ `language` 通知（キャラクター名も更新）
+
+**言語パック**（`src/shared/i18n/languagePack.ts`、バックエンドとフロントで共有）
+
+| 領域 | 内容 |
+|---|---|
+| プロンプト | roleLine / languageRule / languageRuleShort / retryInstruction / speechResetNote |
+| STT | whisper の `-l`、SenseVoice の言語 |
+| 文分割 | 文末・読点の文字、**略語**（`Mr.` `a.m.` `e.g.`）、min/max |
+| 破棄判定 | 短い相槌の allowlist、幻聴パターン |
+| 感情 | 推定語彙（`EmotionVocabulary[]`） |
+| UI | 切替ラベル・トースト・TTS 失敗文言 |
+
+**STT の切替**: `ConfigManager.getSTT()` が英語モードで `[stt.en]` を上書き合成する。
+既定は `engine=whisper, language=en`（sherpa の `nemo_ctc` は日本語専用のため）。whisper の多言語モデルが前提。
+
+**TTS の切替**: `TtsRouter`（`SttSwitcher` と同型）。
+
+- ja: `VoicevoxTtsService`（従来どおり）
+- en: `[tts.en].engine` により `OpenAiSpeechTtsService`（`/v1/audio/speech`）または `GptSovitsTtsService`（`/tts`）
+- **合成後は必ず 16bit PCM モノラルへ正規化**（`services/wavNormalize.ts`）。口パクの `buildVolumeEnvelope()` は
+  16bit 以外を解析できず `volumes=[]` になるため
+- 言語ガードは「目標言語以外のスクリプト」を検出（ja: ハングル / en: 日本語・中国語・韓国語）
+
+**B 案の候補**（詳細と手順: `docs/TTS_MULTILINGUAL.md`）
+
+| エンジン | 同一声質 | 遅延 | ライセンス | 備考 |
+|---|---|---|---|---|
+| Kokoro-82M（OpenAI 互換） | ✗（ja は VOICEVOX 継続） | 小 | Apache-2.0 | まず通すための土台 |
+| GPT-SoVITS V2Pro（api_v2） | ◎（参照音声で日英） | 中 | MIT（重みは配布元条件） | Windows 実績・第一候補 |
+| Qwen3-TTS 0.6B Base / CosyVoice3 | ◎ | 中〜大（実装依存） | Apache-2.0 | 低遅延は vLLM-Omni 構成。要実測 |
+
+**実測**: `npm run spike:tts` で合成時間・音声長・RTF・VRAM を測る。RTF > 1.0 なら
+`tts.prefetch_depth` を上げるか別エンジンへ。受け入れ条件は `docs/TTS_MULTILINGUAL.md` の 4 章。
+
+**C 案（RVC）**: `[tts.voice_conversion]`（既定 OFF）。常駐ワーカー（`POST /convert`）にし、
+モデルのロードを毎回行わない・固定ファイル名を使わない・出力は 16bit PCM に揃える。
+参考実装 `D:\LLMProjects\RVCMultilingual` のパラメータ（rmvpe / index_rate 0.75 / 44.1kHz）を流用する。
+VOICEVOX 音源の学習・変換は規約を確認し、自分の声 / 許諾済みの声で検証する。
+

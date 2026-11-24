@@ -26,6 +26,7 @@
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
+| 英語 TTS の実測 | `npm run spike:tts`（起動中の TTS サーバーへ投げて RTF / VRAM を測る。`--lang en --runs 5`） |
 | CUDA 版 whisper.cpp | `powershell -ExecutionPolicy Bypass -File scripts\setup-whisper-cuda.ps1`（`-Restore` で CPU 版へ） |
 | Live2D の Cubism Core | `powershell -ExecutionPolicy Bypass -File scripts\setup-live2d.ps1`（`-Force` で更新） |
 | sherpa-onnx の日本語モデル | `powershell -ExecutionPolicy Bypass -File scripts\setup-sherpa.ps1`（要 `npm install sherpa-onnx-node`） |
@@ -123,6 +124,21 @@ src/backend/index.ts                                ← Composition Root（DI �
     タグ→表情名の対応は `avatar.expressions`（空文字は「変えない」）。タグが無ければ
     `emotion_heuristic_enabled` のときだけ語彙推定する。表情は `tts_audio.expression` で画面へ渡す。
 
+12-14. **言語モード（ja / en）は `conversation.language` が唯一の真実源**。切替は `PATCH /api/config` で行い、
+    `ConfigManager.onChange` から `SttSwitcher.reconfigure()` / `TtsRouter.reconfigure()` が走る（次の発話から有効）。
+    - 言語別の文言・文分割・破棄パターン・感情語彙は `src/shared/i18n/languagePack.ts` に集約する（バックエンドとフロントで共有）
+    - `ConfigManager.getSTT()` は英語モードで `[stt.en]` を**上書き合成**して返す。STT 実装は言語を意識しない
+    - `SpeechGate` は `{ language: () => ... }` を受け取り、判定テーブルを言語別にキャッシュする（毎回作り直さない）
+    - 英語の文分割は略語（`Mr.` / `a.m.` / `e.g.`）で切らない。`languagePack.en.text.abbreviations` が真実源（`tests/language-pack.test.ts`）
+
+12-15. **読み上げは `TtsRouter` 経由**（`VoicevoxTtsService` を直接 DI しない）。ja は VOICEVOX、en は `[tts.en]` の
+    プロファイル（`openai_speech` = OpenAI 互換 `/v1/audio/speech` / `gpt_sovits` = api_v2 `/tts`）。
+    - **`TtsRouter.synthesize()` は必ず 16bit PCM モノラルへ正規化してから返す**（口パクの `buildVolumeEnvelope()` は
+      16bit 以外を解析できず、`volumes=[]` になる）。RVC / 44.1kHz / 32bit float を挟むときは特に注意
+    - `tts.en.engine=gpt_sovits` は参照音声（1〜5 秒）とその書き起こしが必要。声の権利（VOICEVOX 音源の学習可否）は規約を確認する
+    - 実測は `npm run spike:tts`（合成時間・RTF・VRAM）。**B 案（多言語 TTS で声質統一）→ RVC 検証**の順で進める
+      （手順: `docs/TTS_MULTILINGUAL.md`）
+
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする
@@ -183,6 +199,10 @@ src/backend/index.ts                                ← Composition Root（DI �
 - STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は whisper）
 - **画面の「⚙️ 設定」から LLM モデルと STT のエンジン／モデルを切り替えられる**（`GET /api/models`・
   `PUT /api/models/llm`・`PUT /api/models/stt`。設定は即保存、次の発話から有効）
+- **日英モード切替（P1 実装済み）**: ヘッダの `日本語 / English`（`conversation.language`）。
+  STT は `[stt.en]`、プロンプトは `llm.character_file_en`、読み上げは `[tts.en]` に追従する。
+  英語 TTS は OpenAI 互換（Kokoro 等）と GPT-SoVITS に対応。**B 案（同一声質）の実測が次の作業**
+  （`npm run spike:tts`、手順は `docs/TTS_MULTILINGUAL.md`）。RVC（`[tts.voice_conversion]`）は B 成功後に検証する
 - **残作業のバックログは `docs/TODO.md` に集約**（優先度・受け入れ条件・見積つき）。作業を終えたら同ファイルから削除し、
   この節と README を更新する。
 

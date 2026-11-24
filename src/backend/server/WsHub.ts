@@ -76,6 +76,8 @@ export class WsHub {
 
     const audioConfig = this.deps.config.getAudio();
     const conversationConfig = this.deps.config.getConversation();
+    const language = conversationConfig.language;
+    const character = this.deps.character.get(language);
 
     ws.send(
       JSON.stringify({
@@ -83,9 +85,10 @@ export class WsHub {
         state: this.deps.pipeline.getState(),
         history: this.deps.pipeline.getHistory(),
         character: {
-          name: this.deps.character.get().name,
-          label: this.deps.character.get().label,
+          name: character.name,
+          label: character.label,
         },
+        language,
         user: this.deps.config.getGUI().user_name,
         version: this.deps.version,
         services: this.deps.serviceStatus(),

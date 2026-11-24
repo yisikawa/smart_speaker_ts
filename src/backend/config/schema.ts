@@ -7,6 +7,9 @@
 
 // フロントエンドと共有する型（内向き依存: backend → shared）
 import type { SherpaModelTypeName, SttEngineName } from "../../shared/protocol";
+import type { LanguageMode } from "../../shared/i18n/languagePack";
+
+export type { LanguageMode } from "../../shared/i18n/languagePack";
 
 export interface AudioConfig {
   /** STT / VAD が前提とするサンプリングレート（Whisper は 16kHz 必須） */
@@ -65,6 +68,10 @@ export interface WakewordConfig {
 }
 
 export interface ConversationConfig {
+  /** 応答言語（ja: 日本語 / en: 英語）。STT・プロンプト・TTS・UI が追従する */
+  language: LanguageMode;
+  /** 言語を切り替えたときに会話履歴を消すか */
+  reset_history_on_language_change: boolean;
   /** 起動直後に自動で聞き取りを開始するか */
   auto_start: boolean;
   followup_enabled: boolean;
@@ -126,7 +133,28 @@ export interface STTConfig {
   sherpa_provider: string;
   /** SenseVoice の言語指定（auto / ja / en / zh / ko / yue） */
   sherpa_language: string;
+  /**
+   * 英語モード（`conversation.language = "en"`）のときだけ上書きする値。
+   * 未指定のキーは日本語モードと同じ値を使う（`ConfigManager.getSTT()` が合成する）。
+   */
+  en: SttLanguageOverride;
 }
+
+/** 英語モード用の STT 上書き（既定は空＝日本語モードと同じ構成） */
+export interface SttLanguageOverride {
+  engine?: SttEngine;
+  model_path?: string;
+  binary_path?: string;
+  language?: string;
+  use_gpu?: boolean;
+  threads?: number;
+  timeout_seconds?: number;
+  initial_prompt?: string;
+  sherpa_model_dir?: string;
+  sherpa_model_type?: SherpaModelType;
+  sherpa_language?: string;
+}
+
 
 export interface LLMConfig {
   endpoint: string;
@@ -144,14 +172,61 @@ export interface LLMConfig {
   model_load_timeout_seconds: number;
   /** プロンプトに含める直近ターン数 */
   history_turns: number;
+  /** 英語モードのキャラクター定義（空なら日本語と同じファイルを使う） */
+  character_file_en: string;
   /** Ollama の keep_alive（切替直後の再読み込みを避ける） */
   keep_alive: string;
   /** コンテキスト長（VRAM 使用量に直結する） */
   num_ctx: number;
 }
 
+/** 読み上げエンジン（voicevox: 日本語 / openai_speech: OpenAI 互換 / gpt_sovits: GPT-SoVITS api_v2） */
+export type TtsEngineName = "voicevox" | "openai_speech" | "gpt_sovits";
+
+/** 英語モードの音声プロファイル（日本語は `[tts]` 直下の既存キーを使う） */
+export interface TtsProfile {
+  engine: TtsEngineName;
+  /** エンジンの HTTP エンドポイント（voicevox は未使用） */
+  endpoint: string;
+  /** OpenAI 互換の model 名（openai_speech のみ） */
+  model: string;
+  /** OpenAI 互換の voice 名（openai_speech のみ） */
+  voice: string;
+  /** VOICEVOX のスタイル ID（en で voicevox を選んだ場合のみ） */
+  speaker_id: number;
+  /** 話速（1.0 が標準） */
+  speed: number;
+  /** GPT-SoVITS の参照音声（プロジェクトルート基準） */
+  reference_wav: string;
+  /** GPT-SoVITS の参照音声の書き起こし */
+  reference_text: string;
+  /** 参照音声の言語（ja / en / zh など） */
+  prompt_lang: string;
+}
+
+/** 読み上げ後の声質変換（RVC など）。既定は無効 */
+export interface VoiceConversionConfig {
+  enabled: boolean;
+  /** 変換ワーカーの HTTP エンドポイント（例: http://127.0.0.1:9890） */
+  endpoint: string;
+  /** RVC モデル（.pth）。プロジェクトルート基準 */
+  model_path: string;
+  /** RVC の index ファイル（.index）。空なら未使用 */
+  index_path: string;
+  /** ピッチ（半音） */
+  pitch: number;
+  /** ピッチ推定法（rmvpe / harvest / crepe など） */
+  f0_method: string;
+  /** index の混合率（0..1） */
+  index_rate: number;
+  /** 子音の保護（0..0.5） */
+  protect: number;
+  /** 変換タイムアウト（秒） */
+  timeout_seconds: number;
+}
+
 export interface TTSConfig {
-  engine: "voicevox";
+  engine: TtsEngineName;
   endpoint: string;
   speaker_id: number;
   speed: number;
@@ -167,7 +242,12 @@ export interface TTSConfig {
   min_sentence_chars: number;
   /** これ超の文は読点でも分割する */
   max_sentence_chars: number;
+  /** 英語モードの音声プロファイル */
+  en: TtsProfile;
+  /** 読み上げ後の声質変換（任意） */
+  voice_conversion: VoiceConversionConfig;
 }
+
 
 /** アバター（Live2D / 立ち絵）の設定。P0 では設定と hello への配信のみ */
 export interface AvatarConfig {
@@ -325,6 +405,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     min_scores: 3,
   },
   conversation: {
+    language: "ja",
+    reset_history_on_language_change: false,
     auto_start: false,
     followup_enabled: true,
     max_followup_turns: 3,
@@ -356,6 +438,12 @@ export const DEFAULT_CONFIG: AppConfig = {
     sherpa_model_type: "nemo_ctc",
     sherpa_provider: "cpu",
     sherpa_language: "ja",
+    en: {
+      // 英語モードでは whisper の多言語モデルへ切り替える（sherpa の日本語専用モデルを避ける）
+      engine: "whisper",
+      language: "en",
+      sherpa_language: "en",
+    },
   },
   llm: {
     endpoint: "http://127.0.0.1:11434",
@@ -366,6 +454,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     response_timeout_seconds: 60,
     model_load_timeout_seconds: 180,
     history_turns: 6,
+    character_file_en: "config/characters/sakura.en.toml",
     keep_alive: "30m",
     num_ctx: 4096,
   },
@@ -381,6 +470,28 @@ export const DEFAULT_CONFIG: AppConfig = {
     prefetch_depth: 1,
     min_sentence_chars: 4,
     max_sentence_chars: 60,
+    en: {
+      engine: "openai_speech",
+      endpoint: "http://127.0.0.1:8880",
+      model: "kokoro",
+      voice: "af_heart",
+      speaker_id: 0,
+      speed: 1.0,
+      reference_wav: "",
+      reference_text: "",
+      prompt_lang: "en",
+    },
+    voice_conversion: {
+      enabled: false,
+      endpoint: "http://127.0.0.1:9890",
+      model_path: "",
+      index_path: "",
+      pitch: 0,
+      f0_method: "rmvpe",
+      index_rate: 0.75,
+      protect: 0.33,
+      timeout_seconds: 60,
+    },
   },
   avatar: {
     enabled: true,

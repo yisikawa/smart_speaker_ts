@@ -68,7 +68,7 @@ export class ConversationPipeline {
   private playback: PlaybackHandle | null = null;
   private turnCounter = 0;
   /** 認識結果の採否（幻聴・エコー・短断片・繰り返し） */
-  private readonly gate = new SpeechGate();
+  private readonly gate: SpeechGate;
   /** 1 ターン分の実行（LLM → TTS → 再生） */
   private readonly turnRunner: TurnRunner;
   /** 1 回分の録音（VAD・レベル通知・失敗案内） */
@@ -82,6 +82,8 @@ export class ConversationPipeline {
 
   constructor(private readonly deps: PipelineDeps) {
     this.playbackSink = deps.playback ?? new ServerPlaybackSink({ audio: deps.audio });
+    // 破棄判定は言語モードに追従する（ja: ハングル / en: 日本語・中国語・韓国語）
+    this.gate = new SpeechGate({ language: () => deps.config.getLanguage() });
     this.turnRunner = new TurnRunner({
       config: deps.config,
       history: deps.history,

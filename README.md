@@ -139,7 +139,10 @@ npm start              # node dist/backend/index.js
 - **「マイク確認」ボタン**: 5 秒間だけ録音して入力レベル（peak / dBFS / フレーム数）を表示（送信はしない）
 - **聞き取りを継続**（`conversation.keep_listening = true`）: フォローアップ回数の上限後も「停止」を押すまで待機を続ける
 - ストリーミング応答（差分を逐次表示）と `AbortController` による中断
-- **応答言語ガード**: ハングル（韓国語）が混入した応答は 1 回だけ日本語で再生成（小規模モデルの言語混入対策）
+- **日英モード切替（ヘッダの `日本語 / English`）**: `conversation.language` を切り替えると、
+  STT（`[stt.en]`）・プロンプト／キャラクター（`llm.character_file_en`）・読み上げ（`[tts.en]`）・
+  文分割・破棄判定がまとめて追従する（次の発話から有効）。詳細は [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md)
+- **応答言語ガード**: 目標言語以外の文字が混入した応答は 1 回だけ再生成（ja: ハングル / en: 日本語・中国語・韓国語）
 - **幻聴（hallucination）対策**: whisper.cpp の非音声トークン抑制・文脈抑制・信頼度フィルタで、
   無音や雑音に対する「ご視聴ありがとうございました。」等の誤認識を破棄（[docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md)）
 - **自分の声のエコー対策**: 直前の読み上げ内容と一致する認識結果・意味のない短い断片は会話に載せない（1 人で会話し続けるループ防止）。
@@ -219,6 +222,7 @@ sherpa_provider = "cpu"
 |---|---|---|
 | LLM | Ollama に導入済みのモデル（`GET /api/models` が `ollama list` 相当を返す） | 次の発話から（再起動不要） |
 | 音声認識 | エンジン（whisper.cpp / sherpa-onnx）とモデル（`models/*.bin` / sherpa のモデル一式） | 次の発話から（STT 実装を差し替え） |
+| 言語 | ヘッダの `日本語 / English`（`PATCH /api/config` の `conversation.language`） | 次の発話から（STT・プロンプト・TTS を再構成） |
 
 - 一覧は `GET /api/models`、切替は `PUT /api/models/llm` / `PUT /api/models/stt`
 - **LLM の切り替えは 20〜60 秒かかることがあります**（Ollama がモデルを VRAM に読み込むため）。
@@ -232,10 +236,10 @@ sherpa_provider = "cpu"
 | テーブル | 主なキー |
 |----------|----------|
 | `[audio]` | `sample_rate`, `frame_ms`, `silence_threshold`, `silence_threshold_max`, `silence_duration`, `no_speech_timeout`, `max_record_seconds`, `relative_threshold_multiplier`, `calibration_duration`, `debounce_frames`, `input_device`, `output_volume`, `player`, `input_mode`, `device_settle_ms` |
-| `[conversation]` | `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
-| `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language` |
-| `[llm]` | `endpoint`, `model`, `character_file`, `temperature`, `max_tokens`, `history_turns`, `response_timeout_seconds`, `model_load_timeout_seconds` |
-| `[tts]` | `endpoint`, `speaker_id`, `speed`, `pitch`, `volume` |
+| `[conversation]` | `language`, `reset_history_on_language_change`, `auto_start`, `followup_enabled`, `max_followup_turns`, `followup_timeout_seconds`, `followup_guard_ms`, `keep_listening`, `barge_in_enabled`, `barge_in_min_score` |
+| `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language`, `[stt.en]`（英語モードの上書き） |
+| `[llm]` | `endpoint`, `model`, `character_file`, `character_file_en`, `temperature`, `max_tokens`, `history_turns`, `response_timeout_seconds`, `model_load_timeout_seconds` |
+| `[tts]` | `engine`, `endpoint`, `speaker_id`, `speed`, `pitch`, `volume`, `split_sentences`, `prefetch_depth`, `[tts.en]`（英語の音声プロファイル）, `[tts.voice_conversion]`（任意の RVC） |
 
 設定の反映:
 

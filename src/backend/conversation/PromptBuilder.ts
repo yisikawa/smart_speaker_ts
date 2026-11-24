@@ -1,71 +1,86 @@
 import { ConfigManager } from "../config/ConfigManager";
+import type { LanguageMode } from "../config/schema";
 import { CharacterProfile } from "../services/CharacterService";
-
-/**
- * 応答言語の指定。
- *
- * 小規模モデル（例: gemma4:e2b）は日本語の指示だけだと韓国語（ハングル）や
- * 中国語へ流れることがあるため、先頭と末尾の両方に強い制約を置く。
- */
-const LANGUAGE_RULE =
-  "【最重要】応答は必ず日本語で書くこと。ハングル（韓国語）・中国語・英語など他言語の文字を混ぜてはいけない。";
-const LANGUAGE_RULE_SHORT = "- 日本語以外の言語（韓国語・中国語・英語など）の文字は使わないこと";
+import { getLanguagePack } from "../../shared/i18n/languagePack";
 
 /**
  * LLM に渡す system プロンプトを組み立てる。
- * キャラクター定義（人格・応答ルール・口癖）とユーザー設定を反映する。
+ * キャラクター定義（人格・応答ルール・口癖）とユーザー設定、
+ * 言語モード（ja / en）のルールを反映する。
+ *
+ * 言語ルールを先頭と末尾の両方に置くのは、小規模モデル（gemma4:e2b 等）が
+ * 韓国語・中国語・英語へ流れやすいため。
  */
 export class PromptBuilder {
   constructor(
     private readonly deps: {
       config: ConfigManager;
-      character: { get(): CharacterProfile };
+      character: { get(language?: LanguageMode): CharacterProfile };
     }
   ) {}
 
-  build(): string {
-    const character = this.deps.character.get();
+  build(language?: LanguageMode): string {
+    const mode: LanguageMode = language ?? this.deps.config.getLanguage();
+    const pack = getLanguagePack(mode);
+    const character = this.deps.character.get(mode);
     const gui = this.deps.config.getGUI();
     const llm = this.deps.config.getLLM();
     const now = new Date();
 
     const lines: string[] = [
-      `あなたは「${character.name}」という日本語の音声アシスタントです。`,
-      LANGUAGE_RULE,
+      pack.prompt.roleLine(character.name),
+      pack.prompt.languageRule,
       character.personality,
       "",
-      `ユーザー名: ${gui.user_name}`,
-      `現在の日時: ${formatDateTime(now)}`,
+      mode === "en" ? `User name: ${gui.user_name}` : `ユーザー名: ${gui.user_name}`,
+      mode === "en" ? `Current date/time: ${formatDateTime(now)}` : `現在の日時: ${formatDateTime(now)}`,
       "",
-      "応答ルール:",
+      mode === "en" ? "Response rules:" : "応答ルール:",
       character.responseRules,
-      "- 音声で読み上げられるため、記号や箇条書きを多用せず自然な話し言葉にすること",
-      `- 出力は最大 ${Math.min(5, Math.max(1, Math.round(llm.max_tokens / 100)))} 文程度に収めること`,
+      mode === "en"
+        ? "- The reply is read aloud, so avoid symbols and bullet lists and write natural spoken English."
+        : "- 音声で読み上げられるため、記号や箇条書きを多用せず自然な話し言葉にすること",
+      mode === "en"
+        ? `- Keep the reply to about ${Math.min(5, Math.max(1, Math.round(llm.max_tokens / 100)))} sentences.`
+        : `- 出力は最大 ${Math.min(5, Math.max(1, Math.round(llm.max_tokens / 100)))} 文程度に収めること`,
     ];
 
     if (character.catchphrases.length > 0) {
+      const phrases = character.catchphrases
+        .slice(0, 4)
+        .map((phrase) => `「${phrase}」`)
+        .join(" ");
       lines.push(
         "",
-        `口癖の例（自然に使える場合のみ・毎回は使わない）: ${character.catchphrases
-          .slice(0, 4)
-          .map((phrase) => `「${phrase}」`)
-          .join(" ")}`
+        mode === "en"
+          ? `Example phrases (use naturally, not every time): ${phrases}`
+          : `口癖の例（自然に使える場合のみ・毎回は使わない）: ${phrases}`
       );
     }
 
     const avatar = this.deps.config.getAvatar();
     if (avatar.emotion_tags_enabled) {
-      lines.push(
-        "",
-        "感情表現:",
-        "文中に [喜] [怒] [哀] [驚] [照] [考] のいずれかを、文の区切りに 1 つだけ置くこと。",
-        "例: 「おはよう！[喜] 今日もいい天気だね。」",
-        "使えるのはこの 6 つだけ。文中の単語として書かないこと。"
-      );
+      if (mode === "en") {
+        lines.push(
+          "",
+          "Emotion:",
+          "Put exactly one tag out of [happy] [angry] [sad] [surprised] [shy] [thinking] at a sentence boundary.",
+          'Example: "Good morning! [happy] Nice weather today."',
+          "Use only these six tags. Never write them as ordinary words."
+        );
+      } else {
+        lines.push(
+          "",
+          "感情表現:",
+          "文中に [喜] [怒] [哀] [驚] [照] [考] のいずれかを、文の区切りに 1 つだけ置くこと。",
+          "例: 「おはよう！[喜] 今日もいい天気だね。」",
+          "使えるのはこの 6 つだけ。文中の単語として書かないこと。"
+        );
+      }
     }
 
     // 末尾の指示は小規模モデルに効きやすいため、言語指定を最後にもう一度置く
-    lines.push(LANGUAGE_RULE_SHORT);
+    lines.push(pack.prompt.languageRuleShort);
 
     return lines.join("\n");
   }
@@ -81,3 +96,4 @@ function formatDateTime(date: Date): string {
 function weekdayJa(day: number): string {
   return ["日", "月", "火", "水", "木", "金", "土"][day] ?? "";
 }
+

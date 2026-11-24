@@ -1,4 +1,4 @@
-import { AppConfig, SherpaModelType } from "./schema";
+import { AppConfig, DEFAULT_CONFIG, SherpaModelType } from "./schema";
 
 /** 数値項目を持つセクション */
 type NumericSection = "audio" | "conversation" | "stt" | "llm" | "tts" | "avatar" | "gui";
@@ -169,6 +169,45 @@ export function sanitizeConfig(config: AppConfig): string[] {
 
   if (!config.llm.keep_alive.trim()) {
     config.llm.keep_alive = "30m";
+  }
+
+  // 言語モード（ja / en 以外は既定の ja に戻す）
+  if (config.conversation.language !== "ja" && config.conversation.language !== "en") {
+    warnings.push(
+      `conversation.language=${String(config.conversation.language)} は未対応のため "ja" を使用します`
+    );
+    config.conversation.language = "ja";
+  }
+
+  // 読み上げエンジン（日本語＝[tts]、英語＝[tts.en]）
+  const ttsEngines = ["voicevox", "openai_speech", "gpt_sovits"];
+  if (!ttsEngines.includes(config.tts.engine)) {
+    warnings.push(`tts.engine=${String(config.tts.engine)} は未対応のため "voicevox" を使用します`);
+    config.tts.engine = "voicevox";
+  }
+  if (!config.tts.en || typeof config.tts.en !== "object") {
+    config.tts.en = { ...DEFAULT_CONFIG.tts.en };
+  }
+  if (!ttsEngines.includes(config.tts.en.engine)) {
+    warnings.push(
+      `tts.en.engine=${String(config.tts.en.engine)} は未対応のため "openai_speech" を使用します`
+    );
+    config.tts.en.engine = "openai_speech";
+  }
+  if (!config.tts.en.endpoint.trim()) {
+    config.tts.en.endpoint = DEFAULT_CONFIG.tts.en.endpoint;
+  }
+  if (!config.tts.en.prompt_lang.trim()) {
+    config.tts.en.prompt_lang = "en";
+  }
+
+  // 声質変換（既定は無効。有効なのにモデルが空なら警告して無効へ戻す）
+  const vc = config.tts.voice_conversion;
+  if (!vc || typeof vc !== "object") {
+    config.tts.voice_conversion = { ...DEFAULT_CONFIG.tts.voice_conversion };
+  } else if (config.tts.voice_conversion.enabled && !config.tts.voice_conversion.model_path.trim()) {
+    warnings.push("tts.voice_conversion.enabled=true ですが model_path が空のため無効にします");
+    config.tts.voice_conversion.enabled = false;
   }
 
   return warnings;

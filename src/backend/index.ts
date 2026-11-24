@@ -14,7 +14,7 @@ import { CharacterService } from "./services/CharacterService";
 import { OllamaLlmService } from "./services/OllamaLlmService";
 import { ServerPlaybackSink } from "./services/ServerPlaybackSink";
 import { SttSwitcher } from "./services/SttSwitcher";
-import { VoicevoxTtsService } from "./services/VoicevoxTtsService";
+import { TtsRouter } from "./services/TtsRouter";
 
 function readVersion(rootDir: string): string {
   try {
@@ -52,7 +52,8 @@ async function main(): Promise<void> {
   // STT は画面からエンジン／モデルを切り替えられるよう、差し替え可能なファサードで包む
   const stt = new SttSwitcher({ config, logger: new Logger("STT") });
   const llm = new OllamaLlmService({ config, logger: new Logger("LLM") });
-  const tts = new VoicevoxTtsService({ config, logger: new Logger("TTS") });
+  // 読み上げは言語モードで実装を切り替える（ja: VOICEVOX / en: [tts.en] のプロファイル）
+  const tts = new TtsRouter({ config, logger: new Logger("TTS") });
 
   // 3. 会話パイプライン
   // 読み上げの出力先（ブラウザ再生が本命。表示クライアントが居なければ ffplay へ落ちる）
@@ -109,6 +110,9 @@ async function main(): Promise<void> {
   config.onChange(() => {
     if (stt.reconfigure()) {
       bootLogger.info(`STT を切り替えました: ${stt.describe()}`);
+    }
+    if (tts.reconfigure()) {
+      bootLogger.info(`TTS を切り替えました: ${tts.describe()}`);
     }
     void server.refreshServices();
   });

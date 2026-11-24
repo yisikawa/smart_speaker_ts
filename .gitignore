@@ -5,6 +5,7 @@ logs/*.log
 logs/*.wav
 logs/*.out
 logs/*.err
+logs/tts-spike/
 models/*.bin
 # sherpa-onnx のモデル（scripts/setup-sherpa.ps1 で取得）
 models/sherpa-*/

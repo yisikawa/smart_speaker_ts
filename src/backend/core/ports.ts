@@ -154,4 +154,6 @@ export interface TextToSpeech {
   listSpeakers(): Promise<TtsSpeaker[]>;
   /** テキストから WAV バイナリを生成する */
   synthesize(text: string, options?: TtsOptions): Promise<Buffer>;
+  /** 現在の構成の表示名（任意。hello の表示に使う） */
+  describe?(): string;
 }

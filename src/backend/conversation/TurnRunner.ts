@@ -2,16 +2,18 @@ import { randomUUID } from "node:crypto";
 import type { AssistantState, PipelineEvent } from "../../shared/protocol";
 import { buildVolumeEnvelope } from "../../shared/audio/envelope";
 import { ConfigManager } from "../config/ConfigManager";
+import type { LanguageMode } from "../config/schema";
 import { Logger } from "../core/logger";
 import { LlmMessage } from "../core/messages";
 import { LanguageModel, PlaybackMeta, TextToSpeech } from "../core/ports";
 import { wavDurationMs } from "../services/wav";
 import { ConversationHistory } from "./ConversationHistory";
-import { containsHangul, LANGUAGE_RETRY_INSTRUCTION } from "./languageGuard";
+import { containsDisallowedScript, languageRetryInstruction } from "./languageGuard";
 import { PromptBuilder } from "./PromptBuilder";
 import { SpeechQueue } from "./SpeechQueue";
-import { SentenceSplitter } from "../../shared/text/sentenceSplitter";
+import { SentenceSplitter, SentenceSplitterOptions } from "../../shared/text/sentenceSplitter";
 import { extractEmotion } from "../../shared/avatar/emotion";
+import { getLanguagePack } from "../../shared/i18n/languagePack";
 
 export interface TurnDeps {
   config: ConfigManager;
@@ -67,6 +69,26 @@ export class TurnRunner {
     return this.runStreaming(hooks, signal, startedAt);
   }
 
+  /** 現在の言語モード */
+  private language(): LanguageMode {
+    return this.deps.config.getLanguage();
+  }
+
+  /** 言語パックに沿った文分割オプション（英語は略語で切らない） */
+  private splitterOptions(mode: LanguageMode): SentenceSplitterOptions {
+    const tts = this.deps.config.getTTS();
+    const pack = getLanguagePack(mode);
+    return {
+      minChars:
+        mode === "en" ? Math.max(tts.min_sentence_chars, pack.text.minSentenceChars) : tts.min_sentence_chars,
+      maxChars:
+        mode === "en" ? Math.max(tts.max_sentence_chars, pack.text.maxSentenceChars) : tts.max_sentence_chars,
+      endChars: pack.text.endChars,
+      commaChars: pack.text.commaChars,
+      abbreviations: pack.text.abbreviations,
+    };
+  }
+
   /** 全文をまとめて 1 回だけ合成する（`tts.split_sentences=false`） */
   private async runWholeText(
     hooks: TurnHooks,
@@ -74,21 +96,22 @@ export class TurnRunner {
     llmStartedAt: number
   ): Promise<Buffer | undefined> {
     let reply = "";
+    const mode = this.language();
     try {
       reply = await this.deps.llm.chatStream(
-        this.buildMessages(),
+        this.buildMessages({ language: mode }),
         (delta) => hooks.emit({ type: "llm_delta", content: delta }),
         { signal }
       );
-      if (containsHangul(reply)) {
-        this.logger.warn("応答にハングルが混入したため日本語で再生成します");
+      if (containsDisallowedScript(reply, mode)) {
+        this.logger.warn("応答に目標言語以外の文字が混入したため再生成します");
         reply = await this.deps.llm.chatStream(
-          this.buildMessages({ languageRetry: true }),
+          this.buildMessages({ languageRetry: true, language: mode }),
           () => undefined,
           { signal }
         );
-        if (containsHangul(reply)) {
-          this.logger.warn("再生成してもハングルが残りました");
+        if (containsDisallowedScript(reply, mode)) {
+          this.logger.warn("再生成しても目標言語以外の文字が残りました");
         }
       }
     } catch (error) {
@@ -132,12 +155,10 @@ export class TurnRunner {
     signal: AbortSignal,
     llmStartedAt: number
   ): Promise<Buffer | undefined> {
-    const ttsConfig = this.deps.config.getTTS();
     const avatarConfig = this.deps.config.getAvatar();
-    const splitter = new SentenceSplitter({
-      minChars: ttsConfig.min_sentence_chars,
-      maxChars: ttsConfig.max_sentence_chars,
-    });
+    const mode = this.language();
+    const pack = getLanguagePack(mode);
+    const splitter = new SentenceSplitter(this.splitterOptions(mode));
 
     let announced = false;
     let resetRequested = false;
@@ -146,14 +167,15 @@ export class TurnRunner {
     const enqueue = (raw: string): void => {
       const { text, expression } = extractEmotion(raw, avatarConfig.expressions, {
         heuristic: avatarConfig.emotion_heuristic_enabled,
+        vocabulary: pack.emotion,
       });
       if (!text || !queue) {
         return;
       }
-      if (containsHangul(text)) {
+      if (containsDisallowedScript(text, mode)) {
         if (!resetRequested) {
           resetRequested = true;
-          this.logger.warn("応答にハングルが混入したため読み直します");
+          this.logger.warn("応答に目標言語以外の文字が混入したため読み直します");
           queue.stop();
           queue = null;
           hooks.stopPlayback();
@@ -171,7 +193,7 @@ export class TurnRunner {
     let reply = "";
     try {
       reply = await this.deps.llm.chatStream(
-        this.buildMessages(),
+        this.buildMessages({ language: mode }),
         (delta) => {
           hooks.emit({ type: "llm_delta", content: delta });
           for (const piece of splitter.push(delta)) {
@@ -194,14 +216,18 @@ export class TurnRunner {
       enqueue(piece);
     }
 
-    // 言語ガード: ハングルを検出したら 1 回だけ生成し直して最初から読み上げる
+    // 言語ガード: 目標言語以外の文字を検出したら 1 回だけ生成し直して最初から読み上げる
     if (resetRequested) {
       queue?.stop();
       queue = null;
       hooks.emit({ type: "speech_reset" });
       try {
         reply = (
-          await this.deps.llm.chatStream(this.buildMessages({ languageRetry: true }), () => undefined, { signal })
+          await this.deps.llm.chatStream(
+            this.buildMessages({ languageRetry: true, language: mode }),
+            () => undefined,
+            { signal }
+          )
         ).trim();
       } catch (error) {
         if (signal.aborted) {
@@ -212,10 +238,7 @@ export class TurnRunner {
       }
       announced = false;
       resetRequested = false;
-      const retrySplitter = new SentenceSplitter({
-        minChars: ttsConfig.min_sentence_chars,
-        maxChars: ttsConfig.max_sentence_chars,
-      });
+      const retrySplitter = new SentenceSplitter(this.splitterOptions(mode));
       queue = this.createQueue(hooks, signal);
       for (const piece of [...retrySplitter.push(reply), ...retrySplitter.flush()]) {
         enqueue(piece);
@@ -240,7 +263,7 @@ export class TurnRunner {
       hooks.emit({ type: "speaking_finished" });
     }
     if (!result || (result.played === 0 && result.failed > 0)) {
-      hooks.emit({ type: "error", scope: "tts", message: "音声合成に失敗しました" });
+      hooks.emit({ type: "error", scope: "tts", message: pack.ui.ttsFailure });
     }
     return result?.bargeWav;
   }
@@ -269,13 +292,14 @@ export class TurnRunner {
   }
 
   /** LLM へ渡すメッセージ（言語再生成時は追加の system 指示を末尾に足す） */
-  buildMessages(options: { languageRetry?: boolean } = {}): LlmMessage[] {
+  buildMessages(options: { languageRetry?: boolean; language?: LanguageMode } = {}): LlmMessage[] {
+    const mode = options.language ?? this.language();
     const messages: LlmMessage[] = [
-      { role: "system", content: this.deps.promptBuilder.build() },
+      { role: "system", content: this.deps.promptBuilder.build(mode) },
       ...this.deps.history.forPrompt(),
     ];
     if (options.languageRetry) {
-      messages.push({ role: "system", content: LANGUAGE_RETRY_INSTRUCTION });
+      messages.push({ role: "system", content: languageRetryInstruction(mode) });
     }
     return messages;
   }
