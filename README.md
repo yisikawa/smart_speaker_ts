@@ -103,6 +103,8 @@ model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
 
 Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama / TTS サーバー・モデルの有無を確認してから起動し、ブラウザを開きます）。
 TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちらか**が動いていれば OK です。
+終了は **`quit.bat`**（アプリ・RVC ワーカーの停止、ポート解放の確認、一時ファイルの掃除まで行います。
+GPT-SoVITS / VOICEVOX も止めるなら `quit.bat /all`）。
 
 > ブラウザのマイクは **`http://localhost:3000`（または `http://127.0.0.1:3000`）** で開けば使えます（localhost は「安全なコンテキスト」扱いのため **https は不要**）。
 > LAN の IP・PC 名（例 `http://192.168.0.5:3000`）で開いた場合のみ、ブラウザがマイクを許可しません。

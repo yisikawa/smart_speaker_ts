@@ -24,6 +24,7 @@
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
 | 既定設定の同期 | `npm run config:default`（`schema.ts` の既定値を `settings.default.toml` へ反映。コメントは保持） |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
+| 終了（後処理込み） | `.\quit.bat`（`/all` で GPT-SoVITS・VOICEVOX も停止、`/yes` で確認なし。実処理は `scripts\quit.ps1`） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
 | 英語 TTS の実測 | `npm run spike:tts`（起動中の TTS サーバーへ投げて RTF / VRAM を測る。`--lang en --runs 5`） |
