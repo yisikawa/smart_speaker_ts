@@ -174,6 +174,10 @@ src/backend/index.ts                                ← Composition Root（DI �
     TTS は ffplay（ブラウザ外）で再生するため、ブラウザの `echoCancellation` では自分の声を消せない。
     - バージインは既定で無効（`conversation.barge_in_enabled = false`）。有効化はヘッドホン前提
     - 直近 3 件の応答と一致する断片（バイグラム一致率 0.6 以上を含む）と 2 文字以下の断片は破棄する
+    - **en は単語バイグラムで判定する**（`isEchoOfReply(text, replies, "en")`）。文字バイグラムだと
+      26 文字しかない英語では "today" / "ready" / "anything" が偶然一致し、**話題語が少し被るだけで
+      0.6 を超えて英語の 2 回目の発話が捨てられる**（実際に "Today is rainy day." が破棄された）。
+      ja は従来どおり文字バイグラム（空白が無いため）
     - **破棄したら必ず `turn_skipped` を通知する**。通知しないとブラウザの `waitForTurn()` が解けず、
       画面が「待機中」のまま固まる（回帰テストあり）
 17. **Ollama のモデル切替は「読み込み」に数十秒かかる（ここで詰まると永久に失敗する）**

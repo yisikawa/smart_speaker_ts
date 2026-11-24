@@ -65,10 +65,22 @@ export function isHallucination(text: string, patterns: RegExp[] = DEFAULT_HALLU
  * 直前に自分（アシスタント）が読み上げた内容のエコーか。
  *
  * スピーカー出力をマイクが拾うと「自分の声をユーザーの発話として認識」してしまい、
- * 1 人で会話し続けるループになる。直近の複数の応答と比較し、
- * 完全一致（部分文字列）に加えて文字バイグラムの一致率でも判定する。
+ * 1 人で会話し続けるループになる。直近の複数の応答と比較する。
+ *
+ * - ja: 文字バイグラムの一致率で判定する（空白が無いため）
+ * - en: **単語バイグラム**で判定する。英語は文字種が 26 しかなく、文字バイグラムだと
+ *   "today" と "today"、"rainy" と "ready"、"anything" と "rainy" のように話題語が
+ *   少し被るだけで一致率が 0.6 を超えて誤判定する（実際に "Today is rainy day." が
+ *   直前の応答のエコーと誤判定され、2 回目の発話が捨てられた）
  */
-export function isEchoOfReply(text: string, lastReplies: string | string[]): boolean {
+export function isEchoOfReply(
+  text: string,
+  lastReplies: string | string[],
+  mode: LanguageMode = "ja"
+): boolean {
+  if (mode === "en") {
+    return isEchoOfReplyWords(text, lastReplies);
+  }
   const replies = Array.isArray(lastReplies) ? lastReplies : [lastReplies];
   const target = normalizeTranscript(text);
   if (target.length < 4) {
@@ -83,6 +95,49 @@ export function isEchoOfReply(text: string, lastReplies: string | string[]): boo
       return true;
     }
     if (bigramCoverage(target, normalized) >= 0.6) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** 英語の単語分割（小文字化し、英数字以外を区切りにする） */
+function tokenizeWords(text: string): string[] {
+  return text
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/** 英語: 単語列の部分一致と単語バイグラムの一致率で判定する */
+function isEchoOfReplyWords(text: string, lastReplies: string | string[]): boolean {
+  const replies = Array.isArray(lastReplies) ? lastReplies : [lastReplies];
+  const targetWords = tokenizeWords(text);
+  // 1 語だけ（"today" など）は誤判定しやすいので対象外（短い断片は別の判定が扱う）
+  if (targetWords.length < 2) {
+    return false;
+  }
+  const pairs = targetWords.length - 1;
+  const target = ` ${targetWords.join(" ")} `;
+  for (const reply of replies) {
+    const replyWords = tokenizeWords(reply);
+    if (replyWords.length === 0) {
+      continue;
+    }
+    const reference = ` ${replyWords.join(" ")} `;
+    if (reference.includes(target)) {
+      return true;
+    }
+    let hit = 0;
+    for (let i = 0; i < pairs; i += 1) {
+      if (reference.includes(` ${targetWords[i]} ${targetWords[i + 1]} `)) {
+        hit += 1;
+      }
+    }
+    if (pairs > 0 && hit / pairs >= 0.6) {
       return true;
     }
   }

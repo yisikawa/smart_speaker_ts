@@ -119,8 +119,8 @@ export class SpeechGate {
     if (isTooShortFragment(text, this.allowlistFor(language))) {
       return { kind: "skip", reason: "short", message: `短すぎる認識結果のため破棄します: ${text}` };
     }
-    // 自分の声（スピーカー出力）を拾った場合
-    if (isEchoOfReply(text, this.recentReplies)) {
+    // 自分の声（スピーカー出力）を拾った場合（en は単語バイグラムで判定する）
+    if (isEchoOfReply(text, this.recentReplies, language)) {
       return { kind: "skip", reason: "echo", message: `自分の発話のエコーと判定したため破棄します: ${text}` };
     }
     // 同じ認識結果が続く場合は幻聴・エコーの可能性が高い（2 回目までは正当な繰り返しとして許容）

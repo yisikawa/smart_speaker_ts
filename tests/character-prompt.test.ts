@@ -37,6 +37,8 @@ test("PromptBuilder は人格・応答ルール・ユーザー名・日時を含
   const project = createTempProject({ prefix: "sumika-char-", copyConfig: true });
   try {
     const config = project.config;
+    // ユーザーの settings.toml が英語モードでも、このテストは日本語プロンプトを検証する
+    config.update({ conversation: { language: "ja" } });
     const prompt = new PromptBuilder({
       config,
       character: {

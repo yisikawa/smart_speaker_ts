@@ -55,6 +55,28 @@ test("isEchoOfReply は自分が読み上げた内容のエコーを検出する
   assert.equal(isEchoOfReply("散歩でもどう", replies[0]), true);
 });
 
+test("isEchoOfReply は英語で話題語が被っても誤判定しない（文字バイグラムの偶然一致）", () => {
+  const replies = [
+    "Hi there! I'm happy to chat with you. What's on your mind today? I'm ready for anything!",
+  ];
+  // 実機で誤判定した文（文字バイグラムの一致率が 0.64 になり echo として捨てられていた）
+  assert.equal(isEchoOfReply("Today is rainy day.", replies, "en"), false);
+  assert.equal(isEchoOfReply("I like rainy days.", replies, "en"), false);
+  assert.equal(isEchoOfReply("The weather is nice today.", replies, "en"), false);
+  // 本物のエコー（自分の応答の一部）は検出する
+  assert.equal(isEchoOfReply("What's on your mind today", replies, "en"), true);
+  assert.equal(isEchoOfReply("I'm ready for anything", replies, "en"), true);
+  assert.equal(isEchoOfReply("chat with you", replies, "en"), true);
+  // 1 語だけは対象外（短い断片は別の判定が扱う）
+  assert.equal(isEchoOfReply("today", replies, "en"), false);
+});
+
+test("isEchoOfReply は言語未指定なら日本語として動く（既存の呼び出しと互換）", () => {
+  const replies = ["今日はいい天気だよ、散歩でもどう？"];
+  assert.equal(isEchoOfReply("今日はいい天気だよ、散歩でもどう", replies), true);
+  assert.equal(isEchoOfReply("明日の予定を教えて", replies), false);
+});
+
 test("isTooShortFragment は意味のない断片だけを弾く", () => {
   // 環境音・自分の声の拾いで出やすい断片
   for (const text of ["ただ", "し込", "あっ", "ん", "。。。", ""]) {
