@@ -142,6 +142,8 @@ npm start              # node dist/backend/index.js
 - **日英モード切替（ヘッダの `日本語 / English`）**: `conversation.language` を切り替えると、
   STT（`[stt.en]`）・プロンプト／キャラクター（`llm.character_file_en`）・読み上げ（`[tts.en]`）・
   文分割・破棄判定がまとめて追従する（次の発話から有効）。詳細は [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md)
+- **日英で同じ声（B 案・実測済み）**: `[tts.ja]` と `[tts.en]` に**同じ GPT-SoVITS（MIT）と同じ参照音声**を書くと、
+  ja/en が同じ声になる（RTX 3060 12GB で RTF 0.45 / 0.49・ja↔en の話者類似度 1.000）。手順は同ドキュメントの §2-B
 - **応答言語ガード**: 目標言語以外の文字が混入した応答は 1 回だけ再生成（ja: ハングル / en: 日本語・中国語・韓国語）
 - **幻聴（hallucination）対策**: whisper.cpp の非音声トークン抑制・文脈抑制・信頼度フィルタで、
   無音や雑音に対する「ご視聴ありがとうございました。」等の誤認識を破棄（[docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md)）
@@ -225,6 +227,7 @@ sherpa_provider = "cpu"
 | 言語 | ヘッダの `日本語 / English`（`PATCH /api/config` の `conversation.language`） | 次の発話から（STT・プロンプト・TTS を再構成） |
 
 - 一覧は `GET /api/models`、切替は `PUT /api/models/llm` / `PUT /api/models/stt`
+- 言語の切替は**応答中（録音・認識・生成・読み上げ）は受け付けない**（途中で切り替えると声が混ざるため。停止してから切り替える）
 - **LLM の切り替えは 20〜60 秒かかることがあります**（Ollama がモデルを VRAM に読み込むため）。
   切り替え時に事前読み込みを行い、完了後に「読み込み◯秒」と表示します（`llm.model_load_timeout_seconds` 既定 180 秒）
 - 存在しないモデルは **400 で拒否**されます（`ollama pull <model>` / `scripts\setup-sherpa.ps1` の案内が画面に出ます）

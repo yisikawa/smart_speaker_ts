@@ -1,6 +1,8 @@
 node_modules/
 dist/
 dist-test/
+# Qwen3-TTS などの検証用 venv（scripts/spike-qwen-tts.py が使う）
+.venv-tts/
 logs/*.log
 logs/*.wav
 logs/*.out
@@ -29,3 +31,6 @@ Live2DModels/
 # 立ち絵などのユーザー素材（各自用意）
 assets/avatar/*
 !assets/avatar/.gitkeep
+
+# TTS の参照音声（権利のある音声を各自用意。B 案の GPT-SoVITS などで使う）
+assets/voices/

@@ -26,6 +26,14 @@ import { WsClient } from "./WsClient";
  *
  * ここは「イベントを誰に渡すか」だけを持ち、DOM 操作・通信・録音の詳細は各担当に任せる。
  */
+/** 言語切替を拒否する状態（録音・認識・生成・読み上げの最中） */
+const LANGUAGE_SWITCH_BLOCKED: readonly AssistantState[] = [
+  "recording",
+  "transcribing",
+  "thinking",
+  "speaking",
+];
+
 class SumikaApp {
   private readonly view = new ChatView();
   private readonly ws: WsClient;
@@ -57,7 +65,7 @@ class SumikaApp {
       onMessage: (message) => this.handleMessage(message),
       onClose: () => {
         this.view.setServicesText("サーバー未接続（再接続中…）", true);
-        this.view.setState("error");
+        this.setAssistantState("error");
         this.view.showToast("サーバーとの接続が切れました（再接続します）", "error");
       },
       onHelloTimeout: () => {
@@ -70,6 +78,8 @@ class SumikaApp {
       view: this.view,
       send: (command) => this.send(command),
       isConnected: () => this.ws.isOpen,
+      // 録音はブラウザが駆動するため、状態もここへ集約する（言語切替の判定と表示をずらさない）
+      onStateChange: (state) => this.setAssistantState(state),
     });
     this.settings = new SettingsPanel(this.view, () => this.inputMode);
   }
@@ -79,7 +89,7 @@ class SumikaApp {
     this.bindEvents();
     this.settings.bind();
     // connect() より先に初期状態を設定する（未接続時の表示を上書きしないため）
-    this.view.setState("idle");
+    this.setAssistantState("idle");
     this.connect();
   }
 
@@ -162,9 +172,21 @@ class SumikaApp {
    * サーバーは config 変更を検知して STT / TTS を再構成し、
    * 全クライアントへ `language` 通知を配る（ここでは楽観的に表示も更新する）。
    */
+  /**
+   * 状態表示を更新する（`assistantState` と `ChatView` を同時に更新する唯一の経路）。
+   *
+   * 言語切替の可否は `assistantState` で判定するため、`view.setState()` を直接呼ぶと
+   * 判定と表示がずれる。ブラウザ駆動の録音も `MicLoop` からここを通す。
+   */
+  private setAssistantState(state: AssistantState): void {
+    this.assistantState = state;
+    this.view.setState(state);
+  }
+
   private async changeLanguage(language: LanguageMode): Promise<void> {
-    // 応答中に切り替えると、残りの文が新しい言語の声で読まれてしまう
-    if (this.assistantState !== "idle") {
+    // 録音〜読み上げの最中に切り替えると、残りの文が新しい言語の声で読まれてしまう。
+    // `error` / `waiting_wakeword` は「応答中」ではないので許可する（切り替え不能で固まらないように）
+    if (LANGUAGE_SWITCH_BLOCKED.includes(this.assistantState)) {
       this.view.languageSelect.value = this.language;
       this.view.showToast("応答中は言語を切り替えられません（停止してから切り替えてください）", "info");
       return;
@@ -220,8 +242,7 @@ class SumikaApp {
         this.applyHello(message);
         break;
       case "state":
-        this.assistantState = message.state;
-        this.view.setState(message.state);
+        this.setAssistantState(message.state);
         break;
       case "history":
         this.view.renderHistory(message.messages);
@@ -256,8 +277,7 @@ class SumikaApp {
     this.view.renderHistory(hello.history);
     this.view.renderServices(hello.services, hello.audio.inputMode, hello.models);
     this.settings.updateSelection(hello.models);
-    this.assistantState = hello.state;
-    this.view.setState(hello.state);
+    this.setAssistantState(hello.state);
     if (hello.audio.playbackTarget === "browser") {
       this.audioPlayer = new AudioPlayer({ send: (command) => this.send(command) });
       this.audioPlayer.configure(hello.audio);
@@ -282,8 +302,7 @@ class SumikaApp {
     const view = this.view;
     switch (event.type) {
       case "state":
-        this.assistantState = event.state;
-        view.setState(event.state);
+        this.setAssistantState(event.state);
         // 中断（停止ボタン等）で llm_complete が来なかった場合、途中までの吹き出しが残る。
         // そのままにすると次の応答が古い吹き出しへ追記されるため、ここで切り離す。
         view.discardStreamIfIdle(event.state);

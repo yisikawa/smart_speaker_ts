@@ -413,6 +413,34 @@ test("応答中（thinking/speaking など）は言語切替を送らない", as
   assert.match(elements.get("toast")!.textContent, /応答中は言語を切り替えられません/);
 });
 
+test("録音中（recording）も言語切替を送らない", async () => {
+  const { elements, ws, fetchCalls } = bootApp();
+  ws?.onopen?.();
+  ws?.onmessage?.({ data: JSON.stringify({ ...HELLO, state: "recording" }) });
+
+  elements.get("languageSelect")!.value = "en";
+  elements.get("languageSelect")!.trigger("change");
+  await flush();
+
+  const patch = fetchCalls.find((call) => call.method === "PATCH" && call.path === "/api/config");
+  assert.equal(patch, undefined, "録音中は PATCH しない");
+  assert.equal(elements.get("languageSelect")!.value, "ja");
+});
+
+test("error 状態では言語切替できる（切り替え不能で固まらない）", async () => {
+  const { elements, ws, fetchCalls } = bootApp();
+  ws?.onopen?.();
+  ws?.onmessage?.({ data: JSON.stringify({ ...HELLO, state: "error" }) });
+
+  elements.get("languageSelect")!.value = "en";
+  elements.get("languageSelect")!.trigger("change");
+  await flush();
+
+  const patch = fetchCalls.find((call) => call.method === "PATCH" && call.path === "/api/config");
+  assert.ok(patch, "error では PATCH する");
+  assert.deepEqual(patch?.body, { conversation: { language: "en" } });
+});
+
 test("言語セレクトの変更で PATCH /api/config が送られる（言語モード切替）", async () => {
   const { elements, ws, fetchCalls } = bootApp();
   ws?.onopen?.();

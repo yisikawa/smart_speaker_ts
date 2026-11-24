@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as http from "node:http";
+import * as path from "node:path";
 import { OpenAiSpeechTtsService } from "../src/backend/services/OpenAiSpeechTtsService";
 import { TtsRouter } from "../src/backend/services/TtsRouter";
 import { isPcm16MonoWav, normalizeWav } from "../src/backend/services/wavNormalize";
+import { Logger } from "../src/backend/core/logger";
 import { createTempProject, makeWav } from "./helpers/project";
 
 interface StubServer {
@@ -146,7 +148,9 @@ test("TtsRouter は英語モードで合成結果を正規化して返す", asyn
 test("normalizeWav は変換失敗を onError で通知し、元の Buffer を返す", async () => {
   const bad = Buffer.from("not a wav");
   let captured: unknown = null;
+  // 実在しない ffmpeg を指定して、環境（ffmpeg の有無）に依存せず ENOENT で失敗させる
   const result = await normalizeWav(bad, {
+    ffmpegPath: path.join("__no_such_ffmpeg__", "ffmpeg.exe"),
     timeoutMs: 5000,
     onError: (error) => {
       captured = error;
@@ -154,6 +158,60 @@ test("normalizeWav は変換失敗を onError で通知し、元の Buffer を�
   });
   assert.equal(result, bad, "失敗時は元の Buffer を返す（無音にしない）");
   assert.ok(captured instanceof Error, "失敗は握りつぶさず通知する");
+});
+
+test("normalizeWav は中断時には onError を通知しない（誤警告の防止）", async () => {
+  const bad = Buffer.from("not a wav");
+  let captured: unknown = null;
+  const controller = new AbortController();
+  controller.abort();
+  const result = await normalizeWav(bad, {
+    ffmpegPath: path.join("__no_such_ffmpeg__", "ffmpeg.exe"),
+    timeoutMs: 5000,
+    signal: controller.signal,
+    onError: (error) => {
+      captured = error;
+    },
+  });
+  assert.equal(result, bad, "中断でも元の Buffer を返す");
+  assert.equal(captured, null, "中断は失敗ではないので通知しない");
+});
+
+test("TtsRouter は正規化の失敗を warn で通知する（配線）", async () => {
+  const wav = makeWav({ ms: 50, sampleRate: 24000 });
+  const server = await startStubServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "audio/wav" });
+    res.end(wav);
+  });
+
+  const project = createTempProject({
+    patch: {
+      conversation: { language: "en" },
+      tts: { en: { endpoint: `http://127.0.0.1:${server.port}` } },
+    },
+  });
+
+  try {
+    const warnings: string[] = [];
+    const logger = new Logger("TTS");
+    logger.warn = (message: string) => {
+      warnings.push(message);
+    };
+    const router = new TtsRouter({
+      config: project.config,
+      logger,
+      normalize: async (input, options) => {
+        options.onError?.(new Error("変換できません"));
+        return input;
+      },
+    });
+    await router.synthesize("Hello");
+    assert.equal(warnings.length, 1, "失敗は 1 回 warn される");
+    assert.match(warnings[0], /口パクが無効になります/);
+  } finally {
+    await server.close();
+    project.cleanup();
+  }
 });
 
 test("normalizeWav は 16bit PCM モノラルをそのまま返す", async () => {

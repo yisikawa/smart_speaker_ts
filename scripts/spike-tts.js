@@ -100,8 +100,8 @@ async function timed(fn) {
   return { result, elapsedMs };
 }
 
-async function synthesizeVoicevox(config, text) {
-  const tts = config.tts || {};
+async function synthesizeVoicevox(profile, text) {
+  const tts = profile || {};
   const base = String(tts.endpoint || "http://127.0.0.1:50021").replace(/\/+$/, "");
   const speaker = String(tts.speaker_id ?? 2);
   const query = await fetch(`${base}/audio_query?${new URLSearchParams({ text, speaker })}`, {
@@ -148,7 +148,7 @@ async function synthesizeOpenAi(profile, text) {
 async function synthesizeGptSovits(profile, text, lang) {
   const base = String(profile.endpoint || "http://127.0.0.1:9880").replace(/\/+$/, "");
   if (!profile.reference_wav) {
-    throw new Error("tts.en.reference_wav が未設定です（GPT-SoVITS には参照音声が必要）");
+    throw new Error("reference_wav が未設定です（GPT-SoVITS には参照音声が必要）");
   }
   const reference = path.isAbsolute(profile.reference_wav)
     ? profile.reference_wav
@@ -176,16 +176,15 @@ async function synthesizeGptSovits(profile, text, lang) {
 }
 
 async function synthesize(config, lang, text) {
-  if (lang === "ja") {
-    return synthesizeVoicevox(config, text);
-  }
-  const profile = (config.tts && config.tts.en) || {};
-  const engine = profile.engine || "openai_speech";
+  const tts = config.tts || {};
+  // [tts.ja] があれば [tts] に重ねる（TtsRouter の resolveJaProfile と同じ規則）
+  const profile = lang === "ja" ? { ...tts, ...(tts.ja || {}) } : tts.en || {};
+  const engine = profile.engine || (lang === "ja" ? "voicevox" : "openai_speech");
   if (engine === "gpt_sovits") {
-    return synthesizeGptSovits(profile, text, "en");
+    return synthesizeGptSovits(profile, text, lang);
   }
   if (engine === "voicevox") {
-    return synthesizeVoicevox(config, text);
+    return synthesizeVoicevox(profile, text);
   }
   return synthesizeOpenAi(profile, text);
 }

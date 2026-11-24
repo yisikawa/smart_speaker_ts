@@ -190,8 +190,7 @@ export class AppServer {
   }
 
   /** 言語切り替えを全クライアントへ通知する（キャラクター表示も更新する） */
-  private notifyLanguage(): void {
-    const language = this.deps.config.getLanguage();
+  private notifyLanguage(language: LanguageMode = this.deps.config.getLanguage()): void {
     const character = this.deps.character.get(language);
     this.broadcast({
       type: "language",
@@ -222,8 +221,16 @@ export class AppServer {
         return;
       }
       this.lastLanguage = language;
-      // character.reload() が終わってから配る（PATCH /api/config は update → reload の順のため）
-      setImmediate(() => this.notifyLanguage());
+      // character.reload() が終わってから配る（PATCH /api/config は update → reload の順のため）。
+      // setImmediate に移すと ApiRouter の try/catch の外に出るため、ここで例外を捕まえて
+      // 通知の失敗でプロセスを落とさないようにする。
+      setImmediate(() => {
+        try {
+          this.notifyLanguage(language);
+        } catch (error) {
+          this.logger.error("言語の通知に失敗しました", error);
+        }
+      });
     });
 
     await new Promise<void>((resolve, reject) => {

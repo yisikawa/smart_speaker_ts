@@ -79,6 +79,46 @@ test("isAbbreviationAt は数字に続く語尾を略語扱いしない", () => 
   assert.equal(isAbbreviationAt(text, dot, ["st"]), false);
 });
 
+test("isAbbreviationAt は実パックでも序数・小数を略語扱いしない", () => {
+  const abbreviations = getLanguagePack("en").text.abbreviations;
+  const ordinal = "It was his 21st. He left.";
+  assert.equal(isAbbreviationAt(ordinal, ordinal.indexOf("st.") + 2, abbreviations), false);
+  const decimal = "Pi is 3.5 today.";
+  assert.equal(isAbbreviationAt(decimal, decimal.indexOf("3.5") + 1, abbreviations), false);
+});
+
+test("isAbbreviationAt は Saint の St. を略語として扱う", () => {
+  const abbreviations = getLanguagePack("en").text.abbreviations;
+  const text = "He met St. Mary.";
+  assert.equal(isAbbreviationAt(text, text.indexOf("St.") + 2, abbreviations), true);
+});
+
+test("SentenceSplitter は序数のピリオドで分割する", () => {
+  const splitter = new SentenceSplitter({
+    minChars: 5,
+    maxChars: 200,
+    abbreviations: getLanguagePack("en").text.abbreviations,
+  });
+  assert.deepEqual(splitter.push("He finished 1st. Then he left the room."), [
+    "He finished 1st.",
+    "Then he left the room.",
+  ]);
+  assert.deepEqual(splitter.flush(), []);
+});
+
+test("SentenceSplitter は Saint の St. では分割しない", () => {
+  const splitter = new SentenceSplitter({
+    minChars: 5,
+    maxChars: 200,
+    abbreviations: getLanguagePack("en").text.abbreviations,
+  });
+  assert.deepEqual(splitter.push("Mr. Smith met St. Mary at 9 a.m. today. He left."), [
+    "Mr. Smith met St. Mary at 9 a.m. today.",
+    "He left.",
+  ]);
+  assert.deepEqual(splitter.flush(), []);
+});
+
 test("言語ガードはモードに応じて禁止文字が変わる", () => {
   assert.equal(containsDisallowedScript("こんにちは", "ja"), false);
   assert.equal(containsDisallowedScript("안녕하세요", "ja"), true);

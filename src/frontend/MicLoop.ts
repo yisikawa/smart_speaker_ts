@@ -1,4 +1,4 @@
-import type { ClientCommand, HelloPayload } from "../shared/protocol";
+import type { AssistantState, ClientCommand, HelloPayload } from "../shared/protocol";
 import type { ChatView } from "./ChatView";
 import { delay } from "./dom";
 import { BrowserMic, BrowserMicError } from "./mic";
@@ -11,6 +11,8 @@ export interface MicLoopDeps {
   send(command: ClientCommand): void;
   /** WebSocket が接続中か */
   isConnected(): boolean;
+  /** 状態の変更をアプリへ通知する（表示と言語切替の判定を 1 か所に集約する） */
+  onStateChange(state: AssistantState): void;
 }
 
 /** ターン完了を待つ最大時間（ms）。サーバー無応答で永久に待たないための保険 */
@@ -78,7 +80,7 @@ export class MicLoop {
               break;
             }
           }
-          this.deps.view.setState("recording");
+          this.deps.onStateChange("recording");
           const result = await this.mic.listen({
             startTimeoutMs: followup > 0 ? cfg.followup.timeoutMs : cfg.noSpeechTimeoutMs,
             maxDurationMs: cfg.maxRecordMs,
@@ -96,7 +98,7 @@ export class MicLoop {
         }
 
         this.deps.send({ type: "submit_audio", format: "wav", sampleRate: cfg.sampleRate, data: wav });
-        this.deps.view.setState("transcribing");
+        this.deps.onStateChange("transcribing");
         const completed = await this.waitForTurn();
         if (!this.active || !completed) {
           break;
@@ -129,7 +131,7 @@ export class MicLoop {
       this.running = false;
       this.active = false;
       this.mic?.stop("aborted");
-      this.deps.view.setState("idle");
+      this.deps.onStateChange("idle");
     }
   }
 

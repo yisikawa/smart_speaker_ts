@@ -129,7 +129,13 @@ src/backend/index.ts                                ← Composition Root（DI �
     - 言語別の文言・文分割・破棄パターン・感情語彙は `src/shared/i18n/languagePack.ts` に集約する（バックエンドとフロントで共有）
     - `ConfigManager.getSTT()` は英語モードで `[stt.en]` を**上書き合成**して返す。STT 実装は言語を意識しない
     - `SpeechGate` は `{ language: () => ... }` を受け取り、判定テーブルを言語別にキャッシュする（毎回作り直さない）
-    - 英語の文分割は略語（`Mr.` / `a.m.` / `e.g.`）で切らない。`languagePack.en.text.abbreviations` が真実源（`tests/language-pack.test.ts`）
+    - 英語の文分割は略語（`Mr.` / `a.m.` / `e.g.` / `St.`）で切らない。`languagePack.en.text.abbreviations` が真実源（`tests/language-pack.test.ts`）
+      - 序数・小数（`1st.` / `3.5`）は略語ではない（語頭が英字でない語は対象外）。分割結果は `SentenceSplitter` 経由でもテストする
+    - 切替は**応答中は受け付けない**。画面は `AssistantState` が `recording` / `transcribing` / `thinking` / `speaking` のとき拒否し、
+      `error` / `waiting_wakeword` は許可する（切り替え不能で固まらないように）。状態は `app.ts` の `setAssistantState()` に集約し、
+      ブラウザ駆動の録音も `MicLoop` からここを通す（`view.setState()` を直接呼ばない）
+    - `AppServer` の `language` 通知は `character.reload()` の**後**に配る（`setImmediate`。PATCH は `update` → `reload` の順のため）。
+      `setImmediate` 内の例外は `logger.error` で受ける（ApiRouter の try/catch の外に出るため）
 
 12-15. **読み上げは `TtsRouter` 経由**（`VoicevoxTtsService` を直接 DI しない）。ja は `[tts.ja]`（未指定キーは
     `[tts]` 直下・既定は VOICEVOX）、en は `[tts.en]` のプロファイル（`openai_speech` = OpenAI 互換
@@ -139,6 +145,18 @@ src/backend/index.ts                                ← Composition Root（DI �
     - `tts.en.engine=gpt_sovits` は参照音声（1〜5 秒）とその書き起こしが必要。声の権利（VOICEVOX 音源の学習可否）は規約を確認する
     - 実測は `npm run spike:tts`（合成時間・RTF・VRAM）。**B 案（多言語 TTS で声質統一）→ RVC 検証**の順で進める
       （手順: `docs/TTS_MULTILINGUAL.md`）
+
+12-16. **B 案（日英で同じ声）は GPT-SoVITS で成立（2026-11 実測）**。RTF 0.45（ja）/ 0.49（en）・
+    ja↔en の MFCC 類似度 1.000。**`npm run spike:tts` も `[tts.ja]` を見る**ようにした（以前は ja=VOICEVOX 固定）。
+    - **Qwen3-TTS は不採用**: 声は完璧に揃う（0.999）が、素の transformers 実装で RTF 3.45。flash-attn は
+      Windows に prebuilt が無く、vLLM-Omni（公式の低遅延構成）も Windows 非対応。**`dtype=bfloat16` 必須**
+      （fp16 は `device-side assert triggered` で落ちる）
+    - **Kokoro は B 案に使えない**: 参照音声によるクローンができず ja/en が別話者。日本語ボイスの埋め込み
+      ライセンスも未確定（hexgrad/kokoro#397）
+    - GPT-SoVITS の venv は **`numpy<2.0`** のため Qwen と同居不可。`--system-site-packages` でも pip が
+      venv に torch を入れて torchaudio と不整合になる → `pip uninstall -y torch torchvision torchaudio` で
+      system（2.7.1+cu126）を使わせる
+    - 参照音声は `assets/voices/`（gitignore 済み）。**権利が確認できる音声のみ**使う（VOICEVOX 音源は規約を確認）
 
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
@@ -202,8 +220,10 @@ src/backend/index.ts                                ← Composition Root（DI �
   `PUT /api/models/llm`・`PUT /api/models/stt`。設定は即保存、次の発話から有効）
 - **日英モード切替（P1 実装済み）**: ヘッダの `日本語 / English`（`conversation.language`）。
   STT は `[stt.en]`、プロンプトは `llm.character_file_en`、読み上げは `[tts.en]` に追従する。
-  英語 TTS は OpenAI 互換（Kokoro 等）と GPT-SoVITS に対応。**B 案（同一声質）の実測が次の作業**
-  （`npm run spike:tts`、手順は `docs/TTS_MULTILINGUAL.md`）。RVC（`[tts.voice_conversion]`）は B 成功後に検証する
+  英語 TTS は OpenAI 互換（Kokoro 等）と GPT-SoVITS に対応。**B 案は成立（2026-11 実測）**:
+  GPT-SoVITS（MIT）を ja/en 共通にして同じ参照音声を使うと、RTF 0.45/0.49・ja↔en の類似度 1.000。
+  Qwen3-TTS は声は揃うが RTF 3.45 で不採用（`docs/TTS_MULTILINGUAL.md` の §0〜§3）。
+  **次の作業**は RVC（`[tts.voice_conversion]`）の検証と、実アプリでの口パク・言語切替の確認
 - **残作業のバックログは `docs/TODO.md` に集約**（優先度・受け入れ条件・見積つき）。作業を終えたら同ファイルから削除し、
   この節と README を更新する。
 

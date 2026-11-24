@@ -679,8 +679,11 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 **真実源**: `conversation.language`（ja / en）。
 
 - 切替はヘッダのセレクト → `PATCH /api/config { conversation: { language } }` → `ConfigManager.onChange`
+- 応答中（`recording` / `transcribing` / `thinking` / `speaking`）は画面が切替を拒否する（`app.ts` の `LANGUAGE_SWITCH_BLOCKED`。
+  `error` / `waiting_wakeword` は許可）。状態は `setAssistantState()` に集約し、`view.setState()` を直接呼ばない
 - `SttSwitcher.reconfigure()` / `TtsRouter.reconfigure()` が署名の変化を検知して実装を作り直す（次の発話から有効）
-- `AppServer` は言語の変化を検知して全クライアントへ `language` 通知（キャラクター名も更新）
+- `AppServer` は言語の変化を検知して全クライアントへ `language` 通知（キャラクター名も更新）。
+  通知は `character.reload()` の後に配る（`setImmediate` + 例外は `logger.error` で受ける）
 
 **言語パック**（`src/shared/i18n/languagePack.ts`、バックエンドとフロントで共有）
 
@@ -707,14 +710,17 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 
 **B 案の候補**（詳細と手順: `docs/TTS_MULTILINGUAL.md`）
 
-| エンジン | 同一声質 | 遅延 | ライセンス | 備考 |
+| エンジン | 同一声質 | 遅延（実測 RTF） | ライセンス | 判定 |
 |---|---|---|---|---|
-| Kokoro-82M（OpenAI 互換） | ✗（ja は VOICEVOX 継続） | 小 | Apache-2.0 | まず通すための土台 |
-| GPT-SoVITS V2Pro（api_v2） | ◎（参照音声で日英） | 中 | MIT（重みは配布元条件） | Windows 実績・第一候補 |
-| Qwen3-TTS 0.6B Base / CosyVoice3 | ◎ | 中〜大（実装依存） | Apache-2.0 | 低遅延は vLLM-Omni 構成。要実測 |
+| **GPT-SoVITS v2（api_v2）** | ◎（参照音声で日英） | **0.45 / 0.49** | MIT | **採用（2026-11 実測）** |
+| Qwen3-TTS 0.6B Base | ◎（類似度 0.999） | **3.45 / 3.53** | Apache-2.0 | 速度不足。vLLM-Omni は Windows 非対応 |
+| Kokoro-82M（OpenAI 互換） | ✗（クローン不可・ja/en が別話者） | 0.02 級 | Apache-2.0（ja ボイスは未確定） | B 案の単一話者を作れない |
+| Chatterbox / IndexTTS / Fish / XTTS | ○ | — | MIT / bilibili / 研究用 / CPML | retired またはライセンス条件で保留 |
 
-**実測**: `npm run spike:tts` で合成時間・音声長・RTF・VRAM を測る。RTF > 1.0 なら
-`tts.prefetch_depth` を上げるか別エンジンへ。受け入れ条件は `docs/TTS_MULTILINGUAL.md` の 4 章。
+**実測（2026-11 / RTX 3060 12GB）**: GPT-SoVITS を ja/en 共通・同じ参照音声にすると **RTF 0.45（ja）/ 0.49（en）・
+ja↔en の MFCC 類似度 1.000**（`npm run spike:tts`）。Qwen3-TTS は類似度 0.999 だが RTF 3.45 で不採用。
+エンジン単体の計測は `scripts/spike-gpt-sovits.py` / `scripts/spike-qwen-tts.py`。
+RTF > 1.0 なら `tts.prefetch_depth` を上げるか別エンジンへ。受け入れ条件は `docs/TTS_MULTILINGUAL.md` の 4 章。
 
 **C 案（RVC）**: `[tts.voice_conversion]`（既定 OFF）。常駐ワーカー（`POST /convert`）にし、
 モデルのロードを毎回行わない・固定ファイル名を使わない・出力は 16bit PCM に揃える。

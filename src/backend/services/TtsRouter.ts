@@ -6,7 +6,8 @@ import { GptSovitsTtsService } from "./GptSovitsTtsService";
 import { OpenAiSpeechTtsService } from "./OpenAiSpeechTtsService";
 import { VoicevoxTtsService } from "./VoicevoxTtsService";
 import { describeProfile, resolveJaProfile } from "./ttsProfiles";
-import { normalizeWav, NormalizeWavOptions } from "./wavNormalize";
+import { normalizeWav } from "./wavNormalize";
+import type { NormalizeWavOptions } from "./wavNormalize";
 
 interface ResolvedTts {
   signature: string;

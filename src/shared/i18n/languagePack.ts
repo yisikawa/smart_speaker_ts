@@ -214,10 +214,10 @@ export function isAbbreviationAt(text: string, endIndex: number, abbreviations: 
   if (abbreviations.length === 0) {
     return false;
   }
-  // endIndex はピリオドの位置。前後に連続する英字・ピリオドを含めた「語」を作る
+  // endIndex はピリオドの位置。前後に連続する英数字・ピリオドを含めた「語」を作る
   // （"a.m." のように語中にピリオドを持つ略語も 1 語として扱う）
   let start = endIndex;
-  while (start > 0 && /[A-Za-z.]/.test(text[start - 1])) {
+  while (start > 0 && /[A-Za-z0-9.]/.test(text[start - 1])) {
     start -= 1;
   }
   let end = endIndex + 1;
@@ -232,8 +232,8 @@ export function isAbbreviationAt(text: string, endIndex: number, abbreviations: 
   if (!segment) {
     return false;
   }
-  // 「1st.」のように数字に続く語尾は略語ではない
-  if (start > 0 && /[0-9]/.test(text[start - 1])) {
+  // 語頭が英字でない（"1st." / "3.5" など）は略語ではない
+  if (!/^[a-z]/.test(segment)) {
     return false;
   }
   if (abbreviations.includes(segment)) {

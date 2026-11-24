@@ -42,10 +42,18 @@ export async function normalizeWav(
   if (isPcm16MonoWav(wav)) {
     return wav;
   }
+  // 中断済みなら ffmpeg を起動しない（起動すると ENOENT などが後から未処理例外で飛ぶ）
+  if (options.signal?.aborted) {
+    return wav;
+  }
   try {
     return await convertWithFfmpeg(wav, options);
   } catch (error) {
-    options.onError?.(error);
+    // 中断は呼び出し側の意図的な停止なので「変換失敗」として通知しない
+    // （通知すると「口パクが無効になります」という誤警告になる）
+    if (!options.signal?.aborted) {
+      options.onError?.(error);
+    }
     return wav;
   }
 }
@@ -102,6 +110,9 @@ function convertWithFfmpeg(wav: Buffer, options: NormalizeWavOptions): Promise<B
       finish(new Error(`ffmpeg による WAV 変換がタイムアウトしました（${timeoutMs}ms）`));
     }, timeoutMs);
 
+    // 中断済みでも、後から届く spawn のエラーを取りこぼさないようリスナーは先に張る
+    child.on("error", (error) => finish(error));
+
     const onAbort = (): void => {
       kill();
       finish(new Error("WAV 変換が中断されました"));
@@ -118,7 +129,6 @@ function convertWithFfmpeg(wav: Buffer, options: NormalizeWavOptions): Promise<B
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on("error", (error) => finish(error));
     child.on("close", (code) => {
       if (code !== 0) {
         finish(new Error(`ffmpeg が異常終了しました (code=${code}): ${stderr.slice(0, 200)}`));
