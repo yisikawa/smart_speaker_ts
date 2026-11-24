@@ -272,6 +272,23 @@ npm run spike:tts -- --lang en --runs 5 # en だけ 5 回
   `SentenceSplitter` が**手前の読点で切る**（14 字前後で確定 → 合成 1 秒未満）
 - 文末が 24 文字以内なら従来どおり句点で切る（不自然に細切れにしない）。読点が無い長文は文末で切る
 
+### WS 経由の実測（`speak` コマンド・2026-11 / RTX 3060）
+
+`ws://127.0.0.1:3000/ws?role=display` で接続して `speak` を送った結果:
+
+```
+hello services: {"llm":true,"tts":true,"stt":true}
+tts_audio #1 "こんにちは。今日はとてもいい天気なので、一緒に散歩しませんか。"
+  volumes=281 / sliceMs=20 / durationMs=5620 / base64=479632 bytes
+初声 2108ms / 文数 1
+```
+
+- **`volumes` が 281 個入る = 口パクが動く**（空配列だと口が動かない）
+- `speak` コマンドは**分割せず全文を 1 回で合成**する（31 文字 → 2.1 秒）。
+  会話（`submit_text`）では `SentenceSplitter` が効くため 1 文目は最大 24 文字になり、初声が短くなる
+- `tts_audio` は **primary client（`role=display`）にだけ**送られる。`role` を付けない接続では
+  音声が届かない（`services.tts` の確認だけなら不要）
+
 判定の目安:
 
 | RTF | 意味 | 対応 |
