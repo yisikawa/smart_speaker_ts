@@ -221,6 +221,12 @@ src/backend/index.ts                                ← Composition Root（DI �
 - **GPU は RTX 3060 12GB**（CPU は i7-6700 / RAM 40GB）。`Win32_VideoController.AdapterRAM` は 32bit 丸めで 4GB と出るが誤り
 - OBS 30 系（`C:\Program Files\obs-studio\bin\64bit\obs64.exe`）/ Edge 157
 - マイク: `マイク配列 (Realtek(R) Audio)`
+  - **2026-11-24 時点の注意**: Realtek の入力エンドポイント（マイク配列）が Windows から消え、
+    既定入力が `マイク (Logi C270 HD WebCam)` だけになっていた。C270 は
+    `npm run check-audio` で **peak 0.009（-40.9 dBFS）= ほぼ無音** → STT が空になる
+    （画面は「マイクの入力レベルがほぼ 0 です」を出す）。アプリ側の不具合ではない。
+    復旧は デバイスマネージャー →「High Definition Audio デバイス」を削除 → ハードウェア変更のスキャン、
+    または Windows のサウンド設定で入力レベル／ミュートを確認する
 
 ## 6. コーディング規約
 
