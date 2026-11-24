@@ -299,3 +299,10 @@ sad = ""
 [avatar.motions]
 greeting = ""
 nod = ""
+
+
+[server]
+https = true
+cert_path = ""
+key_path = ""
+host = ""

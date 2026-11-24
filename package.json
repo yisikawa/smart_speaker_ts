@@ -16,7 +16,8 @@
     "test": "tsc -p tsconfig.test.json && node --test --test-timeout=30000 \"dist-test/tests/*.test.js\"",
     "check-audio": "node scripts/check-audio.js",
     "spike:tts": "node scripts/spike-tts.js",
-    "smoke": "node scripts/smoke.js"
+    "smoke": "node scripts/smoke.js",
+    "https:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-https.ps1"
   },
   "keywords": [
     "voice-assistant",

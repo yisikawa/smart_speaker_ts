@@ -19,7 +19,11 @@ if /i "%~1"=="/split" set "LAYOUT=split"
 shift
 goto :parse_args
 :args_done
-set "APP_URL=http://localhost:%PORT%/?mode=%LAYOUT%"
+:: HTTPS は certs\server.crt があれば自動（`[server] https = true` が既定）。
+:: マイク（getUserMedia）は secure context（https か localhost）でのみ動く。
+set "SCHEME=http"
+if exist "certs\server.crt" if exist "certs\server.key" set "SCHEME=https"
+set "APP_URL=%SCHEME%://localhost:%PORT%/?mode=%LAYOUT%"
 
 echo.
 echo ========================================
@@ -131,6 +135,11 @@ if not errorlevel 1 (
 echo.
 echo アプリを起動します: %APP_URL%
 echo   %LAYOUT% : split=チャット + アバター（2画面） / chat=チャットのみ / stage=配信画面
+if "%SCHEME%"=="https" (
+    echo   他の PC / スマホから: https://^<このPCのIP^>:%PORT%/  （IP は npm run https:setup が表示します）
+) else (
+    echo   ヒント: HTTPS にすると他の PC のマイクも使えます（npm run https:setup）
+)
 if "%OPEN_BROWSER%"=="1" (
     echo 3 秒後にブラウザで %LAYOUT% レイアウトを開きます
     echo （ブラウザを開かない場合は start.bat /nobrowser、レイアウト指定は /chat または /stage）

@@ -1,6 +1,7 @@
 import express, { Express, NextFunction, Request, Response } from "express";
 import * as fs from "fs";
 import * as http from "http";
+import * as https from "https";
 import * as path from "path";
 import type { ModelSelection, ServerMessage, ServiceStatus } from "../../shared/protocol";
 import type { LanguageMode } from "../../shared/i18n/languagePack";
@@ -29,6 +30,10 @@ export interface AppServerDeps {
   logger: Logger;
   version: string;
   port: number;
+  /** HTTPS の証明書と鍵（未指定なら HTTP で待ち受ける） */
+  tls?: { key: Buffer; cert: Buffer };
+  /** 待受アドレス（未指定なら全インターフェース = LAN からアクセス可能） */
+  host?: string;
   /** 静的ファイル配信ディレクトリ（存在するものだけ使う） */
   frontendDirs: string[];
   /** ブラウザ再生の完了通知を受け取る先（P1 で WsPlaybackSink を渡す） */
@@ -89,7 +94,9 @@ export class AppServer {
       res.status(500).json({ error: error.message });
     });
 
-    this.server = http.createServer(this.app);
+    this.server = this.deps.tls
+      ? https.createServer({ key: this.deps.tls.key, cert: this.deps.tls.cert }, this.app)
+      : http.createServer(this.app);
   }
 
   private mountStatic(): void {
@@ -244,10 +251,17 @@ export class AppServer {
       };
       this.server.once("error", onError);
       this.server.once("listening", onListening);
-      this.server.listen(this.deps.port);
+      if (this.deps.host) {
+        this.server.listen(this.deps.port, this.deps.host);
+      } else {
+        this.server.listen(this.deps.port);
+      }
     });
 
-    this.logger.info(`HTTP + WebSocket サーバー起動: http://localhost:${this.deps.port}`);
+    const scheme = this.deps.tls ? "https" : "http";
+    this.logger.info(
+      `${scheme.toUpperCase()} + WebSocket サーバー起動: ${scheme}://localhost:${this.deps.port}`
+    );
   }
 
   async stop(): Promise<void> {

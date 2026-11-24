@@ -259,5 +259,16 @@ export function sanitizeConfig(config: AppConfig): string[] {
     clampVoiceConversion(vc, warnings);
   }
 
+  // 配信（HTTPS・LAN 公開）。`[server]` が無い設定ファイルでも既定で補完する
+  const srv = config.server;
+  if (!srv || typeof srv !== "object") {
+    config.server = { ...DEFAULT_CONFIG.server };
+  } else {
+    if (typeof srv.https !== "boolean") srv.https = DEFAULT_CONFIG.server.https;
+    if (typeof srv.cert_path !== "string") srv.cert_path = DEFAULT_CONFIG.server.cert_path;
+    if (typeof srv.key_path !== "string") srv.key_path = DEFAULT_CONFIG.server.key_path;
+    if (typeof srv.host !== "string") srv.host = DEFAULT_CONFIG.server.host;
+  }
+
   return warnings;
 }

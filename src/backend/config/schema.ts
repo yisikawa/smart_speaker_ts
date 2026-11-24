@@ -322,6 +322,23 @@ export interface GUIConfig {
   caption_font_size: number;
 }
 
+/** 配信（HTTPS・LAN 公開）の設定 */
+export interface ServerConfig {
+  /**
+   * HTTPS で待ち受ける。`certs/server.crt` と `certs/server.key` が無いときは
+   * HTTP にフォールバックする（起動ログに警告を出す）。
+   * ブラウザのマイク（`getUserMedia`）は secure context（https か localhost）でのみ動くため、
+   * LAN の IP で開くときはこれが必要。
+   */
+  https: boolean;
+  /** 証明書のパス（空なら `<root>/certs/server.crt`） */
+  cert_path: string;
+  /** 秘密鍵のパス（空なら `<root>/certs/server.key`） */
+  key_path: string;
+  /** 待受アドレス（空なら全インターフェース = LAN からアクセス可能） */
+  host: string;
+}
+
 export interface ProactiveCategory {
   enabled: boolean;
   voice: boolean;
@@ -371,6 +388,7 @@ export interface AppConfig {
   recipe_db: RecipeDBConfig;
   music: MusicConfig;
   gui: GUIConfig;
+  server: ServerConfig;
   apps: {
     proactive_speech: ProactiveSpeechConfig;
     home_assistant: HomeAssistantConfig;
@@ -556,6 +574,12 @@ export const DEFAULT_CONFIG: AppConfig = {
     layout: "chat",
     caption_enabled: true,
     caption_font_size: 34,
+  },
+  server: {
+    https: true,
+    cert_path: "",
+    key_path: "",
+    host: "",
   },
   apps: {
     proactive_speech: {

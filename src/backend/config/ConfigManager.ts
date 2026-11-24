@@ -9,6 +9,7 @@ import {
   DeepPartial,
   DEFAULT_CONFIG,
   GUIConfig,
+  ServerConfig,
   HomeAssistantConfig,
   LanguageMode,
   LLMConfig,
@@ -242,6 +243,11 @@ export class ConfigManager {
 
   getGUI(): GUIConfig {
     return this.config.gui;
+  }
+
+  /** 配信（HTTPS・LAN 公開）の設定 */
+  getServer(): ServerConfig {
+    return this.config.server;
   }
 
   /** 設定のみ（実装なし）: プロアクティブ発話 */

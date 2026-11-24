@@ -453,6 +453,23 @@ type ServerMessage =
 3. `PATCH /api/config` で更新すると `settings.toml` は
    **コメント無しの正規化された TOML** として再生成される（手書きコメントは失われる）。
 
+### 8.4 HTTPS（LAN 公開・他 PC のマイク）
+
+`[server]` を追加した（`schema.ts` が真実源）。
+
+| キー | 既定 | 意味 |
+|---|---|---|
+| `https` | `true` | HTTPS で待ち受ける。`certs/server.crt` / `server.key` が無ければ **HTTP にフォールバック**（起動ログに警告） |
+| `cert_path` | `""` | 証明書。空なら `<root>/certs/server.crt` |
+| `key_path` | `""` | 秘密鍵。空なら `<root>/certs/server.key` |
+| `host` | `""` | 待受アドレス。空なら全インターフェース（LAN からアクセス可能） |
+
+- 生成: `npm run https:setup`（`scripts/setup-https.ps1`。mkcert の SAN に LAN IP とコンピュータ名を含める）
+- 目的: ブラウザのマイク（`getUserMedia`）は secure context でのみ動くため、
+  LAN の IP で開いてもマイクを使えるようにする（`D:\LLMProjects\DictationAny` と同じ方式）
+- `WsClient` は `location.protocol` から `ws` / `wss` を選ぶのでフロントの変更は不要
+- `certs/` は gitignore（秘密鍵）。他端末は `mkcert -CAROOT` の `rootCA.pem` を信頼ストアへ入れる
+
 ---
 
 ## 9. As-Is 課題への対応表

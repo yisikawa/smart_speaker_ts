@@ -34,3 +34,6 @@ assets/avatar/*
 
 # TTS の参照音声（権利のある音声を各自用意。B 案の GPT-SoVITS などで使う）
 assets/voices/
+
+# HTTPS の証明書（scripts\setup-https.ps1 で生成。秘密鍵を含むためコミットしない）
+certs/

@@ -8,6 +8,7 @@ import { PromptBuilder } from "./conversation/PromptBuilder";
 import { Logger, LogLevel } from "./core/logger";
 import { findProjectRoot } from "./core/paths";
 import { AppServer } from "./server/AppServer";
+import { loadTls } from "./server/tls";
 import { WsPlaybackSink } from "./server/WsPlaybackSink";
 import { AudioService } from "./services/AudioService";
 import { CharacterService } from "./services/CharacterService";
@@ -90,6 +91,17 @@ async function main(): Promise<void> {
 
   // 4. サーバー
   const port = Number(process.env.PORT ?? 3000);
+  // HTTPS は `certs/` の証明書があれば自動で有効（マイクは secure context でのみ動く）
+  const serverCfg = config.getServer();
+  const tlsResult = loadTls(rootDir, serverCfg);
+  if (tlsResult.ok) {
+    bootLogger.info(
+      `HTTPS を有効にします（証明書: ${path.relative(rootDir, tlsResult.tls.certPath)}）`
+    );
+  } else if (serverCfg.https) {
+    bootLogger.warn(`HTTPS を無効にしました: ${tlsResult.message}`);
+  }
+
   appServer = new AppServer({
     config,
     pipeline,
@@ -101,6 +113,8 @@ async function main(): Promise<void> {
     logger: new Logger("Server"),
     version,
     port,
+    tls: tlsResult.ok ? tlsResult.tls : undefined,
+    host: serverCfg.host.trim() || undefined,
     frontendDirs: [path.join(rootDir, "dist", "frontend"), path.join(rootDir, "src", "frontend")],
     playbackAck: { resolveDone: (utteranceId) => browserPlayback.resolveDone(utteranceId) },
   });

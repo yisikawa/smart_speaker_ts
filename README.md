@@ -107,7 +107,26 @@ TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちら�
 GPT-SoVITS / VOICEVOX も止めるなら `quit.bat /all`）。
 
 > ブラウザのマイクは **`http://localhost:3000`（または `http://127.0.0.1:3000`）** で開けば使えます（localhost は「安全なコンテキスト」扱いのため **https は不要**）。
-> LAN の IP・PC 名（例 `http://192.168.0.5:3000`）で開いた場合のみ、ブラウザがマイクを許可しません。
+> **他の PC / スマホから使う場合は HTTPS が必要**です（下の「HTTPS で他の PC から使う」）。
+
+### HTTPS で他の PC から使う
+
+ブラウザのマイク（`getUserMedia`）は secure context（https か localhost）でのみ動きます。
+LAN の IP で開いてもマイクを使えるようにするには、**mkcert でローカル信頼済み証明書**を作ります
+（`D:\LLMProjects\DictationAny` と同じ方式）。
+
+```powershell
+npm run https:setup     # mkcert を検出して certs\server.crt / server.key を生成（LAN IP も SAN に入る）
+.\start.bat             # certs\ があれば自動で https://localhost:3000 になる
+```
+
+- 他の端末からは `https://<このPCのIP>:3000/` で開きます（IP は `npm run https:setup` が表示）
+- 他の端末で証明書の警告が出る場合は、`mkcert -CAROOT` の `rootCA.pem` をその端末にインストールして信頼します
+  - Windows: `rootCA.pem` を開く → 証明書のインストール → 「信頼されたルート証明機関」
+  - iPhone/iPad: 転送 → 設定 > 一般 > VPN とデバイス管理 → インストール → 設定 > 一般 > 情報 > 証明書信頼設定 で有効化
+- 証明書は `certs/`（gitignore）に置かれ、`[server] https = true` が既定です。
+  `https = false` にすると HTTP に戻ります（`certs/` が無い場合も自動で HTTP + 起動ログに警告）
+- mkcert が無い場合は `winget install FiloSottile.mkcert` で入れてから実行してください
 
 ```powershell
 .\start.bat              # 2画面（左: チャット / 右: アバター）で起動
@@ -285,6 +304,7 @@ sherpa_provider = "cpu"
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language`, `[stt.en]`（英語モードの上書き） |
 | `[llm]` | `endpoint`, `model`, `character_file`, `character_file_en`, `temperature`, `max_tokens`, `history_turns`, `response_timeout_seconds`, `model_load_timeout_seconds` |
 | `[tts]` | `engine`, `endpoint`, `speaker_id`, `speed`, `pitch`, `volume`, `split_sentences`, `prefetch_depth`, `[tts.ja]`（日本語の上書き）, `[tts.en]`（英語の音声プロファイル）, `[tts.voice_conversion]`（任意の RVC） |
+| `[server]` | `https`（既定 true。`certs/` が無ければ HTTP）, `cert_path`, `key_path`, `host`（空=全インターフェース。LAN 公開用） |
 
 設定の反映:
 

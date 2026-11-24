@@ -3,15 +3,18 @@
  * 使い方: サーバーを起動した状態で `node scripts/smoke.js`
  * 環境変数 SMOKE_BASE で接続先を変更できる（既定: http://127.0.0.1:3000）
  */
-const http = require("http");
 const WebSocket = require("ws");
 
 const BASE = process.env.SMOKE_BASE ?? "http://127.0.0.1:3000";
+const isHttps = BASE.startsWith("https:");
+/** 自己署名（mkcert）でも通す。`NODE_EXTRA_CA_CERTS` を渡せば検証もできる */
+const transport = isHttps ? require("https") : require("http");
+const tlsOptions = isHttps ? { rejectUnauthorized: false } : {};
 
 function getJson(pathname) {
   return new Promise((resolve, reject) => {
-    http
-      .get(`${BASE}${pathname}`, (res) => {
+    transport
+      .get(`${BASE}${pathname}`, tlsOptions, (res) => {
         let raw = "";
         res.on("data", (chunk) => {
           raw += chunk;
@@ -32,7 +35,7 @@ function requestJson(method, pathname, body) {
   const payload = body === undefined ? null : JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const url = new URL(`${BASE}${pathname}`);
-    const req = http.request(
+    const req = transport.request(
       {
         hostname: url.hostname,
         port: url.port,
@@ -41,6 +44,7 @@ function requestJson(method, pathname, body) {
         headers: payload
           ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
           : {},
+        ...tlsOptions,
       },
       (res) => {
         let raw = "";
@@ -67,7 +71,7 @@ function requestJson(method, pathname, body) {
 function waitForWebSocket() {
   return new Promise((resolve) => {
     const url = `${BASE.replace(/^http/, "ws")}/ws`;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(url, tlsOptions);
     const seen = [];
     const timer = setTimeout(() => {
       ws.terminate();

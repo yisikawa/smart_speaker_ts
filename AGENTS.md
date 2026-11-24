@@ -25,6 +25,7 @@
 | 既定設定の同期 | `npm run config:default`（`schema.ts` の既定値を `settings.default.toml` へ反映。コメントは保持） |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
 | 終了（後処理込み） | `.\quit.bat`（`/all` で GPT-SoVITS・VOICEVOX も停止、`/yes` で確認なし。実処理は `scripts\quit.ps1`） |
+| HTTPS 証明書の生成 | `npm run https:setup`（mkcert で `certs/server.crt` / `key` を生成。LAN IP も SAN に入る。`-Force` で作り直し） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
 | 英語 TTS の実測 | `npm run spike:tts`（起動中の TTS サーバーへ投げて RTF / VRAM を測る。`--lang en --runs 5`） |
@@ -61,7 +62,10 @@ src/backend/index.ts                                ← Composition Root（DI �
 3. **AudioContext の自動再生ポリシー**
    初回のマイク許可ダイアログ待ちで `suspended` に戻る。クリック中に生成 + `resume()`、
    だめなら次の `pointerdown` で再開。`diagnostics()` を必ずトーストに出す。
-4. **localhost は https 不要**（secure context）。LAN の IP で開くとマイク不可。
+4. **localhost は https 不要**（secure context）。**LAN の IP で開くとマイク不可** → `certs/` に
+   証明書を置けば自動で HTTPS になる（`[server] https = true`。生成は `npm run https:setup`）。
+   ワーカーではなく**サーバー本体**が `https.createServer` に切り替わる（WS も `wss:`）。
+   フロントの `WsClient` は `location.protocol` から `ws`/`wss` を選ぶので変更不要
 5. **whisper.cpp の `-ng` は「GPU 無効」**。`use_gpu=false` のときだけ付与。
 6. **1.9 系で `main.exe` は廃止**（`whisper-cli.exe`）。互換のためスクリプトが `main.exe` も配置。
 7. **VRAM 4GB では f16（1.6GB）が厳しい** → `ggml-large-v3-turbo-q5_0.bin`（547MB）を使用中。
@@ -177,6 +181,17 @@ src/backend/index.ts                                ← Composition Root（DI �
     - `index_path` を空にすると index なし（`index_rate` が効かない）。**`imadaMio` は `.pth` と `_v2.index` で
       名前が違う**ので明示する（`.pth` → `.index` の自動ペアリングは未実装）
     - **モデルは権利を確認したものだけ使う**（`imadaMio` は実在の人物。ローカル検証のみで公開しない）
+
+12-18. **HTTPS は `certs/` の有無で自動**（`[server] https = true` が既定）
+    - `scripts/setup-https.ps1`（`npm run https:setup`）が mkcert で `certs/server.crt` / `server.key` を作る。
+      SAN には `localhost` / `127.0.0.1` / `::1` / コンピュータ名 / LAN IP が入る
+    - `loadTls()`（`server/tls.ts`）が読み、**無ければ HTTP にフォールバック**して起動ログに警告を出す
+      （起動失敗にはしない。`https = false` で明示的に HTTP）
+    - `AppServer` は `tls` を受け取ったときだけ `https.createServer` を使う。`host` は空なら全インターフェース
+    - `certs/` は **gitignore**（秘密鍵）。他端末で警告が出るときは `mkcert -CAROOT` の `rootCA.pem` を
+      その端末の信頼ストアへ入れる（iPhone は「証明書信頼設定」まで有効化する）
+    - `npm run smoke` は `SMOKE_BASE=https://...` に追従する（自己署名向けに `rejectUnauthorized: false`。
+      検証したいときは `NODE_EXTRA_CA_CERTS` を併用）
 
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
