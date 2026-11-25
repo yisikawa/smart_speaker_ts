@@ -1,6 +1,7 @@
 import type { CaptureEndReason, HelloPayload } from "../shared/protocol";
 import { applyGain, bytesToBase64, encodeWav, resample, splitInt16Frames } from "../shared/audio/pcm";
 import { VadEngine } from "../shared/audio/vad";
+import { buildBrowserVadSettings } from "../shared/audio/vadSettings";
 
 /** hello で受け取る音声設定 */
 export type MicAudioConfig = HelloPayload["audio"];
@@ -67,7 +68,12 @@ export class BrowserMic {
   /** フレーム長に満たない受信サンプルの持ち越し */
   private pending: Int16Array = new Int16Array(0);
 
-  constructor(private readonly config: MicAudioConfig) {}
+  constructor(private config: MicAudioConfig) {}
+
+  /** 設定だけ差し替える（AudioContext とストリームは維持。次の listen から反映） */
+  reconfigure(config: MicAudioConfig): void {
+    this.config = config;
+  }
 
   get isRunning(): boolean {
     return this.stream !== null;
@@ -237,22 +243,10 @@ export class BrowserMic {
       this.finishSession("aborted");
     }
 
-    const vad = this.config.vad;
     this.pending = new Int16Array(0);
+    // hello で受け取った VAD 設定をそのまま使い、録音レートとしきい値だけ実測値で差し替える
     const engine = new VadEngine(
-      {
-        sampleRate: this.captureRate,
-        frameMs: vad.frameMs,
-        preRollMs: vad.preRollMs,
-        silenceThreshold: this.config.silenceThreshold,
-        silenceDurationMs: vad.silenceDurationMs,
-        smoothingAlpha: vad.smoothingAlpha,
-        relativeThresholdMultiplier: vad.relativeThresholdMultiplier,
-        maxSilenceThreshold: vad.maxSilenceThreshold,
-        calibrationMs: vad.calibrationMs,
-        debounceFrames: vad.debounceFrames,
-        inputGain: vad.inputGain,
-      },
+      buildBrowserVadSettings(this.config.vad, this.captureRate, this.config.silenceThreshold),
       {
         maxDurationMs: options.maxDurationMs,
         startTimeoutMs: options.startTimeoutMs,

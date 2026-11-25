@@ -1,4 +1,5 @@
-import { AppConfig, DEFAULT_CONFIG, SherpaModelType } from "./schema";
+import { AppConfig, DEFAULT_CONFIG } from "./schema";
+import { isSherpaModelType } from "../../shared/stt/modelTypes";
 
 /** 数値項目を持つセクション */
 type NumericSection = "audio" | "conversation" | "stt" | "llm" | "tts" | "avatar" | "gui";
@@ -176,8 +177,7 @@ export function sanitizeConfig(config: AppConfig): string[] {
     config.stt.engine = "whisper";
   }
 
-  const modelTypes: SherpaModelType[] = ["nemo_transducer", "nemo_ctc", "sense_voice", "zipformer_transducer"];
-  if (!modelTypes.includes(config.stt.sherpa_model_type)) {
+  if (!isSherpaModelType(config.stt.sherpa_model_type)) {
     warnings.push(
       `stt.sherpa_model_type=${String(config.stt.sherpa_model_type)} は未対応のため "nemo_transducer" を使用します`
     );

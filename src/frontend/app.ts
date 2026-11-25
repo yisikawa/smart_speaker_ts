@@ -8,6 +8,7 @@ import type {
   ServerMessage,
 } from "../shared/protocol";
 import { getLanguagePack, isLanguageMode } from "../shared/i18n/languagePack";
+import { errorText } from "../shared/errorText";
 import { ChatView } from "./ChatView";
 import { AudioPlayer } from "./AudioPlayer";
 import { LipSyncDriver } from "./avatar/LipSyncDriver";
@@ -64,6 +65,9 @@ class SumikaApp {
       },
       onMessage: (message) => this.handleMessage(message),
       onClose: () => {
+        // 再接続でマイクや AudioContext が二重に開かないよう、先に解放する
+        void this.micLoop.shutdown();
+        this.audioPlayer?.stop();
         this.view.setServicesText("サーバー未接続（再接続中…）", true);
         this.setAssistantState("error");
         this.view.showToast("サーバーとの接続が切れました（再接続します）", "error");
@@ -80,6 +84,8 @@ class SumikaApp {
       isConnected: () => this.ws.isOpen,
       // 録音はブラウザが駆動するため、状態もここへ集約する（言語切替の判定と表示をずらさない）
       onStateChange: (state) => this.setAssistantState(state),
+      // バージイン検出時はサーバーの応答を待たずにローカル再生を止める
+      onBargeIn: () => this.audioPlayer?.stop(),
     });
     this.settings = new SettingsPanel(this.view, () => this.inputMode);
   }
@@ -88,6 +94,11 @@ class SumikaApp {
     this.stage.apply(parseStageOptions(window.location.search ?? ""));
     this.bindEvents();
     this.settings.bind();
+    // ページ破棄時にマイクと AudioContext を残さない（次回の起動で「使用中」にならない）
+    window.addEventListener("beforeunload", () => {
+      void this.micLoop.shutdown();
+      this.audioPlayer?.dispose();
+    });
     // connect() より先に初期状態を設定する（未接続時の表示を上書きしないため）
     this.setAssistantState("idle");
     this.connect();
@@ -264,6 +275,11 @@ class SumikaApp {
 
   private applyHello(hello: HelloPayload): void {
     this.ws.helloReceived();
+    // 再接続時は旧インスタンスを必ず止める（AudioContext・口パクのリーク防止）
+    this.lipSync?.stop();
+    this.lipSync = null;
+    this.audioPlayer?.dispose();
+    this.audioPlayer = null;
     this.view.setServicesText("");
     this.applyLanguage(hello.language ?? "ja");
     this.view.setNames(hello.character.name, hello.user);
@@ -281,8 +297,6 @@ class SumikaApp {
     if (hello.audio.playbackTarget === "browser") {
       this.audioPlayer = new AudioPlayer({ send: (command) => this.send(command) });
       this.audioPlayer.configure(hello.audio);
-    } else {
-      this.audioPlayer?.configure(hello.audio);
     }
 
     if (hello.avatar) {
@@ -348,6 +362,8 @@ class SumikaApp {
         this.audioPlayer?.enqueue(event);
         break;
       case "speech_reset":
+        // 言語ガードの読み直し。旧言語の音声・キューの世代を進めて破棄する
+        this.audioPlayer?.stop();
         view.addSystemNote(getLanguagePack(this.language).prompt.speechResetNote);
         break;
       case "speaking_finished":
@@ -407,8 +423,4 @@ function formatDiagnostics(report: DiagnosticsReport): string {
     `音声: ${report.audio.input_mode} / しきい値=${report.audio.silence_threshold}（上限 ${report.audio.silence_threshold_max}） / 無音=${report.audio.silence_duration}s / 最大=${report.audio.max_record_seconds}s / バージイン=${report.audio.barge_in_enabled}`,
     report.warnings.length > 0 ? `設定の警告: ${report.warnings.join(" / ")}` : "設定の警告: なし",
   ].join("\n");
-}
-
-function errorText(error: unknown): string {
-  return String((error as Error)?.message ?? error);
 }

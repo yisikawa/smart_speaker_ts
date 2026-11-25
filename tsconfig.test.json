@@ -7,6 +7,12 @@
     "noUnusedParameters": false,
     "sourceMap": false
   },
-  "include": ["src/backend/**/*", "src/shared/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist", "dist-test", "src/frontend"]
+  "include": [
+    "src/backend/**/*",
+    "src/shared/**/*",
+    "src/frontend/AudioPlayer.ts",
+    "src/frontend/MicLoop.ts",
+    "tests/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "dist-test"]
 }

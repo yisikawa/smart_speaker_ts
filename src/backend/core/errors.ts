@@ -6,6 +6,8 @@
  * 判定は **AbortSignal の状態**で行い、文字列一致には依存しない。
  */
 
+import { errorText } from "../../shared/errorText";
+
 /** 中断されたか（AbortSignal の状態で判定する） */
 export function isAborted(signal?: AbortSignal): boolean {
   return signal?.aborted === true;
@@ -18,10 +20,11 @@ export function abortError(message = "処理が中断されました"): Error {
   return error;
 }
 
-/** 例外からメッセージ文字列を取り出す */
-export function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+/**
+ * 例外からメッセージ文字列を取り出す（表示用の共通実装を共有する）。
+ * 新規コードは `shared/errorText` の `errorText` を使う。
+ */
+export const errorMessage = errorText;
 
 /**
  * 通信レベルのエラーを、原因が分かるメッセージへ変換する。

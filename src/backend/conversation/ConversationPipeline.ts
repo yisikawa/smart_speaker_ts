@@ -280,7 +280,12 @@ export class ConversationPipeline {
 
   /** 再生のみ停止する（ブラウザからのバージイン用） */
   stopSpeaking(): void {
+    // 現在のターンの読み上げキューも止める（次の文が続けて鳴らないように）
+    this.turnRunner.stopSpeaking();
     this.playback?.stop();
+    if (this.state === "speaking") {
+      this.emit({ type: "barge_in" });
+    }
   }
 
   /** 音声を認識する（実装は `TranscriptionRunner`。破棄は `ignored` として返る） */

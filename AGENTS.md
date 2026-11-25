@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 119 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 285 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -193,6 +193,22 @@ src/backend/index.ts                                ← Composition Root（DI �
     - `npm run smoke` は `SMOKE_BASE=https://...` に追従する（自己署名向けに `rejectUnauthorized: false`。
       検証したいときは `NODE_EXTRA_CA_CERTS` を併用）
 
+12-19. **停止は「世代番号 / キャンセルフラグ」で二重実行を防ぐ**
+    - ブラウザ再生は `AudioPlayer.token`（`stop()` で +1）。`decodeAudioData` の完了時にも検査する
+    - サーバー再生は `PlaybackProcess` の `cancelled`。`writeFile` / `spawn` の前に必ず見る
+    - 停止後に遅れて届いた音声・プロセスは捨てる（`audio_playback_done` も送らない）
+    - 回帰テスト: `tests/audio-player.test.ts` / `tests/playback-process.test.ts`
+
+12-20. **再接続は teardown → 生成の順**
+    - `app.ts` の `onClose` は `micLoop.shutdown()` と `audioPlayer.stop()`
+    - `applyHello()` は旧 `lipSync.stop()` / `audioPlayer.dispose()` を**先に**実行する
+    - `MicLoop.configure()` はマイクを作り直さず `BrowserMic.reconfigure()` で設定だけ差し替える
+
+12-21. **VAD 設定は `src/shared/audio/vadSettings.ts` のみ**
+    - サーバーは `buildVadSettings(audio)`、hello は `buildClientVadSettings(audio)`
+    - hello の組み立ては `backend/server/helloPayload.ts` の `buildHelloPayload()`
+    - 手写しが復活していないことは `tests/vad-settings-single-source.test.ts` が検出する
+
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない
     - 相対しきい値は `silence_threshold_max`（既定 0.06）でクランプする
@@ -230,6 +246,7 @@ src/backend/index.ts                                ← Composition Root（DI �
 ## 5. 環境前提（この PC）
 
 - Windows / Node.js v24.11 / ffmpeg・ffplay あり（`C:\ffmpeg\bin`・PATH 済み）
+- **サブエージェント実行（superpowers SDD）は `cline-pass/deepseek-v4.1-flash-1017` を使う**（残高の影響を受けない。Anthropic 直・Cline の他モデルは残高不足で失敗する）
 - Ollama 稼働・**`gemma4:e2b-it-qat`**（導入済み: `llama3.2:3b` / `qwen2.5:7b` / `qwen2.5:14b` / `llama3.1:8b` / `nomic-embed-text`）
 - VOICEVOX ENGINE 0.26.1・`speaker_id = 2`（四国めたん）
 - whisper.cpp は CUDA 版（`whisper.cpp/`、CPU 版は `whisper.cpp/_cpu-backup/`）。既定 STT は sherpa-onnx（CPU）
@@ -258,6 +275,9 @@ src/backend/index.ts                                ← Composition Root（DI �
 - **Live2D アバター（P4）**: `Live2DModels/hiyori_vts/hiyori.model3.json` を表示。Cubism Core は
   `scripts\setup-live2d.ps1` で `vendor/live2d/` へ取得（gitignore）。モデル/Core が無ければ sprite へ落ちる
 - バージョン表記は `0.3.0`（`package.json`）。リファクタリング（P0〜P6）完了に伴い 0.2.0 から更新。
+- **潜在バグ優先リファクタリング（2026-11-25）完了**: VAD 設定の単一化・hello の純粋関数化・sherpa 種別の型ガード・
+  エラー文言の集約・停止のキャンセル（ブラウザ / サーバー）・再接続時の teardown・バージインでのキュー停止
+  （設計: `docs/superpowers/specs/2026-11-25-latent-bug-refactor-design.md`。再発防止は 12-19〜12-21）。
 - 未実装（設定のみ）: `[rag]` / `[recipe_db]` / `[music]` / `[apps.proactive_speech]` / `[apps.home_assistant]` / ウェイクワード
   （真実源は `ConfigManager.UNSUPPORTED_SECTIONS`）
 - STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は whisper）
