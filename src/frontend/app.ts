@@ -349,6 +349,8 @@ class SumikaApp {
         this.audioPlayer?.enqueue(event);
         break;
       case "speech_reset":
+        // 言語ガードの読み直し。旧言語の音声・キューの世代を進めて破棄する
+        this.audioPlayer?.stop();
         view.addSystemNote(getLanguagePack(this.language).prompt.speechResetNote);
         break;
       case "speaking_finished":

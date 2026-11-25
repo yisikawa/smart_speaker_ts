@@ -20,7 +20,7 @@ function setup() {
   const stopped: number[] = [];
   const acks: string[] = [];
   const sources: FakeSource[] = [];
-  const decodes: ((buffer: unknown) => void)[] = [];
+  const decodes: { resolve: (buffer: unknown) => void; reject: (error: unknown) => void }[] = [];
 
   const context = {
     currentTime: 0,
@@ -38,7 +38,10 @@ function setup() {
       sources.push(source);
       return source;
     },
-    decodeAudioData: () => new Promise<unknown>((resolve) => decodes.push(resolve)),
+    decodeAudioData: () =>
+      new Promise<unknown>((resolve, reject) => {
+        decodes.push({ resolve, reject });
+      }),
     close: async () => undefined,
   };
 
@@ -69,7 +72,7 @@ test("デコード解決前に stop したら再生しない（ack も送らな�
   const fakes = setup();
   fakes.player.enqueue(ttsAudio("u1"));
   fakes.player.stop();
-  fakes.decodes[0]({});
+  fakes.decodes[0].resolve({});
   await flush();
   assert.deepEqual(fakes.started, []);
   assert.deepEqual(fakes.acks, []);
@@ -78,7 +81,7 @@ test("デコード解決前に stop したら再生しない（ack も送らな�
 test("再生中の stop は source を止め、遅れて来た onended で二重 ack しない", async () => {
   const fakes = setup();
   fakes.player.enqueue(ttsAudio("u1"));
-  fakes.decodes[0]({});
+  fakes.decodes[0].resolve({});
   await flush();
   assert.deepEqual(fakes.started, ["start"]);
 
@@ -92,12 +95,31 @@ test("再生中の stop は source を止め、遅れて来た onended で二重
 test("stop 後の次の enqueue は再生される", async () => {
   const fakes = setup();
   fakes.player.enqueue(ttsAudio("u1"));
-  fakes.decodes[0]({});
+  fakes.decodes[0].resolve({});
   await flush();
   fakes.player.stop();
 
   fakes.player.enqueue(ttsAudio("u2"));
-  fakes.decodes[1]({});
+  fakes.decodes[1].resolve({});
   await flush();
   assert.equal(fakes.started.length, 2);
+});
+
+test("デコード失敗（停止していない）は ack を送る", async () => {
+  const fakes = setup();
+  fakes.player.enqueue(ttsAudio("u1"));
+  fakes.decodes[0].reject(new Error("bad wav"));
+  await flush();
+  assert.deepEqual(fakes.started, []);
+  assert.deepEqual(fakes.acks, ["u1"]);
+});
+
+test("停止後のデコード失敗は ack も送らない", async () => {
+  const fakes = setup();
+  fakes.player.enqueue(ttsAudio("u1"));
+  fakes.player.stop();
+  fakes.decodes[0].reject(new Error("bad wav"));
+  await flush();
+  assert.deepEqual(fakes.started, []);
+  assert.deepEqual(fakes.acks, []);
 });
