@@ -6,8 +6,8 @@ import type {
   HealthReport,
   ModelCatalog,
   ModelUpdateResult,
-  SherpaModelTypeName,
 } from "../../shared/protocol";
+import { isSherpaModelType } from "../../shared/stt/modelTypes";
 import { ConfigManager } from "../config/ConfigManager";
 import { AppConfig, DeepPartial, STTConfig } from "../config/schema";
 import { ConversationPipeline } from "../conversation/ConversationPipeline";
@@ -22,14 +22,6 @@ import {
   pickLlmModel,
 } from "../services/modelCatalog";
 import { ServiceMonitor } from "./ServiceMonitor";
-
-/** 受け付ける sherpa-onnx のモデル種別（`schema.ts` と一致させる） */
-const SHERPA_MODEL_TYPES: SherpaModelTypeName[] = [
-  "nemo_transducer",
-  "nemo_ctc",
-  "sense_voice",
-  "zipformer_transducer",
-];
 
 /** 設定へ保存するパスは `/` 区切りに統一する（TOML の可読性） */
 function toConfigPath(value: string): string {
@@ -305,11 +297,11 @@ export function createApiRouter(deps: ApiDeps): Router {
 
         const modelType = req.body?.sherpa_model_type;
         if (typeof modelType === "string" && modelType) {
-          if (!SHERPA_MODEL_TYPES.includes(modelType as SherpaModelTypeName)) {
+          if (!isSherpaModelType(modelType)) {
             res.status(400).json({ error: `未対応の sherpa_model_type です: ${modelType}` });
             return;
           }
-          sttPatch.sherpa_model_type = modelType as SherpaModelTypeName;
+          sttPatch.sherpa_model_type = modelType;
         }
         label = `sherpa-onnx / ${path.basename(requested)}`;
       }
