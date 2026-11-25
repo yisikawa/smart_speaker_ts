@@ -6,6 +6,8 @@ type AudioEvent = Extract<PipelineEvent, { type: "tts_audio" }>;
 export interface AudioPlayerDeps {
   send(command: ClientCommand): void;
   onPlayingChange?(playing: boolean): void;
+  /** AudioContext の生成（テスト用。既定は `new AudioContext()`） */
+  createContext?: () => AudioContext;
 }
 
 /**
@@ -93,7 +95,7 @@ export class AudioPlayer {
 
   private context(): AudioContext {
     if (!this.ctx) {
-      this.ctx = new AudioContext();
+      this.ctx = this.deps.createContext?.() ?? new AudioContext();
       this.gain = this.ctx.createGain();
       this.gain.gain.value = this.volume;
       this.gain.connect(this.ctx.destination);
@@ -102,14 +104,21 @@ export class AudioPlayer {
   }
 
   private async decode(event: AudioEvent): Promise<void> {
+    const token = this.token;
     try {
       const copy = new Uint8Array(bytesFromBase64(event.audio));
       const buffer = await this.context().decodeAudioData(copy.buffer as ArrayBuffer);
+      if (token !== this.token) {
+        // stop() 済み。デコード結果は捨てる（ack も送らない）
+        return;
+      }
       this.ready.push({ event, buffer });
       this.pump();
     } catch (error) {
       console.warn("[Audio] 音声をデコードできませんでした", error);
-      this.deps.send({ type: "audio_playback_done", utteranceId: event.utteranceId });
+      if (token === this.token) {
+        this.deps.send({ type: "audio_playback_done", utteranceId: event.utteranceId });
+      }
     }
   }
 
