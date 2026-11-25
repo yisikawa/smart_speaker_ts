@@ -288,7 +288,7 @@ P2 で必要なシーム（`PlaybackProcess`・`createMic`・`createContext`）�
 | `tests/model-catalog.test.ts`（追記） | `isSherpaModelType()` が 4 種別のみ true／配列が型と一致（`satisfies` によるコンパイル時検証） |
 | `tests/audio-player.test.ts` | フェイク `AudioContext` を注入。`decode` の解決前に `stop()` → `source.start()` が呼ばれない／`onended` 後に二重 ack しない／`stop()` 後の次の `enqueue` は再生される |
 | `tests/playback-process.test.ts` | フェイク `spawn`。`stop()` が `spawn` より先 → spawn されず一時ファイルも残らない／spawn 後 → `kill()` が呼ばれる／ffplay の音量が 0..1 にクランプされる／SoundPlayer の引数にファイルパスが入る |
-| `tests/mic-loop.test.ts` | フェイク mic を注入。`configure()` を 2 回呼ぶと旧 mic の `stopStream()` が 1 回だけ呼ばれ、新しい設定が反映される／`shutdown()` でループとストリームが止まる／`onSpeechStart` で `onBargeIn` が先に呼ばれ、その後 `stop_speaking` が送られる |
+| `tests/mic-loop.test.ts` | フェイク mic を注入。`configure()` を 2 回呼んでもマイクは 1 つだけ生成され、`reconfigure()` で新しい設定が反映される／`shutdown()` でループとストリームが止まる／`onSpeechStart` で `onBargeIn` が先に呼ばれ、その後 `stop_speaking` が送られる |
 | `tests/turn-runner-streaming.test.ts`（追記） | `stopSpeaking()` 後、残りの文が合成・再生されない（`play` が追加で呼ばれない） |
 
 **既存テストへの影響**
