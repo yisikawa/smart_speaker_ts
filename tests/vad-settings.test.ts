@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { VadEngine, type VadDecision } from "../src/shared/audio/vad";
 import {
+  buildBrowserVadSettings,
   buildClientVadSettings,
   buildVadSettings,
   type VadConfigSource,
@@ -96,5 +97,26 @@ test("同じフレーム列ならサーバーとブラウザで同じ判定に�
   assert.deepEqual(
     serverDecisions.filter((decision) => decision.kind === "finish"),
     [{ kind: "finish", reason: "silence" }]
+  );
+});
+
+test("buildBrowserVadSettings は録音レートとしきい値だけを上書きする", () => {
+  const client = buildClientVadSettings(SOURCE);
+  const settings = buildBrowserVadSettings(client, 48000, 0.03);
+  assert.equal(settings.sampleRate, 48000);
+  assert.equal(settings.silenceThreshold, 0.03);
+  assert.deepEqual(
+    {
+      frameMs: settings.frameMs,
+      preRollMs: settings.preRollMs,
+      silenceDurationMs: settings.silenceDurationMs,
+      smoothingAlpha: settings.smoothingAlpha,
+      relativeThresholdMultiplier: settings.relativeThresholdMultiplier,
+      maxSilenceThreshold: settings.maxSilenceThreshold,
+      calibrationMs: settings.calibrationMs,
+      debounceFrames: settings.debounceFrames,
+      inputGain: settings.inputGain,
+    },
+    client
   );
 });

@@ -63,3 +63,19 @@ export function buildClientVadSettings(source: VadConfigSource): ClientVadSettin
     inputGain: settings.inputGain,
   };
 }
+
+/**
+ * ブラウザ録音用の VadSettings。
+ * hello で受け取った値のうち、録音レートとしきい値だけを実測値で上書きする。
+ */
+export function buildBrowserVadSettings(
+  vad: ClientVadSettings,
+  captureRate: number,
+  silenceThreshold: number
+): VadSettings {
+  return {
+    ...vad,
+    sampleRate: captureRate,
+    silenceThreshold,
+  };
+}

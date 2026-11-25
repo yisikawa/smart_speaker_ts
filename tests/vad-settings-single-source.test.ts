@@ -1,3 +1,4 @@
+// このテストは「手写しの復活」だけを検出する。別名 import 等で偽陽性になったら実装に合わせて直す。
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -13,6 +14,8 @@ test("AudioService は buildVadSettings を使う", () => {
   const source = read("src/backend/services/AudioService.ts");
   assert.match(source, /buildVadSettings/);
   assert.doesNotMatch(source, /silenceDurationMs:\s*cfg\.silence_duration\s*\*\s*1000/);
+  // VadOptions への素通し（silenceDurationMs: options.silenceDurationMs）は正当なので除外する
+  assert.doesNotMatch(source, /silenceDurationMs:\s*(?!\s*options\.)/);
 });
 
 test("helloPayload は buildClientVadSettings を使う", () => {
@@ -23,6 +26,6 @@ test("helloPayload は buildClientVadSettings を使う", () => {
 
 test("BrowserMic は hello の vad 設定をそのまま使う", () => {
   const source = read("src/frontend/mic.ts");
-  assert.match(source, /\.\.\.this\.config\.vad/);
-  assert.doesNotMatch(source, /calibrationMs:\s*vad\.calibrationMs/);
+  assert.match(source, /buildBrowserVadSettings/);
+  assert.doesNotMatch(source, /silenceDurationMs:\s*/);
 });
