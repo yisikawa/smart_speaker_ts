@@ -62,6 +62,8 @@ test("未知の sherpa_model_type は 400 で拒否し、設定を保存しな�
     })
   );
 
+  const beforeModelType = project.config.getSTT().sherpa_model_type;
+
   const server = http.createServer(app);
   const port = await listen(server);
   try {
@@ -78,6 +80,68 @@ test("未知の sherpa_model_type は 400 で拒否し、設定を保存しな�
     const body = (await response.json()) as { error: string };
     assert.match(body.error, /bogus_type/);
     assert.equal(updated.length, 0);
+    // 拒否した値が設定へ漏れていないこと（既定値のまま）
+    assert.equal(project.config.getSTT().sherpa_model_type, beforeModelType);
+    assert.notEqual(project.config.getSTT().sherpa_model_type, "bogus_type");
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    fs.rmSync(modelDir, { recursive: true, force: true });
+    project.cleanup();
+  }
+});
+
+test("有効な sherpa_model_type は設定へ保存される", async () => {
+  const project = createTempProject({
+    patch: { stt: { engine: "sherpa" } },
+  });
+  const modelDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-sherpa-"));
+  fs.writeFileSync(path.join(modelDir, "tokens.txt"), "");
+
+  const app = express();
+  app.use(express.json());
+  app.use(
+    "/api",
+    createApiRouter({
+      config: project.config,
+      pipeline: {
+        getState: () => "idle",
+        isBusy: false,
+        getHistory: () => [],
+        clearHistory: () => undefined,
+        speak: async () => undefined,
+      } as unknown as ConversationPipeline,
+      audio: { listInputDevices: async () => [] } as unknown as AudioIO,
+      llm: { listModels: async () => [] } as unknown as LanguageModel,
+      character: {
+        get: () => ({ name: "さくら", label: "テスト" }),
+        reload: () => undefined,
+      } as unknown as CharacterService,
+      serviceMonitor: {
+        refresh: async () => ({ llm: true, tts: true, stt: true }),
+        current: { llm: true, tts: true, stt: true },
+      } as unknown as ServiceMonitor,
+      version: "0.0.0",
+      startedAt: Date.now(),
+    })
+  );
+
+  const server = http.createServer(app);
+  const port = await listen(server);
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/models/stt`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        engine: "sherpa",
+        sherpa_model_dir: modelDir,
+        sherpa_model_type: "sense_voice",
+      }),
+    });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { ok: boolean };
+    assert.equal(body.ok, true);
+    assert.equal(project.config.getSTT().sherpa_model_type, "sense_voice");
+    assert.equal(project.config.getSTT().engine, "sherpa");
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     fs.rmSync(modelDir, { recursive: true, force: true });
