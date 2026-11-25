@@ -230,7 +230,7 @@ src/backend/index.ts                                ← Composition Root（DI �
 ## 5. 環境前提（この PC）
 
 - Windows / Node.js v24.11 / ffmpeg・ffplay あり（`C:\ffmpeg\bin`・PATH 済み）
-- **サブエージェント実行（superpowers SDD）は `cline/deepseek-v4.1-flash-1017` を使う**（残高の影響を受けない。Anthropic 直・Cline の他モデルは残高不足で失敗する）
+- **サブエージェント実行（superpowers SDD）は `cline-pass/deepseek-v4.1-flash-1017` を使う**（残高の影響を受けない。Anthropic 直・Cline の他モデルは残高不足で失敗する）
 - Ollama 稼働・**`gemma4:e2b-it-qat`**（導入済み: `llama3.2:3b` / `qwen2.5:7b` / `qwen2.5:14b` / `llama3.1:8b` / `nomic-embed-text`）
 - VOICEVOX ENGINE 0.26.1・`speaker_id = 2`（四国めたん）
 - whisper.cpp は CUDA 版（`whisper.cpp/`、CPU 版は `whisper.cpp/_cpu-backup/`）。既定 STT は sherpa-onnx（CPU）
