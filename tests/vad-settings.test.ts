@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { VadEngine } from "../src/shared/audio/vad";
+import { VadEngine, type VadDecision } from "../src/shared/audio/vad";
 import {
   buildClientVadSettings,
   buildVadSettings,
@@ -22,12 +22,20 @@ const SOURCE: VadConfigSource = {
   input_gain: 1.5,
 };
 
-test("buildVadSettings は秒指定を ms に直す", () => {
-  const settings = buildVadSettings(SOURCE);
-  assert.equal(settings.silenceDurationMs, 800);
-  assert.equal(settings.calibrationMs, 500);
-  assert.equal(settings.sampleRate, 16000);
-  assert.equal(settings.maxSilenceThreshold, 0.06);
+test("buildVadSettings は全フィールドを snake_case から camelCase へ写す", () => {
+  assert.deepEqual(buildVadSettings(SOURCE), {
+    sampleRate: 16000,
+    frameMs: 20,
+    preRollMs: 200,
+    silenceThreshold: 0.02,
+    silenceDurationMs: 800,
+    smoothingAlpha: 0.3,
+    relativeThresholdMultiplier: 3,
+    maxSilenceThreshold: 0.06,
+    calibrationMs: 500,
+    debounceFrames: 2,
+    inputGain: 1.5,
+  });
 });
 
 test("hello 用の設定はサーバー用から sampleRate としきい値を除いた同値", () => {
@@ -49,7 +57,7 @@ test("hello 用の設定はサーバー用から sampleRate としきい値を�
 test("同じフレーム列ならサーバーとブラウザで同じ判定になる", () => {
   const frameSamples = Math.round((SOURCE.sample_rate * SOURCE.frame_ms) / 1000);
   const frames: Int16Array[] = [];
-  for (let i = 0; i < 60; i += 1) {
+  for (let i = 0; i < 110; i += 1) {
     const amplitude = i >= 10 && i < 40 ? 1200 : 30;
     frames.push(new Int16Array(frameSamples).fill(amplitude));
   }
@@ -65,7 +73,28 @@ test("同じフレーム列ならサーバーとブラウザで同じ判定に�
     options
   );
 
-  const serverKinds = frames.map((frame) => server.push(frame).kind);
-  const browserKinds = frames.map((frame) => browser.push(frame).kind);
-  assert.deepEqual(browserKinds, serverKinds);
+  // VadEngine は終了後も finish を返し続ける（done のラッチ）ため、
+  // 判定そのものを比べるために最初の finish で打ち切る。
+  const runUntilFinish = (engine: VadEngine): VadDecision[] => {
+    const decisions: VadDecision[] = [];
+    for (const frame of frames) {
+      const decision = engine.push(frame);
+      decisions.push(decision);
+      if (decision.kind === "finish") {
+        break;
+      }
+    }
+    return decisions;
+  };
+  const serverDecisions = runUntilFinish(server);
+  const browserDecisions = runUntilFinish(browser);
+  assert.deepEqual(
+    browserDecisions.map((decision) => decision.kind),
+    serverDecisions.map((decision) => decision.kind)
+  );
+  assert.ok(serverDecisions.some((decision) => decision.kind === "speech_start"));
+  assert.deepEqual(
+    serverDecisions.filter((decision) => decision.kind === "finish"),
+    [{ kind: "finish", reason: "silence" }]
+  );
 });
