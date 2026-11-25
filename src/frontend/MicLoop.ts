@@ -1,5 +1,4 @@
 import type { AssistantState, ClientCommand, HelloPayload } from "../shared/protocol";
-import type { ChatView } from "./ChatView";
 import { delay } from "./dom";
 import { errorText } from "../shared/errorText";
 import { BrowserMic } from "./mic";
@@ -7,13 +6,28 @@ import type { ListenResult } from "./mic";
 
 type AudioConfig = HelloPayload["audio"];
 
+/** `ChatView` が構造的に満たす、このループが必要とする表示だけの面 */
+export interface MicLoopView {
+  readonly deviceSelect: { value: string; disabled: boolean };
+  setDeviceOptions(devices: { id: string; label: string }[], current: string): void;
+  updateLevel(level: number, threshold: number): void;
+  resetLevel(): void;
+  addSystemNote(text: string): void;
+  showToast(message: string, type?: "info" | "error"): void;
+  setServicesText(text: string, offline?: boolean): void;
+}
+
 export interface MicLoopDeps {
-  view: ChatView;
+  view: MicLoopView;
   send(command: ClientCommand): void;
   /** WebSocket が接続中か */
   isConnected(): boolean;
   /** 状態の変更をアプリへ通知する（表示と言語切替の判定を 1 か所に集約する） */
   onStateChange(state: AssistantState): void;
+  /** マイク生成（テスト用。既定は `new BrowserMic(cfg)`） */
+  createMic?(cfg: AudioConfig): BrowserMic;
+  /** バージイン検出時にローカル再生を止める（`app.ts` が `audioPlayer.stop` を渡す） */
+  onBargeIn?(): void;
 }
 
 /** ターン完了を待つ最大時間（ms）。サーバー無応答で永久に待たないための保険 */
@@ -37,10 +51,20 @@ export class MicLoop {
   /** hello の音声設定を反映する（ブラウザモードならマイクを用意する） */
   configure(cfg: AudioConfig): void {
     this.cfg = cfg;
-    this.mic = new BrowserMic(cfg);
+    if (!this.mic) {
+      this.mic = this.createMic(cfg);
+    } else {
+      // 再接続のたびに作り直すと AudioContext とストリームが漏れるため、設定だけ差し替える
+      this.mic.reconfigure(cfg);
+    }
     if (cfg.inputMode !== "browser") {
       this.deps.view.deviceSelect.disabled = true;
     }
+  }
+
+  /** マイクの唯一の生成経路（テストは `deps.createMic` で差し替える） */
+  private createMic(cfg: AudioConfig): BrowserMic {
+    return this.deps.createMic?.(cfg) ?? new BrowserMic(cfg);
   }
 
   get isBrowserMode(): boolean {
@@ -65,7 +89,7 @@ export class MicLoop {
     this.running = true;
     this.active = true;
     try {
-      this.mic = this.mic ?? new BrowserMic(cfg);
+      this.mic = this.mic ?? this.createMic(cfg);
       await this.mic.start(this.deviceId());
       await this.refreshDevices();
 
@@ -143,6 +167,12 @@ export class MicLoop {
     this.resolveTurn(false);
   }
 
+  /** 接続断・ページ破棄でループとマイクを解放する（再接続で二重に開かない） */
+  async shutdown(): Promise<void> {
+    this.stop();
+    await this.mic?.stopStream();
+  }
+
   /** ターン完了（または破棄）を通知する */
   resolveTurn(completed: boolean): void {
     this.turnWaiter?.(completed);
@@ -163,7 +193,11 @@ export class MicLoop {
         startTimeoutMs: cfg.maxRecordMs,
         maxDurationMs: cfg.maxRecordMs,
         threshold: Math.max(cfg.silenceThreshold, cfg.bargeIn.minScore),
-        onSpeechStart: () => this.deps.send({ type: "stop_speaking" }),
+        onSpeechStart: () => {
+          // 先にローカル再生を止める（サーバーの stop_speaking を待たずに無音にする）
+          this.deps.onBargeIn?.();
+          this.deps.send({ type: "stop_speaking" });
+        },
       })
       .then((result) => {
         if (result.wavBase64) {

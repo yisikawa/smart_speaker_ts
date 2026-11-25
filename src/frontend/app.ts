@@ -65,6 +65,9 @@ class SumikaApp {
       },
       onMessage: (message) => this.handleMessage(message),
       onClose: () => {
+        // 再接続でマイクや AudioContext が二重に開かないよう、先に解放する
+        void this.micLoop.shutdown();
+        this.audioPlayer?.stop();
         this.view.setServicesText("サーバー未接続（再接続中…）", true);
         this.setAssistantState("error");
         this.view.showToast("サーバーとの接続が切れました（再接続します）", "error");
@@ -89,6 +92,11 @@ class SumikaApp {
     this.stage.apply(parseStageOptions(window.location.search ?? ""));
     this.bindEvents();
     this.settings.bind();
+    // ページ破棄時にマイクと AudioContext を残さない（次回の起動で「使用中」にならない）
+    window.addEventListener("beforeunload", () => {
+      void this.micLoop.shutdown();
+      this.audioPlayer?.dispose();
+    });
     // connect() より先に初期状態を設定する（未接続時の表示を上書きしないため）
     this.setAssistantState("idle");
     this.connect();
@@ -265,6 +273,11 @@ class SumikaApp {
 
   private applyHello(hello: HelloPayload): void {
     this.ws.helloReceived();
+    // 再接続時は旧インスタンスを必ず止める（AudioContext・口パクのリーク防止）
+    this.lipSync?.stop();
+    this.lipSync = null;
+    this.audioPlayer?.dispose();
+    this.audioPlayer = null;
     this.view.setServicesText("");
     this.applyLanguage(hello.language ?? "ja");
     this.view.setNames(hello.character.name, hello.user);
@@ -282,8 +295,6 @@ class SumikaApp {
     if (hello.audio.playbackTarget === "browser") {
       this.audioPlayer = new AudioPlayer({ send: (command) => this.send(command) });
       this.audioPlayer.configure(hello.audio);
-    } else {
-      this.audioPlayer?.configure(hello.audio);
     }
 
     if (hello.avatar) {

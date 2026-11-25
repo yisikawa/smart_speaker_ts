@@ -68,7 +68,12 @@ export class BrowserMic {
   /** フレーム長に満たない受信サンプルの持ち越し */
   private pending: Int16Array = new Int16Array(0);
 
-  constructor(private readonly config: MicAudioConfig) {}
+  constructor(private config: MicAudioConfig) {}
+
+  /** 設定だけ差し替える（AudioContext とストリームは維持。次の listen から反映） */
+  reconfigure(config: MicAudioConfig): void {
+    this.config = config;
+  }
 
   get isRunning(): boolean {
     return this.stream !== null;

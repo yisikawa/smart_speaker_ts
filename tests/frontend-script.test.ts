@@ -182,6 +182,8 @@ function bootApp(
     location,
     setTimeout: () => 0,
     clearTimeout: () => undefined,
+    // beforeunload でのリソース解放を登録できるようにする（ブラウザでは常に存在する）
+    addEventListener: () => undefined,
   };
 
   const code = fs.readFileSync(APP_JS, "utf-8");
