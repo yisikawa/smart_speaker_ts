@@ -17,7 +17,8 @@ import {
   CaptureResult,
   PlaybackHandle,
 } from "../core/ports";
-import { encodeWav, ensureWav } from "./wav";
+import { PlaybackProcess } from "./PlaybackProcess";
+import { encodeWav } from "./wav";
 
 /**
  * 音声入出力（Windows / ffmpeg 前提）。
@@ -30,12 +31,32 @@ export class AudioService implements AudioIO {
   private readonly logger: Logger;
   private readonly children = new Set<ChildProcess>();
   private deviceCache: AudioDevice[] | null = null;
-  private playerKind: "ffplay" | "soundplayer" | null = null;
+  /** 再生は PlaybackProcess に委譲する（停止のキャンセルを 1 箇所に閉じ込める） */
+  private readonly playbackProcess: PlaybackProcess;
   /** 録音セッションの直列化用ロック */
   private deviceLock: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: { config: ConfigManager; logger?: Logger }) {
     this.logger = deps.logger ?? new Logger("Audio");
+    this.playbackProcess = new PlaybackProcess({
+      config: deps.config,
+      logger: this.logger,
+      spawn: (binary, args, options) => spawn(binary, args, options),
+      hasFfplay: async () =>
+        spawnSync("ffplay", ["-version"], { windowsHide: true, encoding: "utf8", timeout: 5000 })
+          .status === 0,
+      writeFile: (file, data) => fs.writeFileSync(file, data),
+      removeFile: (file) => {
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+        }
+      },
+      tmpFile: () =>
+        path.join(
+          os.tmpdir(),
+          `sumika_play_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2)}.wav`
+        ),
+    });
   }
 
   /** ffmpeg 実行パス（設定で上書き可能） */
@@ -307,109 +328,12 @@ export class AudioService implements AudioIO {
     });
   }
 
-  /** 再生バックエンドを決める（設定 → ffplay の有無 → SoundPlayer） */
-  private async resolvePlayer(): Promise<"ffplay" | "soundplayer"> {
-    const configured = this.deps.config.getAudio().player;
-    if (configured === "ffplay" || configured === "soundplayer") {
-      return configured;
-    }
-    if (this.playerKind) {
-      return this.playerKind;
-    }
-    const probe = spawnSync("ffplay", ["-version"], { windowsHide: true, encoding: "utf8", timeout: 5000 });
-    this.playerKind = probe.status === 0 ? "ffplay" : "soundplayer";
-    this.logger.info(`再生バックエンド: ${this.playerKind}`);
-    return this.playerKind;
-  }
-
   play(wav: Buffer): PlaybackHandle {
-    const cfg = this.deps.config.getAudio();
-    const file = path.join(
-      os.tmpdir(),
-      `sumika_play_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2)}.wav`
-    );
-    let proc: ChildProcess | null = null;
-    let resolveFinished!: () => void;
-    let resolved = false;
-
-    const finished = new Promise<void>((resolve) => {
-      resolveFinished = resolve;
-    });
-
-    const complete = (): void => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      try {
-        if (fs.existsSync(file)) {
-          fs.unlinkSync(file);
-        }
-      } catch {
-        // 一時ファイル削除の失敗は無視
-      }
-      resolveFinished();
-    };
-
-    void (async () => {
-      try {
-        // VOICEVOX の出力は既に WAV なので二重ヘッダを付けない
-        fs.writeFileSync(file, ensureWav(wav, cfg.sample_rate));
-        const kind = await this.resolvePlayer();
-        const args =
-          kind === "ffplay"
-            ? [
-                "-nodisp",
-                "-autoexit",
-                "-loglevel",
-                "quiet",
-                "-volume",
-                String(Math.round(Math.min(1, Math.max(0, cfg.output_volume)) * 100)),
-                "-i",
-                file,
-              ]
-            : [
-                "-NoProfile",
-                "-Command",
-                `$p = New-Object Media.SoundPlayer '${file.replace(/'/g, "''")}'; $p.PlaySync()`,
-              ];
-
-        const child = spawn(kind === "ffplay" ? "ffplay" : "powershell.exe", args, {
-          windowsHide: true,
-        });
-        proc = child;
-        this.children.add(child);
-
-        child.on("error", (error) => {
-          this.logger.error("再生プロセスの起動に失敗しました", error);
-          complete();
-        });
-        child.on("close", () => {
-          this.children.delete(child);
-          complete();
-        });
-      } catch (error) {
-        this.logger.error("再生に失敗しました", error);
-        complete();
-      }
-    })();
-
-    return {
-      finished,
-      stop: () => {
-        if (proc) {
-          try {
-            proc.kill();
-          } catch {
-            // 既に終了している場合は無視
-          }
-        }
-        complete();
-      },
-    };
+    return this.playbackProcess.play(wav);
   }
 
   async dispose(): Promise<void> {
+    this.playbackProcess.dispose();
     for (const child of this.children) {
       try {
         child.kill();
