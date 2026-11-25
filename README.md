@@ -211,6 +211,7 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
 - **自分の声のエコー対策**: 直前の読み上げ内容と一致する認識結果・意味のない短い断片は会話に載せない（1 人で会話し続けるループ防止）。
   バージインは既定で無効（ブラウザのエコーキャンセルは ffplay の再生音には効かないため。有効化はヘッドホン推奨）
 - バージイン（発話で再生を停止し、その発話を次のターンとして処理）
+  - 有効時は、発話を検出した時点で**残りの文も含めて**読み上げを止め、その発話を次のターンとして処理します
 - フォローアップ（連続会話）
 - キャラクター定義（`config/characters/*.toml`）の人格・応答ルール・口癖をプロンプトへ反映
 - Web GUI（レベルメーター、履歴同期、自動再接続）
@@ -393,6 +394,7 @@ logs/                          # app.log（実行ログ）
 | 返答が返ってこない | `logs/app.log` に `ERROR [LLM]` が出ていないか確認。接続断は「Ollama との接続が中断されました（モデルの読み込み失敗・VRAM 不足など）」として通知されます。タイムアウトは `llm.response_timeout_seconds` |
 | 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |
 | バージインしない | `conversation.barge_in_enabled`, `barge_in_min_score`（既定 0.08） |
+| 停止したのに音が鳴る | ブラウザ再生は `AudioPlayer`、サーバー再生は `PlaybackProcess` が停止後の音声・プロセスを捨てます。古いビルドが残っていないか `npm run build` を確認してください |
 | 設定が効かない | 画面の「⚙️ 設定」で切り替えたモデルは即時反映（次の発話から）。手で `settings.toml` を編集した場合は `POST /api/config/reload` または再起動 |
 | モデルを切り替えたら STT が 🔴 のまま | `models/` のパス、`whisper.cpp/main.exe` の有無、`npm install sherpa-onnx-node` を確認。`logs/app.log` に「STT を再構成しました」が出ているか確認 |
 | LLM のモデルを切り替えられない | Ollama に未導入のモデルは 400 で拒否されます。`ollama pull <model>` を実行してから選び直してください |

@@ -1,6 +1,6 @@
 # 残作業（TODO / バックログ）
 
-最終更新: 2026-11-24（v0.3.0 / B 案＝GPT-SoVITS と RVC 声質変換を実装・実測。`index_rate` の既定は 0）
+最終更新: 2026-11-25（VAD 設定の単一化・停止/再接続の修正。テストは 285 件）
 
 このファイルは「**まだ終わっていない作業**」の一覧です。完了した項目は削除し、
 `AGENTS.md` の「現在の状態」と README を更新してください（履歴は Git のコミットに残します）。
@@ -21,7 +21,6 @@
 | # | 項目 | 現状 / 理由 | 受け入れ条件 | 見積 |
 |---|---|---|---|---|
 | 1-1 | **設定 UI（音声まわりのしきい値）** | **モデル切替（LLM モデル / STT のエンジン・モデル）は画面の「⚙️ 設定」で実装済み**。残りは `audio.silence_threshold` / `input_gain` / `output_volume` / `tts.speaker_id` など数値項目 | 画面から当該項目を変更でき、`warnings` を表示する。保存後に `POST /api/config/reload` を呼び、応答が壊れないこと | 1 日 |
-| 1-2 | **VAD 設定の二重管理の解消** | ブラウザ VAD は hello で受け取った値、サーバー VAD は `AudioService` が設定を直接読む。同じ計算式が 2 経路 | ブラウザ・サーバー双方が同じ `VadSettings` 生成関数（`shared`）を使う。テストで一致を担保 | 0.5 日 |
 | 1-3 | **エコー対策の本命（WebAudio 再生）** | **ブラウザ再生（`audio.playback_target = "browser"`）を実装済み**。`getUserMedia` の `echoCancellation` が効く構成になった。残りは実測（3 往復で誤検知 0）と `barge_in_enabled` の既定 ON 化 | `config/profiles/vtuber-rtx3060.toml` で既定 ON にして 3 往復の誤検知 0 を確認し、README / `AGENTS.md` を更新 | 0.5 日 |
 | 1-4 | **CI（`npm run verify` の自動実行）** | 手元実行のみ。壊れた状態が main に入り得る | GitHub Actions で push/PR 時に `npm ci && npm run verify` が走る。Windows ランナーか ubuntu（ネイティブ依存なしで通ること）を確認 | 0.5 日 |
 | 1-5 | **リリース手順の自動化** | バージョン更新は `package.json` / `package-lock.json` / ドキュメントを手で直している | `npm version` 相当のスクリプト（または手順書）で 4 箇所が一括更新される。`tests` でバージョン整合を検証 | 0.5 日 |
@@ -35,8 +34,9 @@
 | 2-4 | **会話履歴の永続化** | プロセス再起動で履歴が消える（`data/` は未使用） | `data/history.json` へ保存し、起動時に復元。`/api/history` の挙動は不変 | 0.5 日 |
 | 2-5 | **ログのローテーション** | `logs/app.log` は追記のみで肥大化する | 起動時または日次でローテーション（`logs/app-YYYYMMDD.log` など）。サイズ上限を設定可能に | 0.5 日 |
 | 2-6 | **whisper-server 常駐化** | whisper.cpp を毎回起動するためモデルロードが発生（初回 3〜7 秒） | `whisper-server` を常駐させ、`WhisperSttService` から HTTP で叩くモードを追加（`stt.engine = "whisper-server"`） | 1.5 日 |
-| 2-7 | **`mic.ts`（398 行）の分割** | P3 でフロントを分割したが `BrowserMic` は未分割（デバイス管理・AudioWorklet・VAD 駆動・診断が同居） | 取得（`MicSource`）と VAD 駆動（`listen` / `stop`）に分割。`listen` の戻り値（`ListenResult`）は不変に保つ | 1 日 |
+| 2-7 | **`mic.ts`（398 行）の分割** | P3 でフロントを分割したが `BrowserMic` は未分割（デバイス管理・AudioWorklet・VAD 駆動・診断が同居）。2026-11 に `reconfigure()` のみ追加済み | 取得（`MicSource`）と VAD 駆動（`listen` / `stop`）に分割。`listen` の戻り値（`ListenResult`）は不変に保つ | 1 日 |
 | 2-8 | **バージイン監視の見直し** | クライアントが再生中にもう 1 本 `mic.listen` を開く（`bargeMonitorActive` で排他）。エコー環境では誤検知しやすい | バージイン判定に「直前の応答との類似」「最小継続時間」を入れ、誤検知を回帰テストで固定 | 1 日 |
+| 2-9 | **STT 種別の一覧が画面で 3 重管理** | `shared/stt/modelTypes.ts` が真実源になったが、`SettingsPanel.ts` の `MODEL_TYPE_OPTIONS` は手写しのまま。新しい種別を足すと画面から選べず `nemo_ctc` へ silently fallback する | `MODEL_TYPE_OPTIONS` を `SHERPA_MODEL_TYPES` から導出し、`tests/stt-model-types.test.ts` で画面の選択肢が全種別を含むことを検証する | 0.5 日 |
 
 ### P3: 将来（未実装セクションの実装）
 
@@ -78,6 +78,7 @@
 | sherpa-onnx の `decode()` は中断できない | 同期処理（200〜400ms）。`stop()` は「完了後に破棄」で対応（2-3 で改善予定） |
 | VOICEVOX / Ollama / モデルの有無は環境依存 | `npm run smoke` と `/api/health` の `services` / `warnings` で確認する |
 | 認証なし | localhost 前提。外部公開する場合はリバースプロキシ等で保護すること |
+| `/api/models/stt` は絶対パスも受理する | `ConfigManager.resolvePath()` が絶対パスをそのまま返すため。localhost 前提のローカルアプリなので許可リストは未導入（外部公開するなら必要） |
 
 ---
 
