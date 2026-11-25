@@ -237,21 +237,13 @@ export class BrowserMic {
       this.finishSession("aborted");
     }
 
-    const vad = this.config.vad;
     this.pending = new Int16Array(0);
+    // hello で受け取った VAD 設定をそのまま使い、録音レートとしきい値だけ差し替える
     const engine = new VadEngine(
       {
+        ...this.config.vad,
         sampleRate: this.captureRate,
-        frameMs: vad.frameMs,
-        preRollMs: vad.preRollMs,
         silenceThreshold: this.config.silenceThreshold,
-        silenceDurationMs: vad.silenceDurationMs,
-        smoothingAlpha: vad.smoothingAlpha,
-        relativeThresholdMultiplier: vad.relativeThresholdMultiplier,
-        maxSilenceThreshold: vad.maxSilenceThreshold,
-        calibrationMs: vad.calibrationMs,
-        debounceFrames: vad.debounceFrames,
-        inputGain: vad.inputGain,
       },
       {
         maxDurationMs: options.maxDurationMs,

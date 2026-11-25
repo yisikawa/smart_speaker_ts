@@ -4,7 +4,8 @@ import * as os from "os";
 import * as path from "path";
 import type { CaptureEndReason } from "../../shared/protocol";
 import { applyGain, bytesToInt16, int16ToBytes } from "../../shared/audio/pcm";
-import { VadEngine, VadSettings } from "../../shared/audio/vad";
+import { buildVadSettings } from "../../shared/audio/vadSettings";
+import { VadEngine } from "../../shared/audio/vad";
 import { ConfigManager } from "../config/ConfigManager";
 import { AudioConfig } from "../config/schema";
 import { Logger } from "../core/logger";
@@ -88,20 +89,8 @@ export class AudioService implements AudioIO {
 
   capture(options: CaptureOptions): CaptureHandle {
     const cfg = this.deps.config.getAudio();
-    const vadSettings: VadSettings = {
-      sampleRate: cfg.sample_rate,
-      frameMs: cfg.frame_ms,
-      preRollMs: cfg.pre_roll_ms,
-      silenceThreshold: cfg.silence_threshold,
-      silenceDurationMs: cfg.silence_duration * 1000,
-      smoothingAlpha: cfg.smoothing_alpha,
-      relativeThresholdMultiplier: cfg.relative_threshold_multiplier,
-      maxSilenceThreshold: cfg.silence_threshold_max,
-      calibrationMs: cfg.calibration_duration * 1000,
-      debounceFrames: cfg.debounce_frames,
-      inputGain: cfg.input_gain,
-    };
-    const engine = new VadEngine(vadSettings, {
+    // VAD 設定の組み立ては shared/audio/vadSettings（ブラウザと共通の 1 箇所）に任せる
+    const engine = new VadEngine(buildVadSettings(cfg), {
       maxDurationMs: options.maxDurationMs,
       startTimeoutMs: options.startTimeoutMs,
       silenceDurationMs: options.silenceDurationMs,
