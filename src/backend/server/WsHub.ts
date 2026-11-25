@@ -11,6 +11,7 @@ import { AudioPayloadError, decodeAudioPayload } from "./audioPayload";
 import { buildAvatarPayload } from "./avatarPayload";
 import type { ClientIdentity, ClientRole } from "./clientRole";
 import { parseClientRole, pickPrimaryClientId } from "./clientRole";
+import { buildHelloPayload } from "./helloPayload";
 
 export interface WsHubDeps {
   server: http.Server;
@@ -80,53 +81,22 @@ export class WsHub {
     const character = this.deps.character.get(language);
 
     ws.send(
-      JSON.stringify({
-        type: "hello",
-        state: this.deps.pipeline.getState(),
-        history: this.deps.pipeline.getHistory(),
-        character: {
-          name: character.name,
-          label: character.label,
-        },
-        language,
-        user: this.deps.config.getGUI().user_name,
-        version: this.deps.version,
-        services: this.deps.serviceStatus(),
-        models: this.deps.models(),
-        avatar: buildAvatarPayload(this.deps.config.getAvatar(), this.avatarModels()),
-        audio: {
-          inputMode: audioConfig.input_mode,
-          playbackTarget: audioConfig.playback_target,
+      JSON.stringify(
+        buildHelloPayload({
+          state: this.deps.pipeline.getState(),
+          history: this.deps.pipeline.getHistory(),
+          character: { name: character.name, label: character.label },
+          language,
+          user: this.deps.config.getGUI().user_name,
+          version: this.deps.version,
+          services: this.deps.serviceStatus(),
+          models: this.deps.models(),
+          avatar: buildAvatarPayload(this.deps.config.getAvatar(), this.avatarModels()),
           isPrimary: this.clientIds.get(ws) === this.primaryId,
-          outputVolume: audioConfig.output_volume,
-          sampleRate: audioConfig.sample_rate,
-          noSpeechTimeoutMs: audioConfig.no_speech_timeout * 1000,
-          followup: {
-            enabled: conversationConfig.followup_enabled,
-            maxTurns: conversationConfig.max_followup_turns,
-            timeoutMs: conversationConfig.followup_timeout_seconds * 1000,
-            guardMs: conversationConfig.followup_guard_ms,
-            keepListening: conversationConfig.keep_listening,
-          },
-          bargeIn: {
-            enabled: conversationConfig.barge_in_enabled,
-            minScore: conversationConfig.barge_in_min_score,
-          },
-          silenceThreshold: audioConfig.silence_threshold,
-          maxRecordMs: audioConfig.max_record_seconds * 1000,
-          vad: {
-            frameMs: audioConfig.frame_ms,
-            preRollMs: audioConfig.pre_roll_ms,
-            silenceDurationMs: audioConfig.silence_duration * 1000,
-            smoothingAlpha: audioConfig.smoothing_alpha,
-            relativeThresholdMultiplier: audioConfig.relative_threshold_multiplier,
-            maxSilenceThreshold: audioConfig.silence_threshold_max,
-            calibrationMs: audioConfig.calibration_duration * 1000,
-            debounceFrames: audioConfig.debounce_frames,
-            inputGain: audioConfig.input_gain,
-          },
-        },
-      })
+          audio: audioConfig,
+          conversation: conversationConfig,
+        })
+      )
     );
 
     ws.on("message", (data: Buffer) => {
