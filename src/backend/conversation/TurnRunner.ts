@@ -50,9 +50,16 @@ export interface TurnHooks {
  */
 export class TurnRunner {
   private readonly logger: Logger;
+  /** 進行中の読み上げキュー（stopSpeaking で残りを捨てる） */
+  private activeQueue: SpeechQueue | null = null;
 
   constructor(private readonly deps: TurnDeps) {
     this.logger = deps.logger;
+  }
+
+  /** 進行中の読み上げだけを止める（ターンは続ける） */
+  stopSpeaking(): void {
+    this.activeQueue?.stop();
   }
 
   async run(userText: string, hooks: TurnHooks, signal: AbortSignal): Promise<Buffer | undefined> {
@@ -258,6 +265,7 @@ export class TurnRunner {
     hooks.emit({ type: "tts_started" });
     const started = Date.now();
     const result = await queue?.drain();
+    this.activeQueue = null;
     hooks.emit({ type: "tts_complete", elapsedMs: Date.now() - started });
     if (announced) {
       hooks.emit({ type: "speaking_finished" });
@@ -270,7 +278,7 @@ export class TurnRunner {
 
   /** 文単位再生のキュー（先読み・直列・中断） */
   private createQueue(hooks: TurnHooks, signal: AbortSignal): SpeechQueue {
-    return new SpeechQueue({
+    const queue = new SpeechQueue({
       tts: this.deps.tts,
       logger: this.logger,
       signal,
@@ -278,6 +286,8 @@ export class TurnRunner {
       prefetchDepth: this.deps.config.getTTS().prefetch_depth,
       play: (wav, meta) => hooks.play(wav, meta, { announce: false }),
     });
+    this.activeQueue = queue;
+    return queue;
   }
 
   /** 表示・口パク用のメタ情報 */

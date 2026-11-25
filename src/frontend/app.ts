@@ -84,6 +84,8 @@ class SumikaApp {
       isConnected: () => this.ws.isOpen,
       // 録音はブラウザが駆動するため、状態もここへ集約する（言語切替の判定と表示をずらさない）
       onStateChange: (state) => this.setAssistantState(state),
+      // バージイン検出時はサーバーの応答を待たずにローカル再生を止める
+      onBargeIn: () => this.audioPlayer?.stop(),
     });
     this.settings = new SettingsPanel(this.view, () => this.inputMode);
   }
