@@ -8,6 +8,7 @@ import type {
   ServerMessage,
 } from "../shared/protocol";
 import { getLanguagePack, isLanguageMode } from "../shared/i18n/languagePack";
+import { errorText } from "../shared/errorText";
 import { ChatView } from "./ChatView";
 import { AudioPlayer } from "./AudioPlayer";
 import { LipSyncDriver } from "./avatar/LipSyncDriver";
@@ -407,8 +408,4 @@ function formatDiagnostics(report: DiagnosticsReport): string {
     `音声: ${report.audio.input_mode} / しきい値=${report.audio.silence_threshold}（上限 ${report.audio.silence_threshold_max}） / 無音=${report.audio.silence_duration}s / 最大=${report.audio.max_record_seconds}s / バージイン=${report.audio.barge_in_enabled}`,
     report.warnings.length > 0 ? `設定の警告: ${report.warnings.join(" / ")}` : "設定の警告: なし",
   ].join("\n");
-}
-
-function errorText(error: unknown): string {
-  return String((error as Error)?.message ?? error);
 }

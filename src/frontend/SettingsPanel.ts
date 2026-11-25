@@ -4,6 +4,7 @@ import type {
   ModelUpdateResult,
   SherpaModelTypeName,
 } from "../shared/protocol";
+import { errorText } from "../shared/errorText";
 import type { ChatView } from "./ChatView";
 
 /**
@@ -62,10 +63,6 @@ async function requestJson<T>(method: "GET" | "PUT", path: string, body?: unknow
 
 function formatSize(bytes: number): string {
   return bytes > 0 ? `${Math.round(bytes / (1024 * 1024))} MB` : "サイズ不明";
-}
-
-function errorText(error: unknown): string {
-  return String((error as Error)?.message ?? error);
 }
 
 export class SettingsPanel {

@@ -1,7 +1,8 @@
 import type { AssistantState, ClientCommand, HelloPayload } from "../shared/protocol";
 import type { ChatView } from "./ChatView";
 import { delay } from "./dom";
-import { BrowserMic, BrowserMicError } from "./mic";
+import { errorText } from "../shared/errorText";
+import { BrowserMic } from "./mic";
 import type { ListenResult } from "./mic";
 
 type AudioConfig = HelloPayload["audio"];
@@ -298,10 +299,4 @@ export class MicLoop {
       }, TURN_TIMEOUT_MS);
     });
   }
-}
-
-function errorText(error: unknown): string {
-  return error instanceof BrowserMicError
-    ? error.message
-    : String((error as Error)?.message ?? error);
 }
