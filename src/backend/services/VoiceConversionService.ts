@@ -71,8 +71,8 @@ export class VoiceConversionService {
           pitch: cfg.pitch,
           f0_method: cfg.f0_method,
           index_rate: cfg.index_rate,
-          model: cfg.model_path,
-          index: cfg.index_path,
+          model: this.deps.config.resolvePath(cfg.model_path),
+          index: this.deps.config.resolvePath(cfg.index_path),
         }),
         signal,
       });
