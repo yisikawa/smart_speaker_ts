@@ -174,8 +174,8 @@ scripts\start-rvc-worker.bat   # :9890 で待受（初回はモデルのロー�
 [tts.voice_conversion]
 enabled = true
 endpoint = "http://127.0.0.1:9890"
-model_path = "D:/LLMProjects/RVCMultilingual/models/imadaMio.pth"
-index_path = "D:/LLMProjects/RVCMultilingual/models/imadaMio_v2.index"
+model_path = "models/imadaMio.pth"
+index_path = "models/imadaMio_v2.index"
 index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms）。品質優先なら 0.75
 ```
 

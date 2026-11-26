@@ -12,6 +12,10 @@ models/*.bin
 # sherpa-onnx のモデル（scripts/setup-sherpa.ps1 で取得）
 models/sherpa-*/
 models/*.tar.bz2
+# Whisper.cpp / sherpa-onnx モデルファイル（重大なバイナリ。gitignore へ追加）
+models/*.pth
+models/*.index
+models/*/
 whisper.cpp/*.dll
 whisper.cpp/*.exe
 whisper.cpp/_cpu-backup/

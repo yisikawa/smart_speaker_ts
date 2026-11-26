@@ -20,7 +20,9 @@ import struct
 import tempfile
 import threading
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
+import tomllib
 
 import torch
 from fastapi import FastAPI, HTTPException
@@ -222,10 +224,34 @@ def convert(req: ConvertRequest) -> dict[str, str]:
 
 def _warmup_from_env() -> None:
     model = os.environ.get("RVC_WARMUP_MODEL", "").strip()
+    index = os.environ.get("RVC_WARMUP_INDEX", "").strip()
+    if not model or not index:
+        project_root = Path(__file__).resolve().parents[1]
+        settings_path = project_root / "config" / "settings.toml"
+        try:
+            with settings_path.open("rb") as handle:
+                settings = tomllib.load(handle)
+            voice_conversion = settings.get("tts", {}).get("voice_conversion", {})
+            if not model:
+                model = str(voice_conversion.get("model_path", "")).strip()
+            if not index:
+                index = str(voice_conversion.get("index_path", "")).strip()
+
+            def resolve_project_path(path: str) -> str:
+                if not path:
+                    return ""
+                candidate = Path(path)
+                if not candidate.is_absolute():
+                    candidate = project_root / candidate
+                return str(candidate.resolve())
+
+            model = resolve_project_path(model)
+            index = resolve_project_path(index)
+        except Exception:  # noqa: BLE001 - 設定読込失敗時はウォームアップだけ省略
+            logger.exception("RVC 設定を読めませんでした: %s", settings_path)
     if not model:
         logger.info("RVC_WARMUP_MODEL が未設定のためウォームアップを省略します")
         return
-    index = os.environ.get("RVC_WARMUP_INDEX", "").strip()
     try:
         worker.warmup(model, index)
     except Exception:  # noqa: BLE001 - 起動は続ける（初回変換で再試行される）

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as http from "node:http";
+import * as path from "node:path";
 import { TtsRouter } from "../src/backend/services/TtsRouter";
 import { VoiceConversionService } from "../src/backend/services/VoiceConversionService";
 import { createTempProject, makeWav } from "./helpers/project";
@@ -75,7 +76,7 @@ test("VoiceConversionService は設定の index_rate などをそのまま /conv
           pitch: 3,
           f0_method: "harvest",
           model_path: "models/test.pth",
-          index_path: "",
+          index_path: "models/test.index",
         },
       },
     },
@@ -90,7 +91,8 @@ test("VoiceConversionService は設定の index_rate などをそのまま /conv
     assert.equal(bodies[0].index_rate, 0.42, "設定の index_rate をそのまま送る（ハードコードしない）");
     assert.equal(bodies[0].pitch, 3);
     assert.equal(bodies[0].f0_method, "harvest");
-    assert.equal(bodies[0].model, "models/test.pth");
+    assert.equal(bodies[0].model, path.resolve(project.rootDir, "models/test.pth"));
+    assert.equal(bodies[0].index, path.resolve(project.rootDir, "models/test.index"));
     assert.equal(bodies[0].wav_base64, input.toString("base64"));
   } finally {
     await server.close();
