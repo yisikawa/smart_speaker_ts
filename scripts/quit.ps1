@@ -1,7 +1,7 @@
-# 後処理込みの終了スクリプト（quit.bat から呼ばれる）。
+# Cleanup-capable quit script (called from quit.bat).
 #
-# ASCII のみで書くこと（Windows PowerShell 5.1 は BOM なし UTF-8 を誤読することがある。
-# 日本語のメッセージは quit.bat 側で出す）。
+# ASCII only: Windows PowerShell 5.1 may misread BOM-less UTF-8.
+# Japanese messages are printed by quit.bat.
 param(
     [int]$Port = 3000,
     [int]$RvcPort = 9890,
@@ -26,7 +26,7 @@ function Stop-Tree {
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  [stop] $Label (pid=$ProcessId)"
     } else {
-        # 既に終了していた場合はタスクとしては成功（失敗にしない）
+        # Already gone counts as success (not a failure).
         Write-Host "  [skip] $Label (pid=$ProcessId) was already gone"
     }
 }
@@ -131,21 +131,21 @@ if ($null -ne $launcherState -and $null -ne $launcherState.services) {
     }
 }
 
-# アプリ本体（start.bat が起動する node）
+# App (node started by start.bat)
 Stop-ByCommandLine -Label "app (node)" -Name "node.exe" -Patterns @("*dist\backend\index.js*", "*dist/backend/index.js*")
-# RVC ワーカー（scripts\start-rvc-worker.bat が起動する python）
-Stop-ByCommandLine -Label "rvc worker" -Name "python.exe" -Patterns @("*rvc_worker.py*")
-# 再生（ffplay）の孤児。録音用 ffmpeg は -t で自然終了するので触らない
+# Orphaned ffplay (playback leftovers). Recording ffmpeg is left alone: it ends by itself with -t.
 Stop-ByCommandLine -Label "ffplay (leftover)" -Name "ffplay.exe" -Patterns @("*")
 
 if ($All) {
+    # Manual RVC workers too. Recorded RVC entries are stopped by Stop-LauncherServices.
+    Stop-ByCommandLine -Label "rvc worker (manual)" -Name "python.exe" -Patterns @("*rvc_worker.py*")
     Stop-ByCommandLine -Label "gpt-sovits api" -Name "python.exe" -Patterns @("*api_v2.py*")
     Stop-ByCommandLine -Label "voicevox" -Name "VOICEVOX.exe" -Patterns @("*")
 }
 
 Stop-LauncherServices -State $launcherState -Path $statePath -PatternsByService $launcherPatterns
 
-# ポートが解放されるまで少し待つ（time_wait ではなく LISTEN の消滅を待つ）
+# Wait briefly for ports to be released (LISTEN gone, not TIME_WAIT).
 Start-Sleep -Milliseconds 800
 
 Write-Host ""

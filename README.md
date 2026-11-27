@@ -103,12 +103,14 @@ model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
 
 Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama / TTS サーバー・モデルの有無を確認してから起動し、ブラウザを開きます）。
 TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちらか**が動いていれば OK です。
-終了は **`quit.bat`**（アプリ・RVC ワーカーの停止、ポート解放の確認、一時ファイルの掃除まで行います。
-GPT-SoVITS / VOICEVOX も止めるなら `quit.bat /all`）。
+終了は **`quit.bat`**（アプリ・ffplay・`start.bat /all` が起動した RVC ワーカー / GPT-SoVITS の停止、
+ポート解放の確認、一時ファイルの掃除まで行います）。手動で起動した GPT-SoVITS / RVC ワーカーは残ります。
+それらも止めるなら `quit.bat /all`。
 
 GPT-SoVITS と RVC もまとめて起動する場合は `/all` を付けます。未起動のサービスを
 GPT-SoVITS → RVC の順に起動し、準備完了（`/docs` / `/health`）を待ってからアプリを起動します。
-`start.bat /all` が起動したサービスは `quit.bat`（通常実行）で停止できます（手動起動分は残ります）。
+`start.bat /all` が起動したサービスは `quit.bat`（通常実行）で停止できます。
+手動で起動した GPT-SoVITS / RVC ワーカーは `quit.bat`（通常実行）では残りますが、`quit.bat /all` ならそれらも停止できます。
 
 ```powershell
 .\start.bat /all              # GPT-SoVITS + RVC + アプリ

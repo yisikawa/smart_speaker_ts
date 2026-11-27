@@ -211,8 +211,8 @@ src/backend/index.ts                                ← Composition Root（DI �
     - 手写しが復活していないことは `tests/vad-settings-single-source.test.ts` が検出する
 
 12-22. **`start.bat /all` は起動したサービスだけを `logs\start-all.state.json` に記録する**
-    - `quit.bat` 通常実行は記録された PID とコマンドラインを検証して停止する。手動起動分は残す
-    - `quit.bat /all` は従来どおり、手動起動分も含めて GPT-SoVITS / VOICEVOX を停止する
+    - `quit.bat` 通常実行は記録済みサービス（アプリ・ffplay・`/all` が起動した RVC ワーカー / GPT-SoVITS）だけを停止する。未記録の RVC ワーカー（手動起動分）は残す
+    - `quit.bat /all` は手動起動分も含めて GPT-SoVITS / RVC ワーカー / VOICEVOX を停止する
     - 状態ファイルは gitignore 対象。タイムアウトは `START_ALL_TIMEOUT`（既定 180 秒）
 
 13. **VAD のしきい値は「較正」で決まる**
