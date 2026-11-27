@@ -50,7 +50,7 @@ TTS が準備できていない状態でアプリが起動し、最初の発話�
 2. 既に起動中のサービスは二重起動せず、準備完了だけを待つ
 3. `/all` が起動したサービスを `quit.bat` の通常実行で停止できる（手動起動分は残す）
 4. サービスが準備できなくてもアプリの起動は妨げない（既存の警告ベースの姿勢を維持）
-5. `start.bat`（`/all` なし）と `quit.bat`（状態ファイルなし）の既存挙動を変えない
+5. `start.bat`（`/all` なし）の既存挙動を変えない。`quit.bat` の既定動作は、未記録の RVC ワーカーを停止しないよう変更する（手動起動分を残す）
 
 ### 非目標
 
@@ -183,8 +183,9 @@ GPT-SoVITS と RVC は、モデルのロード／ウォームアップが終わ�
 6. ポート確認に 9880 を追加する（状態ファイルに GPT-SoVITS のエントリがあった場合）
    - 9890 は既存の `-RvcPort` で確認済み
 
-`quit.bat` の既定の停止対象は「アプリ・RVC・ffplay・`/all` が起動した GPT-SoVITS」となる。
-`quit.bat /all` は従来どおり、コマンドラインパターンで**手動起動分も含めて** GPT-SoVITS と
+`quit.bat` の既定の停止対象は「アプリ・ffplay・`/all` が起動した GPT-SoVITS / RVC ワーカー」となる。
+**未記録の RVC ワーカー（手動起動分）は既定では停止しない。**
+`quit.bat /all` は、コマンドラインパターンで**手動起動分も含めて** GPT-SoVITS / RVC ワーカーと
 VOICEVOX を停止する。
 
 ### 4.7 PowerShell の実装制約
@@ -277,8 +278,8 @@ if "%START_ALL%"=="1" (
 - 状態ファイル処理は既存の停止処理の後、ポート確認の前に置く。
 - 停止に失敗したサービスがある場合、状態ファイルを残して `RESULT` に警告として数える。
 - `quit.bat` の表示を更新する:
-  - 既定: `- GPT-SoVITS（start.bat /all が起動した場合）`
-  - `/all`: `- GPT-SoVITS / VOICEVOX（手動起動分も含む）`
+  - 既定: `- RVC ワーカー（start.bat /all が起動した場合のみ）` / `- GPT-SoVITS（同）`
+  - `/all`: `- RVC ワーカー / GPT-SoVITS / VOICEVOX（手動起動分も含む）`
 
 ### 6.4 `.gitignore` / ドキュメント
 
@@ -303,8 +304,8 @@ if "%START_ALL%"=="1" (
 | RVC の `model_path` が空 | ワーカーは起動するが `warm=false`。警告して続行 |
 | 両サービスがタイムアウト | アプリは起動する。TTS は VOICEVOX で動作、RVC は素通し |
 | `start.bat`（`/all` なし） | 従来どおり。状態ファイルにも触れない |
-| `quit.bat`（状態ファイルなし） | 従来どおり |
-| `quit.bat /all` | 従来どおり。手動起動分も停止 |
+| `quit.bat`（状態ファイルなし） | 未記録の RVC ワーカーは停止しない（手動起動分を残す）。`quit.bat /all` で停止できる |
+| `quit.bat /all` | 手動起動分も含めて GPT-SoVITS / RVC ワーカー / VOICEVOX を停止 |
 
 ---
 
@@ -316,13 +317,14 @@ if "%START_ALL%"=="1" (
    → GPT-SoVITS → RVC の順に起動し、準備完了後にアプリが起動する
 2. `quit.bat /yes`
    → アプリ・RVC・GPT-SoVITS が停止し、ポート 3000 / 9880 / 9890 が解放され、状態ファイルが消える
-3. GPT-SoVITS を手動起動してから `start.bat /all /nobrowser`
-   → GPT-SoVITS はスキップされ、`quit.bat /yes` 後も 9880 は稼働を続ける
+3. GPT-SoVITS と RVC ワーカーを手動起動してから `start.bat /all /nobrowser`
+   → 両方スキップされ、`quit.bat /yes` 後も 9880 / 9890 は稼働を続ける。
+     `quit.bat /all /yes` で両方停止できる
 4. `GPT_SOVITS_HOME` を不正な値にして `start.bat /all /nobrowser`
    → 即警告し、アプリは起動する
 5. `START_ALL_TIMEOUT=5` にして `start.bat /all /nobrowser`
    → タイムアウト警告が出てもアプリは起動し、`quit.bat /yes` で起動済みサービスを停止できる
-6. `start.bat`（`/all` なし）と `quit.bat`（状態ファイルなし）が従来どおり動く
+6. `start.bat`（`/all` なし）が従来どおり動く。`quit.bat`（状態ファイルなし）は未記録の RVC ワーカーを停止しない
 7. 状態ファイルの JSON が有効で、PID が実際のプロセスと一致する
 
 ### 自動確認
@@ -352,9 +354,16 @@ if "%START_ALL%"=="1" (
 - [ ] `start.bat /all` が、未起動の GPT-SoVITS と RVC を順に起動し、準備完了を待ってからアプリを起動する
 - [ ] 既に起動中のサービスを二重起動しない
 - [ ] `start.bat`（`/all` なし）の挙動が変わらない
-- [ ] `quit.bat`（通常実行）が `/all` 起動分を停止し、手動起動分は停止しない
-- [ ] `quit.bat /all` の挙動が変わらない
+- [ ] `quit.bat`（通常実行）が `/all` 起動分を停止し、手動起動分（GPT-SoVITS / RVC）は停止しない
+- [ ] `quit.bat /all` が手動起動分も含めて GPT-SoVITS / RVC ワーカー / VOICEVOX を停止する
 - [ ] タイムアウト・パス不備でもアプリの起動が妨げられない
 - [ ] 状態ファイルの PID 検証により、無関係なプロセスを停止しない
 - [ ] README / AGENTS.md が更新されている
 - [ ] `npm run verify` が通る
+
+---
+
+## 11. 変更履歴
+
+- 2026-11-27: ユーザー決定により、`quit.bat` 通常実行は未記録の RVC ワーカーを停止しない。
+  `quit.bat /all` は手動起動分も含めて GPT-SoVITS / RVC ワーカー / VOICEVOX を停止する。
