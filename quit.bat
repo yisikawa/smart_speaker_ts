@@ -31,10 +31,10 @@ echo 停止するもの:
 echo   - アプリ本体        (node dist\backend\index.js / :%PORT%)
 echo   - RVC ワーカー      (scripts\rvc_worker.py / :%RVC_PORT%)
 if "%STOP_ALL%"=="1" (
-    echo   - GPT-SoVITS API    (api_v2.py / :9880。手動起動分も含む)
-    echo   - VOICEVOX ENGINE   (:50021)
+    echo   - GPT-SoVITS API    ^(api_v2.py / :9880。手動起動分も含む^)
+    echo   - VOICEVOX ENGINE   ^(:50021^)
 ) else (
-    echo   - GPT-SoVITS        (start.bat /all が起動した場合のみ / :9880)
+    echo   - GPT-SoVITS        ^(start.bat /all が起動した場合のみ / :9880^)
     echo   - VOICEVOX は止めません（止めるには quit.bat /all）
 )
 echo   - ffplay の孤児プロセス（再生の残り）
