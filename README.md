@@ -2,10 +2,12 @@
 
 ローカル完結型 AI 音声アシスタント（バックエンド・フロントエンドともに TypeScript）。
 
-- 音声認識: whisper.cpp
+- 音声認識: sherpa-onnx（日本語・現在の設定）/ whisper.cpp（英語モード）。切替可能
 - 応答生成: Ollama
-- 音声合成: VOICEVOX
-- 音声・テキストは**外部クラウドへ送信しません**（すべて localhost で完結）
+- 音声合成: GPT-SoVITS（現在の設定）/ VOICEVOX / OpenAI 互換 TTS。切替可能
+- 声質変換: RVC（任意）
+- **既定の構成では**音声・テキストを外部クラウドへ送信しません（すべて localhost で完結）。
+  OpenAI 互換 TTS など外部エンドポイントを明示設定した場合は、その送信先に依存します。
 
 設計書:
 
@@ -13,6 +15,9 @@
 - [docs/REDESIGN.md](docs/REDESIGN.md) — 再設計書（To-Be / アーキテクチャ・プロトコル・VAD・移行手順）
 - [docs/REFACTORING_PLAN.md](docs/REFACTORING_PLAN.md) — リファクタリング計画（フェーズ・優先度・完了条件）
 - [docs/TODO.md](docs/TODO.md) — 残作業（優先度つきバックログ・既知の制約・実装状況）
+- [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) — STT エンジンの比較・幻聴対策
+- [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md) — 日英 TTS / GPT-SoVITS / B 案
+- [docs/RVC_PLAN.md](docs/RVC_PLAN.md) — RVC の設計・実測
 - [AGENTS.md](AGENTS.md) — 作業メモリー（コマンド・規約・ハマりどころ・現状の TODO）
 
 ## 必要なもの
@@ -21,8 +26,8 @@
 |------|------|
 | Node.js | v18 以上（開発は v22 で確認） |
 | Ollama | LLM 推論サーバー（既定 `http://127.0.0.1:11434`） |
-| VOICEVOX ENGINE | 音声合成サーバー（既定 `http://127.0.0.1:50021`） |
-| whisper.cpp + ggml モデル | `whisper.cpp/main.exe`（CUDA 版推奨）と `models/ggml-large-v3-turbo*.bin` |
+| TTS サーバー | **GPT-SoVITS（現在の設定、`http://127.0.0.1:9880`）**。VOICEVOX（`:50021`）/ OpenAI 互換 TTS も使用可 |
+| STT エンジン | **sherpa-onnx（現在の日本語設定）**。whisper.cpp + ggml モデル（`whisper.cpp/main.exe` と `models/ggml-large-v3-turbo*.bin`）も使用可（英語モードは whisper） |
 | ffmpeg / ffplay | `audio.input_mode = "server"` のときの録音・再生（既定はブラウザ入力なので ffmpeg 不要） |
 | マイク | ブラウザから利用（`getUserMedia`。localhost または https で開くこと） |
 | NVIDIA GPU（任意） | CUDA 版 whisper.cpp を使う場合のみ（VRAM 4GB 以上推奨） |
@@ -31,7 +36,7 @@
 
 ```powershell
 npm install
-npm run build          # clean → tsc → フロントエンド静的ファイルのコピー
+npm run build          # clean → tsc → esbuild で app.js / live2d.js をバンドル
 ```
 
 Windows では `scripts\setup.bat` でも可。
@@ -102,7 +107,8 @@ model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
 ## 起動
 
 Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama / TTS サーバー・モデルの有無を確認してから起動し、ブラウザを開きます）。
-TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちらか**が動いていれば OK です。
+TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちらか**が動いていれば OK です
+（OpenAI 互換 TTS を使う場合は `[tts]` / `[tts.en]` の endpoint を設定してください。`start.bat` の疎通確認は 50021/9880 のみです）。
 終了は **`quit.bat`**（アプリ・ffplay・`start.bat /all` が起動した RVC ワーカー / GPT-SoVITS の停止、
 ポート解放の確認、一時ファイルの掃除まで行います）。手動で起動した GPT-SoVITS / RVC ワーカーは残ります。
 それらも止めるなら `quit.bat /all`（VOICEVOX も停止します）。
@@ -212,11 +218,11 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
 - VAD（無音検出）による発話区間の自動切り出し（`execSync` を使わないストリーム録音）
 - **ブラウザのマイク入力**（既定）: `getUserMedia` で録音し、発話単位の WAV を WebSocket で送信。
   VAD はサーバーと同一実装を共有。ffmpeg は `input_mode = "server"` のフォールバックとして残置
-- マイク選択（ブラウザのデバイス一覧）とレベルメーター表示
-- **「マイク確認」ボタン**: 5 秒間だけ録音して入力レベル（peak / dBFS / フレーム数）を表示（送信はしない）
+- マイク選択（ハンバーガーメニューのデバイス一覧）とレベルメーター表示（上部バー）
+- **「マイク確認」ボタン**（ハンバーガーメニュー）: 5 秒間だけ録音して入力レベル（peak / dBFS / フレーム数）を表示（送信はしない）
 - **聞き取りを継続**（`conversation.keep_listening = true`）: フォローアップ回数の上限後も「停止」を押すまで待機を続ける
 - ストリーミング応答（差分を逐次表示）と `AbortController` による中断
-- **日英モード切替（ヘッダの `日本語 / English`）**: `conversation.language` を切り替えると、
+- **日英モード切替（ハンバーガーメニューの `日本語 / English`）**: `conversation.language` を切り替えると、
   STT（`[stt.en]`）・プロンプト／キャラクター（`llm.character_file_en`）・読み上げ（`[tts.en]`）・
   文分割・破棄判定がまとめて追従する（次の発話から有効）。詳細は [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md)
 - **日英で同じ声（B 案・実測済み）**: `[tts.ja]` と `[tts.en]` に**同じ GPT-SoVITS（MIT）と同じ参照音声**を書くと、
@@ -234,9 +240,9 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
 - キャラクター定義（`config/characters/*.toml`）の人格・応答ルール・口癖をプロンプトへ反映
 - Web GUI（レベルメーター、履歴同期、自動再接続）
 - REST API（設定の参照・部分更新・保存、履歴、ヘルスチェック、デバイス一覧、診断）
-- **設定メニュー（⚙️ 設定）**: 画面から **LLM モデル**（Ollama の導入済み一覧）と **STT のエンジン／モデル**
-  （whisper の `*.bin` / sherpa のモデル一式）を切り替えられる。再起動不要（次の発話から有効）
-- **診断パネル（「診断」ボタン / `GET /api/diagnostics`）**: 状態・サービス疎通・破棄の内訳（幻聴/短断片/エコー/繰り返し）・
+- **設定メニュー（ハンバーガーメニューの ⚙️ モデル設定）**: **LLM モデル**（Ollama の導入済み一覧）と
+  **STT のエンジン／モデル**（whisper の `*.bin` / sherpa のモデル一式）を切り替えられる。再起動不要（次の発話から有効）
+- **診断パネル（ハンバーガーメニューの「診断」 / `GET /api/diagnostics`）**: 状態・サービス疎通・破棄の内訳（幻聴/短断片/エコー/繰り返し）・
   直近の破棄理由・録音結果・VAD しきい値を 1 箇所で確認できる
 - レベル付きロガー（コンソール + `logs/app.log`）
 
@@ -276,8 +282,9 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
 
 ### 認識エンジンの切り替え（whisper / sherpa-onnx）
 
-既定は whisper.cpp です。**幻聴が構造的に起きない CTC 系モデル**を使いたい場合は sherpa-onnx に切り替えられます
-（CPU のみで動作し、GPU を LLM に空けられます）。
+現在の `config/settings.toml` では **sherpa-onnx（日本語）** を使用しています（英語モード `[stt.en]` は whisper.cpp）。
+sherpa-onnx は幻聴が構造的に起きない CTC 系モデルで、CPU のみで動作し GPU を LLM に空けられます。
+コードの既定値（`schema.ts` / `settings.default.toml`）は whisper.cpp です。切り替えは `[stt] engine` で行います。
 
 ```powershell
 npm install sherpa-onnx-node                              # Windows x64 は DLL 同梱（追加設定不要）
@@ -297,15 +304,15 @@ sherpa_provider = "cpu"
 実測（この PC / VOICEVOX の日本語音声）: sherpa-onnx は **222〜420ms / 発話**（whisper.cpp + CUDA q5_0 は約 1.5〜3.5 秒）。
 詳細と他エンジンの比較は [docs/ASR_OPTIONS.md](docs/ASR_OPTIONS.md) を参照してください。
 
-### 画面から切り替える（⚙️ 設定）
+### ハンバーガーメニューから切り替える（⚙️ モデル設定）
 
-画面右上の **⚙️ 設定** を開くと、次の 2 つを切り替えられます（変更は即保存され `config/settings.toml` に書き込まれます）。
+☰ でドロワーを開き、**⚙️ モデル設定** を開くと、次の項目を切り替えられます（変更は即保存され `config/settings.toml` に書き込まれます）。
 
 | 項目 | 切り替え内容 | 反映タイミング |
 |---|---|---|
 | LLM | Ollama に導入済みのモデル（`GET /api/models` が `ollama list` 相当を返す） | 次の発話から（再起動不要） |
 | 音声認識 | エンジン（whisper.cpp / sherpa-onnx）とモデル（`models/*.bin` / sherpa のモデル一式） | 次の発話から（STT 実装を差し替え） |
-| 言語 | ヘッダの `日本語 / English`（`PATCH /api/config` の `conversation.language`） | 次の発話から（STT・プロンプト・TTS を再構成） |
+| 言語 | ハンバーガーメニューの `日本語 / English`（`PATCH /api/config` の `conversation.language`） | 次の発話から（STT・プロンプト・TTS を再構成） |
 
 - 一覧は `GET /api/models`、切替は `PUT /api/models/llm` / `PUT /api/models/stt`
 - 言語の切替は**応答中（録音・認識・生成・読み上げ）は受け付けない**（途中で切り替えると声が混ざるため。停止してから切り替える）
@@ -345,7 +352,7 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 ```powershell
 npm run verify         # typecheck → test → build をまとめて実行（作業後はこれ 1 本）
 npm run typecheck      # 型チェック（backend）
-npm test               # ユニット/結合テスト（node:test, 255 ケース）
+npm test               # ユニット/結合テスト（node:test, 289 ケース）
 npm run clean:tests    # dist-test の削除（pretest から自動実行）
 npm run config:default # schema.ts の既定値を settings.default.toml へ同期（コメントは保持）
 npm run smoke          # 起動中サーバーの疎通確認
@@ -354,7 +361,7 @@ npm run dev            # ts-node で直接起動
 npm run clean          # dist / dist-test の削除
 ```
 
-テスト構成（`tests/`）:
+テスト構成（`tests/`、代表例）:
 
 | ファイル | 内容 |
 |----------|------|
@@ -368,7 +375,8 @@ npm run clean          # dist / dist-test の削除
 | `pipeline.test.ts` | 無音 / 1 ターン / テキスト入力 / フォローアップ / バージイン / 中断 / ブラウザ音声 1 ターン |
 | `shared-pcm.test.ts` | WAV 生成・Base64・リサンプル・ゲイン（ブラウザと共通） |
 | `audio-payload.test.ts` | `submit_audio` の検証（Base64/WAV/サイズ/形式） |
-| `frontend-script.test.ts` | ビルド済み `app.js` を擬似 DOM で実行（WS 接続・hello 描画・ボタン送信） |
+| `stage-mode.test.ts` | `?mode=` の解析（studio / split / chat / stage・既定 studio・不正値フォールバック） |
+| `frontend-script.test.ts` | ビルド済み `app.js` を擬似 DOM で実行（WS 接続・hello 描画・ボタン送信・設定・ハンバーガー開閉・Esc/背景クリック） |
 
 ## 構成
 
@@ -383,11 +391,14 @@ src/
 │   ├── services/              # Audio / VAD / STT / LLM / TTS / Character
 │   ├── conversation/          # パイプライン・履歴・プロンプト生成
 │   └── server/                # Express + WebSocket
-└── frontend/                  # index.html / style.css / app.ts（組立）・WsClient・ChatView・MicLoop・mic
+└── frontend/                  # index.html / style.css / app.ts（組立）・WsClient・ChatView・SettingsPanel
+                               # StageView・MenuDrawer・MicLoop・AudioPlayer・avatar/
 config/                        # settings.toml, settings.default.toml, characters/
-scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js, setup-whisper-cuda.ps1, setup-live2d.ps1
-start.bat                      # Windows 用ランチャー（依存/ビルド/外部サービス確認 → 起動）
-docs/                          # DESIGN.md（As-Is）, REDESIGN.md（To-Be）
+scripts/                       # setup.bat, run.bat, build.js, clean.js, smoke.js,
+                               # start-services.ps1, start-gpt-sovits.bat, start-rvc-worker.bat, rvc_worker.py, quit.ps1,
+                               # setup-whisper-cuda.ps1, setup-live2d.ps1, setup-sherpa.ps1, setup-https.ps1
+start.bat                      # Windows 用ランチャー（既定 studio。依存/ビルド/外部サービス確認 → 起動。 /all で GPT-SoVITS/RVC も）
+docs/                          # DESIGN.md（As-Is）, REDESIGN.md（To-Be）, ASR_OPTIONS.md, TTS_MULTILINGUAL.md, RVC_PLAN.md
 models/, whisper.cpp/          # Whisper 本体とモデル
 logs/                          # app.log（実行ログ）
 ```
@@ -396,13 +407,13 @@ logs/                          # app.log（実行ログ）
 
 | 症状 | 確認ポイント |
 |------|--------------|
-| 何が起きているか分からない | 「診断」ボタン（または `GET /api/diagnostics`）で、状態・サービス疎通・破棄の内訳・直近の破棄理由・VAD しきい値をまとめて確認できます |
+| 何が起きているか分からない | ハンバーガーメニューの「診断」（または `GET /api/diagnostics`）で、状態・サービス疎通・破棄の内訳・直近の破棄理由・VAD しきい値をまとめて確認できます |
 | マイクが使えない／許可が出ない | `http://localhost` か `http://127.0.0.1`（または https）で開く。LAN の IP では使えません |
 | 「マイクの使用が許可されていません」 | ブラウザのアドレスバー横のマイク許可。`http://localhost`（または https）で開く |
 | 「音声データが届きません（ctx=suspended …）」 | 自動再生ポリシーで音声処理が停止しています。**画面をもう一度クリック**して再試行（「マイク確認」は自動で再初期化も試します） |
-| マイクが一覧に出ない | 画面の「マイク」で「既定のマイク」以外を選択。Windows のサウンド設定も確認 |
+| マイクが一覧に出ない | ハンバーガーメニューの「マイク」で「既定のマイク」以外を選択。Windows のサウンド設定も確認 |
 | マイクが開かない（ffmpeg モード） | `audio.input_mode = "server"` の場合。`ffmpeg` の PATH、`audio.input_device`、`GET /api/audio-devices` |
-| 入力レベルが動かない（マイクが拾っていない） | 「マイク確認」を押して 5 秒話す。peak が 0.02 未満なら「マイク」セレクトで別デバイスを選択 |
+| 入力レベルが動かない（マイクが拾っていない） | ハンバーガーメニューの「マイク確認」を押して 5 秒話す。peak が 0.02 未満なら「マイク」セレクトで別デバイスを選択 |
 | 発話を検出しない | `audio.silence_threshold`（RMS 0..1）を上げる、`audio.input_gain` を上げる。UI のレベルメーターを確認 |
 | 話している途中で切れる | ① `audio.max_record_seconds`（既定 30 秒）に達していないか ② `audio.silence_duration`（既定 1.5 秒）より長く黙っていないか ③ `audio.silence_threshold_max`（既定 0.06）でしきい値が上がりすぎていないか。`logs/app.log` の「ブラウザから音声を受信: 1234ms」で実際に送られた長さを確認できる |
 | タイピング音や物音で聞き取りが始まる | `audio.debounce_frames`（既定 3 = 60ms 連続）を増やす、`audio.silence_threshold` を上げる、`audio.silence_threshold_max` を下げる |
@@ -411,15 +422,15 @@ logs/                          # app.log（実行ログ）
 | LLM が 404（`model 'xxx' not found`） | `llm.model` が Ollama に無い。`ollama list` で確認し `ollama pull <model>` を実行。**`settings.toml` を書き換えただけでは反映されない**ので `POST /api/config/reload` か再起動も行う（起動時にも警告が出ます） |
 | 反応しない／固まったように見える | 「聞き取り開始」を押し直すか、ページを再読み込み。サーバーが幻聴・エコーを破棄した場合は `turn_skipped` を通知して聞き取りを続けます（従来は待機したまま固まる不具合がありました）。`logs/app.log` に「破棄します」が出ていないか確認 |
 | 返答が返ってこない | `logs/app.log` に `ERROR [LLM]` が出ていないか確認。接続断は「Ollama との接続が中断されました（モデルの読み込み失敗・VRAM 不足など）」として通知されます。タイムアウトは `llm.response_timeout_seconds` |
-| 音が出ない | VOICEVOX の起動、`audio.output_volume`、`audio.player` |
+| 音が出ない | TTS サーバー（GPT-SoVITS :9880 / VOICEVOX :50021）の起動、`audio.output_volume`、`audio.player` |
 | バージインしない | `conversation.barge_in_enabled`, `barge_in_min_score`（既定 0.08） |
 | 停止したのに音が鳴る | ブラウザ再生は `AudioPlayer`、サーバー再生は `PlaybackProcess` が停止後の音声・プロセスを捨てます。古いビルドが残っていないか `npm run build` を確認してください |
-| 設定が効かない | 画面の「⚙️ 設定」で切り替えたモデルは即時反映（次の発話から）。手で `settings.toml` を編集した場合は `POST /api/config/reload` または再起動 |
+| 設定が効かない | ハンバーガーメニューの「⚙️ モデル設定」で切り替えたモデルは即時反映（次の発話から）。手で `settings.toml` を編集した場合は `POST /api/config/reload` または再起動 |
 | モデルを切り替えたら STT が 🔴 のまま | `models/` のパス、`whisper.cpp/main.exe` の有無、`npm install sherpa-onnx-node` を確認。`logs/app.log` に「STT を再構成しました」が出ているか確認 |
 | LLM のモデルを切り替えられない | Ollama に未導入のモデルは 400 で拒否されます。`ollama pull <model>` を実行してから選び直してください |
 | LLM を切り替えるとタイムアウトする／切り替えが終わらない | モデルの読み込みが遅い環境です。`llm.model_load_timeout_seconds`（既定 180 秒）を増やすか、より小さいモデルを選んでください。`ollama ps` で `size_vram`（VRAM に載っているか）を確認 |
 | 「LLM がタイムアウトしました」で応答が止まる | 読み込み中なら上記。生成中なら `llm.response_timeout_seconds`（既定 60 秒）。`logs/app.log` の「最初のチャンクを受信しました」で読み込みと生成を切り分けられる |
-| 「⚙️ 設定」で「/api/models が見つかりません」 | 画面（静的ファイル）だけ新しく、起動中のサーバーが古いままです。**アプリを再起動**してください（`start.bat`。コード更新後は必須） |
+| ハンバーガーメニューの「⚙️ モデル設定」で「/api/models が見つかりません」 | 画面（静的ファイル）だけ新しく、起動中のサーバーが古いままです。**アプリを再起動**してください（`start.bat`。コード更新後は必須） |
 
 ## 未実装（設定のみ）
 
