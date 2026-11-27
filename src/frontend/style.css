@@ -716,7 +716,10 @@ body.studio-mode #conversation {
   color: #fff;
 }
 
-body.studio-mode #chatOverlay .message.assistant { background: rgba(255, 255, 255, 0.94); }
+body.studio-mode #chatOverlay .message.assistant {
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.94);
+}
 body.studio-mode #chatOverlay .message.user { background: #4f46e5; }
 body.studio-mode #chatOverlay .system-note { color: rgba(255, 255, 255, 0.7); }
 body.studio-mode #chatOverlay .composer { margin-bottom: 0; }
@@ -730,7 +733,7 @@ body.studio-mode #chatOverlay .composer textarea { background: rgba(255, 255, 25
   background: rgba(0, 0, 0, 0.45);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s, visibility 0.2s;
 }
 
 .menu-backdrop.open { opacity: 1; visibility: visible; }
@@ -866,6 +869,12 @@ body.split-mode .avatar-sprite {
   min-width: 0;
   transform: translate(-50%, -50%);
 }
+
+body.studio-mode .avatar-sprite,
+body.split-mode .avatar-sprite { aspect-ratio: 3 / 4; }
+
+body.studio-mode .avatar-sprite--image,
+body.split-mode .avatar-sprite--image { aspect-ratio: auto; }
 
 body.split-mode .caption {
   bottom: 24px;
