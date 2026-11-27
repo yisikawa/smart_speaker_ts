@@ -150,8 +150,9 @@ Start-Sleep -Milliseconds 800
 
 Write-Host ""
 Write-Host "--- ports ---"
-$ports = @($Port, $RvcPort) + $launcherPorts
+$ports = @($Port) + $launcherPorts
 if ($All) {
+    $ports += $RvcPort
     $ports += 9880
     $ports += 50021
 }

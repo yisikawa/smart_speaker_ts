@@ -95,8 +95,8 @@ function Write-State {
     }
     $json = $payload | ConvertTo-Json -Depth 5
     $temp = "$Path.tmp"
-    Set-Content -LiteralPath $temp -Value $json -Encoding UTF8
-    Move-Item -LiteralPath $temp -Destination $Path -Force
+    Set-Content -LiteralPath $temp -Value $json -Encoding UTF8 -ErrorAction Stop
+    Move-Item -LiteralPath $temp -Destination $Path -Force -ErrorAction Stop
 }
 
 function Remove-StaleEntries {
@@ -175,7 +175,7 @@ function Ensure-ServiceReady {
         try {
             Write-State -Path $StatePath -State $State
         } catch {
-            Write-Host "[all] ${Name}: failed to record state: $($_.Exception.Message)"
+            Write-Host "[all] ${Name}: failed to record state; this service will not be auto-stopped: $($_.Exception.Message)"
         }
     }
 
