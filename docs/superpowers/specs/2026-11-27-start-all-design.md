@@ -322,7 +322,7 @@ if "%START_ALL%"=="1" (
      `quit.bat /all /yes` で両方停止できる
 4. `GPT_SOVITS_HOME` を不正な値にして `start.bat /all /nobrowser`
    → 即警告し、アプリは起動する
-5. `START_ALL_TIMEOUT=5` にして `start.bat /all /nobrowser`
+5. `START_ALL_TIMEOUT=10` にして `start.bat /all /nobrowser`
    → タイムアウト警告が出てもアプリは起動し、`quit.bat /yes` で起動済みサービスを停止できる
 6. `start.bat`（`/all` なし）が従来どおり動く。`quit.bat`（状態ファイルなし）は未記録の RVC ワーカーを停止しない
 7. 状態ファイルの JSON が有効で、PID が実際のプロセスと一致する
