@@ -39,11 +39,13 @@ export class MenuDrawer {
     document.body.classList.remove("menu-open");
     this.drawer.classList.remove("open");
     this.backdrop.classList.remove("open");
-    this.drawer.setAttribute("aria-hidden", "true");
     this.btnMenu.setAttribute("aria-expanded", "false");
-    const target = this.lastFocused ?? this.btnMenu;
+    // Safari はフォーカスが body のままだと復元できないため、☰ にフォールバックする
+    const target = this.lastFocused && this.lastFocused !== document.body ? this.lastFocused : this.btnMenu;
     this.lastFocused = null;
+    // フォーカスがドロワー内にあると Chrome が aria-hidden の変更を無視するため、先に外へ移す
     target.focus();
+    this.drawer.setAttribute("aria-hidden", "true");
   }
 
   private toggle(): void {

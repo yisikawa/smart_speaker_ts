@@ -19,6 +19,7 @@ interface StubElement {
   scrollHeight: number;
   children: StubElement[];
   attributes: Record<string, string>;
+  focused: boolean;
   classList: {
     toggle(): void;
     add(): void;
@@ -51,13 +52,16 @@ function createElement(id?: string): StubElement {
     scrollHeight: 0,
     children: [],
     attributes,
+    focused: false,
     classList: {
       toggle: () => undefined,
       add: () => undefined,
       remove: () => undefined,
       contains: () => false,
     },
-    focus: () => undefined,
+    focus: () => {
+      element.focused = true;
+    },
     setAttribute: (name, value) => {
       attributes[name] = value;
     },
@@ -178,20 +182,28 @@ function flush(): Promise<void> {
 
 function bootApp(
   location: { protocol: string; host: string } = { protocol: "http:", host: "localhost:3000" }
-): { elements: Map<string, StubElement>; ws: FakeWebSocket | undefined; fetchCalls: FetchCall[] } {
+): {
+  elements: Map<string, StubElement>;
+  ws: FakeWebSocket | undefined;
+  fetchCalls: FetchCall[];
+  triggerDocument: (type: string, event?: unknown) => void;
+} {
   const elements = new Map<string, StubElement>();
   for (const id of ELEMENT_IDS) {
     elements.set(id, createElement(id));
   }
 
   let domReady: (() => void) | null = null;
+  const documentListeners: Record<string, (event?: unknown) => void> = {};
   const documentStub = {
     getElementById: (id: string) => elements.get(id) ?? null,
     createElement: () => createElement(),
     body: createElement(),
-    addEventListener: (type: string, handler: () => void) => {
+    addEventListener: (type: string, handler: (event?: unknown) => void) => {
       if (type === "DOMContentLoaded") {
         domReady = handler;
+      } else {
+        documentListeners[type] = handler;
       }
     },
   };
@@ -233,7 +245,11 @@ function bootApp(
   assert.ok(domReady, "DOMContentLoaded ハンドラが登録されること");
   (domReady as () => void)();
 
-  return { elements, ws: FakeWebSocket.instances[0], fetchCalls };
+  const triggerDocument = (type: string, event?: unknown): void => {
+    documentListeners[type]?.(event);
+  };
+
+  return { elements, ws: FakeWebSocket.instances[0], fetchCalls, triggerDocument };
 }
 
 const HELLO = {
@@ -495,4 +511,43 @@ test("ハンバーガーでドロワーを開閉できる", () => {
   elements.get("btnMenuClose")!.trigger("click");
   assert.equal(btnMenu.getAttribute("aria-expanded"), "false");
   assert.equal(drawer.getAttribute("aria-hidden"), "true");
+});
+
+test("Esc でドロワーが閉じ、フォーカスが ☰ に戻る", () => {
+  const { elements, triggerDocument } = bootApp();
+  const btnMenu = elements.get("btnMenu")!;
+  const drawer = elements.get("menuDrawer")!;
+
+  btnMenu.trigger("click");
+  assert.equal(drawer.getAttribute("aria-hidden"), "false");
+  assert.equal(elements.get("btnMenuClose")!.focused, true, "開いた直後は閉じるボタンへフォーカスする");
+
+  triggerDocument("keydown", { key: "Escape", preventDefault: () => undefined });
+
+  assert.equal(btnMenu.getAttribute("aria-expanded"), "false");
+  assert.equal(drawer.getAttribute("aria-hidden"), "true");
+  assert.equal(btnMenu.focused, true, "フォーカスが ☰ に戻る");
+});
+
+test("背景クリックでドロワーが閉じる", () => {
+  const { elements } = bootApp();
+  const btnMenu = elements.get("btnMenu")!;
+  const drawer = elements.get("menuDrawer")!;
+
+  btnMenu.trigger("click");
+  assert.equal(drawer.getAttribute("aria-hidden"), "false");
+
+  elements.get("menuBackdrop")!.trigger("click");
+
+  assert.equal(btnMenu.getAttribute("aria-expanded"), "false");
+  assert.equal(drawer.getAttribute("aria-hidden"), "true");
+});
+
+test("index.html は ELEMENT_IDS のすべての id を持つ", () => {
+  const html = fs.readFileSync(
+    path.join(PROJECT_ROOT, "src", "frontend", "index.html"),
+    "utf-8"
+  );
+  const missing = ELEMENT_IDS.filter((id) => !html.includes(`id="${id}"`));
+  assert.deepEqual(missing, [], `index.html に無い id: ${missing.join(", ")}`);
 });

@@ -1216,3 +1216,18 @@ git log --oneline -6
 ```
 
 Expected: 意図したファイルだけが変更・コミットされている。未コミットの変更があれば、対応するタスクのコミットへ含める。
+
+---
+
+## 最終レビュー追補（2026-11-27）
+
+最終レビューで以下を修正した。Task 5 の CSS を再適用するときは、この追補を優先すること。
+
+- split の狭幅レイアウト（`@media (max-width: 1100px)`）を復元した（Task 5 で一度削除されていた）。
+  `body.split-mode #app` は 1 カラムで `grid-template-areas: "bar" "info" "chat" "stage"`、
+  `height: auto; min-height: 100vh`。`body.split-mode #stage` は `height: 48vh; min-height: 320px`、
+  `body.split-mode #conversation` は `max-height: 46vh`。stage はチャットの下に積まれる。
+- split / chat の `#characterInfo` は白カードに戻した。紫のグラデーション上で `#4f46e5` / `#64748b` が
+  読めないため、`padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);` を適用する。split の `padding: 0; background: none;`
+  は使わない。studio の暗いピルは変更しない。

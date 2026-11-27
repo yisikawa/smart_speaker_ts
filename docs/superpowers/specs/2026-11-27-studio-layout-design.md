@@ -469,3 +469,14 @@ grid-template-areas:
 - [ ] アバター無しでも studio の背景・キャラ情報・チャットが表示される
 - [ ] 幅 720px / 480px 未満でレイアウトが崩れない
 - [ ] `npm run verify` が通る
+
+---
+
+## 14. 最終レビュー追補（2026-11-27）
+
+- `split` は互換用のレガシーレイアウトとして維持する。`?mode=split` は 1100px 以下で縦積み
+  （`bar` → `info` → `chat` → `stage`）になり、stage がチャットの下に来る。この挙動は Task 5 で
+  一度削除されたが、最終レビューで復元した。
+- `split` / `chat` の `#characterInfo` は白カードで表示し、紫の背景上でも文字が読めるようにする
+  （`padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.95);`）。
+  `studio` の暗いピルはそのまま。

@@ -823,9 +823,15 @@ body.split-mode #studioBar {
 
 body.split-mode #characterInfo {
   grid-area: info;
-  padding: 0;
-  background: none;
-  color: inherit;
+}
+
+/* split / chat は紫の背景上に直接置かれるため、白カードでコントラストを確保する */
+body.split-mode #characterInfo,
+body.chat-mode #characterInfo {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 body.split-mode #characterInfo .character-name { color: #4f46e5; }
@@ -860,6 +866,8 @@ body.split-mode #stage {
   grid-area: stage;
   min-height: 0;
   height: 100%;
+  border-radius: 24px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
 }
 
 body.split-mode .avatar-sprite {
@@ -873,9 +881,6 @@ body.split-mode .avatar-sprite {
 body.studio-mode .avatar-sprite,
 body.split-mode .avatar-sprite { aspect-ratio: 3 / 4; }
 
-body.studio-mode .avatar-sprite--image,
-body.split-mode .avatar-sprite--image { aspect-ratio: auto; }
-
 body.split-mode .caption {
   bottom: 24px;
   max-width: 86%;
@@ -886,6 +891,43 @@ body.split-mode .caption {
 body.split-mode:has(#stage.hidden) #app {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "bar" "info" "chat";
+}
+
+/* 狭い画面では split の 2 カラムを縦積みにし、stage をチャットの下へ置く */
+@media (max-width: 1100px) {
+  body.split-mode {
+    overflow-y: auto;
+  }
+
+  body.split-mode #app {
+    height: auto;
+    min-height: 100vh;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "bar"
+      "info"
+      "chat"
+      "stage";
+  }
+
+  body.split-mode #stage {
+    height: 48vh;
+    min-height: 320px;
+  }
+
+  body.split-mode #conversation {
+    max-height: 46vh;
+  }
+
+  /* アバター無しで右カラムを畳んでいる場合は stage 行を足さない */
+  body.split-mode:has(#stage.hidden) #app {
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "bar"
+      "info"
+      "chat";
+  }
 }
 
 /* ---- chat（互換） ---- */
