@@ -571,17 +571,6 @@ main {
 .caption:empty { display: none; }
 
 body.stage-mode { background: #0f1117; overflow: hidden; }
-body.stage-mode #app { max-width: none; min-height: 100vh; padding: 0; }
-body.stage-mode header,
-body.stage-mode .character,
-body.stage-mode .conversation,
-body.stage-mode .mic-row,
-body.stage-mode .composer,
-body.stage-mode .controls,
-body.stage-mode .diagnostics,
-body.stage-mode .settings,
-body.stage-mode footer { display: none; }
-body.stage-mode #stage { min-height: 100vh; }
 
 /* 配信時はキャラクターを大きく、下中央に置く（OLV 風の構図） */
 body.stage-mode .avatar-sprite {
@@ -600,11 +589,213 @@ body.stage-mode .avatar-expression { color: #fff; }
 body.transparent { background: transparent !important; }
 body.transparent #app { background: transparent; }
 
-/* ---- 2 画面（左: チャット / 右: ステージ） ---- */
-body.split-mode {
+/* ---- studio: 全面キャラクター + 左下チャット + 上部バー ---- */
+body.studio-mode { overflow: hidden; }
+
+body.studio-mode #app {
+  max-width: none;
+  height: 100vh;
+  min-height: 0;
+  padding: 0;
+  position: relative;
   overflow: hidden;
 }
 
+body.studio-mode #stage {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+}
+
+body.studio-mode #caption { display: none; }
+
+body.studio-mode .avatar-sprite {
+  top: 50%;
+  height: calc(90% * var(--avatar-scale, 1));
+  width: auto;
+  min-width: 0;
+  transform: translate(-50%, -50%);
+}
+
+.studio-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.studio-mode #studioBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(15, 17, 23, 0.78), rgba(15, 17, 23, 0.15));
+  backdrop-filter: blur(8px);
+}
+
+body.studio-mode #studioBar .level-row {
+  flex: 1 1 160px;
+  min-width: 120px;
+  margin-top: 0;
+}
+
+body.studio-mode #studioBar .level-hint {
+  min-width: 0;
+  font-size: 0.7rem;
+}
+
+.character-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.character-info-text { min-width: 0; }
+
+body.studio-mode #characterInfo {
+  position: absolute;
+  top: 64px;
+  right: 24px;
+  z-index: 4;
+  flex-direction: row-reverse;
+  max-width: min(360px, 60vw);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(15, 17, 23, 0.55);
+  color: #fff;
+  text-align: right;
+}
+
+body.studio-mode #characterInfo .character-face {
+  font-size: 28px;
+  animation: none;
+}
+
+body.studio-mode #characterInfo .character-name {
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+body.studio-mode #characterInfo .services {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.7rem;
+}
+
+.chat-overlay {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+body.studio-mode #chatOverlay {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  z-index: 4;
+  width: min(420px, calc(100% - 48px));
+  max-height: 45vh;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 17, 23, 0.82);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+body.studio-mode #conversation {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  margin-bottom: 10px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: #fff;
+}
+
+body.studio-mode #chatOverlay .message.assistant { background: rgba(255, 255, 255, 0.94); }
+body.studio-mode #chatOverlay .message.user { background: #4f46e5; }
+body.studio-mode #chatOverlay .system-note { color: rgba(255, 255, 255, 0.7); }
+body.studio-mode #chatOverlay .composer { margin-bottom: 0; }
+body.studio-mode #chatOverlay .composer textarea { background: rgba(255, 255, 255, 0.95); }
+
+/* ---- ハンバーガードロワー ---- */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s;
+}
+
+.menu-backdrop.open { opacity: 1; visibility: visible; }
+
+.menu-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+  width: min(360px, 86vw);
+  padding: 18px;
+  overflow-y: auto;
+  background: #111827;
+  color: #e5e7eb;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 0.2s ease, visibility 0.2s;
+}
+
+.menu-drawer.open { transform: translateX(0); visibility: visible; }
+body.menu-open { overflow: hidden; }
+
+.menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.menu-header h1 { color: #fff; font-size: 1.25rem; }
+
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.menu-section h2 { color: #c7d2fe; font-size: 0.9rem; }
+.menu-section label { color: #cbd5e1; font-size: 0.8rem; }
+
+.menu-section select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #e5e7eb;
+  font-family: inherit;
+}
+
+.menu-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+/* ---- split（互換） ---- */
 body.split-mode #app {
   max-width: none;
   height: 100vh;
@@ -612,40 +803,70 @@ body.split-mode #app {
   padding: 18px 22px;
   display: grid;
   grid-template-columns: minmax(420px, 1fr) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
-    "header stage"
-    "main stage"
-    "footer stage";
+    "bar stage"
+    "info stage"
+    "chat stage";
   gap: 14px 18px;
 }
 
-body.split-mode header {
-  grid-area: header;
-  margin-bottom: 0;
+body.split-mode #studioBar {
+  grid-area: bar;
+  padding: 0;
+  background: none;
+  backdrop-filter: none;
 }
 
-body.split-mode main {
-  grid-area: main;
+body.split-mode #characterInfo {
+  grid-area: info;
+  padding: 0;
+  background: none;
+  color: inherit;
+}
+
+body.split-mode #characterInfo .character-name { color: #4f46e5; }
+body.split-mode #characterInfo .services { color: #64748b; }
+body.split-mode #characterInfo .character-face {
+  font-size: 48px;
+  animation: float 3s ease-in-out infinite;
+}
+
+body.split-mode #chatOverlay {
+  grid-area: chat;
+  position: static;
+  width: auto;
+  max-height: none;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body.split-mode #conversation {
+  flex: 1 1 auto;
   min-height: 0;
-  padding: 18px;
-  overflow: hidden;
+  max-height: none;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: inherit;
 }
 
 body.split-mode #stage {
   grid-area: stage;
   min-height: 0;
   height: 100%;
-  border-radius: 24px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
 }
 
-body.split-mode footer {
-  grid-area: footer;
-  margin-top: 0;
+body.split-mode .avatar-sprite {
+  top: 50%;
+  height: calc(90% * var(--avatar-scale, 1));
+  width: auto;
+  min-width: 0;
+  transform: translate(-50%, -50%);
 }
 
-/* split はチャット側にも台詞が出るが、配信用にステージ内の字幕も使う */
 body.split-mode .caption {
   bottom: 24px;
   max-width: 86%;
@@ -653,84 +874,80 @@ body.split-mode .caption {
   font-size: 26px;
 }
 
-body.split-mode .character {
-  margin-bottom: 12px;
+body.split-mode:has(#stage.hidden) #app {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "bar" "info" "chat";
 }
 
-body.split-mode .character-face {
-  font-size: 48px;
+/* ---- chat（互換） ---- */
+body.chat-mode #app {
+  max-width: 820px;
+  height: 100vh;
+  min-height: 0;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* チャットの履歴を左カラムの高さいっぱいに使う */
-body.split-mode .conversation {
+body.chat-mode #studioBar { order: 0; }
+body.chat-mode #characterInfo { order: 1; }
+body.chat-mode #chatOverlay { order: 2; flex: 1 1 auto; min-height: 0; }
+body.chat-mode #stage,
+body.chat-mode #caption { display: none !important; }
+
+body.chat-mode #conversation {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
-  margin-bottom: 12px;
 }
 
-/* アバターが無いときは右カラムを畳んで 1 カラムにする */
-body.split-mode:has(#stage.hidden) #app {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas:
-    "header"
-    "main"
-    "footer";
+/* ---- stage（配信） ---- */
+body.stage-mode #app { max-width: none; min-height: 100vh; padding: 0; }
+
+body.stage-mode #studioBar,
+body.stage-mode #characterInfo,
+body.stage-mode #chatOverlay,
+body.stage-mode #menuDrawer,
+body.stage-mode #menuBackdrop { display: none; }
+
+body.stage-mode #stage { min-height: 100vh; }
+
+@media (max-width: 720px) {
+  body.studio-mode #chatOverlay {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 40vh;
+  }
+
+  body.studio-mode #studioBar {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  body.studio-mode #studioBar .level-row {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  body.studio-mode #characterInfo {
+    top: 96px;
+    right: 12px;
+    max-width: 70vw;
+  }
+
+  .menu-drawer { width: min(360px, 86vw); }
 }
 
-/* sprite フォールバックも split ではステージいっぱいに置く */
-body.split-mode .avatar-sprite {
-  top: 50%;
-  height: calc(90% * var(--avatar-scale, 1));
-  width: auto;
-  aspect-ratio: 3 / 4;
-  transform: translate(-50%, -50%);
+@media (max-width: 480px) {
+  body.studio-mode #characterInfo .services { display: none; }
+  body.studio-mode #characterInfo .character-face { font-size: 22px; }
+  body.studio-mode #characterInfo .character-name { font-size: 0.85rem; }
 }
 
-body.split-mode .avatar-sprite--image {
-  aspect-ratio: auto;
-}
-
-body.split-mode.transparent {
-  background: transparent !important;
-}
-
-@media (max-width: 1100px) {
-  body.split-mode {
-    overflow-y: auto;
-  }
-
-  body.split-mode #app {
-    height: auto;
-    min-height: 100vh;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto;
-    grid-template-areas:
-      "header"
-      "stage"
-      "main"
-      "footer";
-  }
-
-  body.split-mode #stage {
-    height: 48vh;
-    min-height: 320px;
-  }
-
-  body.split-mode main {
-    overflow: visible;
-  }
-
-  body.split-mode .conversation {
-    max-height: 46vh;
-  }
-
-  body.split-mode:has(#stage.hidden) #app {
-    grid-template-rows: auto auto auto;
-    grid-template-areas:
-      "header"
-      "main"
-      "footer";
-  }
+@media (prefers-reduced-motion: reduce) {
+  .menu-drawer { transition: none; }
+  .menu-backdrop { transition: none; }
 }
 
