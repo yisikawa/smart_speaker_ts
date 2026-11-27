@@ -9,6 +9,7 @@ cd /d "%APP_DIR%"
 if not defined PORT set "PORT=3000"
 set "OPEN_BROWSER=1"
 set "LAYOUT=split"
+set "START_ALL=0"
 :parse_args
 if "%~1"=="" goto :args_done
 if /i "%~1"=="/nobrowser" set "OPEN_BROWSER=0"
@@ -16,6 +17,7 @@ if /i "%~1"=="--no-browser" set "OPEN_BROWSER=0"
 if /i "%~1"=="/chat" set "LAYOUT=chat"
 if /i "%~1"=="/stage" set "LAYOUT=stage"
 if /i "%~1"=="/split" set "LAYOUT=split"
+if /i "%~1"=="/all" set "START_ALL=1"
 shift
 goto :parse_args
 :args_done
@@ -90,6 +92,18 @@ if errorlevel 1 (
 )
 
 :: ---------------------------------------------------------------
+:: 4.5. 追加サービス（/all）
+:: ---------------------------------------------------------------
+if "%START_ALL%"=="1" (
+    echo.
+    echo [all] GPT-SoVITS / RVC を確認・起動します...
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%APP_DIR%scripts\start-services.ps1"
+    if errorlevel 1 (
+        echo [all] 警告: サービスの起動確認で問題が発生しました。続行します。
+    )
+)
+
+:: ---------------------------------------------------------------
 :: 5. TTS サーバー（VOICEVOX 50021 / GPT-SoVITS 9880）
 :: ---------------------------------------------------------------
 set "TTS_OK=0"
@@ -145,6 +159,7 @@ if "%OPEN_BROWSER%"=="1" (
     echo （ブラウザを開かない場合は start.bat /nobrowser、レイアウト指定は /chat または /stage）
     start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process '%APP_URL%'" >nul 2>&1
 )
+echo   start.bat /all で GPT-SoVITS と RVC も起動・待機します
 echo 終了するには Ctrl+C を押してください。
 echo.
 
