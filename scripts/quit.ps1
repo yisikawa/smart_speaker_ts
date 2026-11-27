@@ -14,6 +14,11 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $script:failures = 0
+$statePath = Join-Path $root "logs\start-all.state.json"
+$launcherPatterns = @{
+    "gpt-sovits" = @("*start-gpt-sovits.bat*", "*api_v2.py*")
+    "rvc-worker" = @("*start-rvc-worker.bat*", "*rvc_worker.py*")
+}
 
 function Stop-Tree {
     param([int]$ProcessId, [string]$Label)
@@ -42,8 +47,89 @@ function Stop-ByCommandLine {
     }
 }
 
+function Get-LauncherState {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+    try {
+        $raw = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+        return ($raw | ConvertFrom-Json)
+    } catch {
+        Write-Host "  [warn] state file is unreadable: $Path"
+        return $null
+    }
+}
+
+function Test-StateProcess {
+    param([int]$ProcessId, [string[]]$Patterns)
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue
+    if ($null -eq $proc -or $null -eq $proc.CommandLine) {
+        return $false
+    }
+    foreach ($pattern in $Patterns) {
+        if ($proc.CommandLine -like $pattern) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Stop-LauncherServices {
+    param([object]$State, [string]$Path, [hashtable]$PatternsByService)
+    if ($null -eq $State -or $null -eq $State.services) {
+        return
+    }
+    $remaining = @{}
+    foreach ($prop in $State.services.PSObject.Properties) {
+        $name = $prop.Name
+        $entry = $prop.Value
+        $pidValue = [int]$entry.pid
+        $patterns = $PatternsByService[$name]
+        if ($null -eq $patterns) {
+            Write-Host "  [warn] unknown launcher service: $name (pid=$pidValue)"
+            continue
+        }
+        if (-not (Test-StateProcess -ProcessId $pidValue -Patterns $patterns)) {
+            Write-Host "  [skip] $name (launcher, pid=$pidValue) is not running or no longer matches"
+            continue
+        }
+        Stop-Tree -ProcessId $pidValue -Label "$name (launcher)"
+        Start-Sleep -Milliseconds 500
+        if (Test-StateProcess -ProcessId $pidValue -Patterns $patterns) {
+            Write-Host "  [warn] $name (launcher, pid=$pidValue) is still running"
+            $remaining[$name] = @{
+                pid = $pidValue
+                port = [int]$entry.port
+                startedAt = [string]$entry.startedAt
+            }
+            $script:failures += 1
+        }
+    }
+    if ($remaining.Count -eq 0) {
+        Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    } else {
+        $payload = @{
+            version = 1
+            updatedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
+            services = $remaining
+        }
+        $payload | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $Path -Encoding UTF8
+    }
+}
+
 Write-Host ""
 Write-Host "--- processes ---"
+
+$launcherState = Get-LauncherState -Path $statePath
+$launcherPorts = @()
+if ($null -ne $launcherState -and $null -ne $launcherState.services) {
+    foreach ($prop in $launcherState.services.PSObject.Properties) {
+        if ($null -ne $prop.Value.port) {
+            $launcherPorts += [int]$prop.Value.port
+        }
+    }
+}
 
 # アプリ本体（start.bat が起動する node）
 Stop-ByCommandLine -Label "app (node)" -Name "node.exe" -Patterns @("*dist\backend\index.js*", "*dist/backend/index.js*")
@@ -57,16 +143,19 @@ if ($All) {
     Stop-ByCommandLine -Label "voicevox" -Name "VOICEVOX.exe" -Patterns @("*")
 }
 
+Stop-LauncherServices -State $launcherState -Path $statePath -PatternsByService $launcherPatterns
+
 # ポートが解放されるまで少し待つ（time_wait ではなく LISTEN の消滅を待つ）
 Start-Sleep -Milliseconds 800
 
 Write-Host ""
 Write-Host "--- ports ---"
-$ports = @($Port, $RvcPort)
+$ports = @($Port, $RvcPort) + $launcherPorts
 if ($All) {
     $ports += 9880
     $ports += 50021
 }
+$ports = $ports | Select-Object -Unique
 foreach ($p in $ports) {
     $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
     if ($conn) {
