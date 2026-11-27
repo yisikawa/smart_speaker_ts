@@ -673,10 +673,9 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
   `audio_tts` の `volumes` と `AudioPlayer.elapsedMs()` を `LipSyncDriver` が毎フレーム渡す。
   Live2D は `Groups[].Name = "LipSync"` のパラメータ（無ければ `ParamMouthOpenY`）を更新する。
 - `StageView` は既定を **studio**（全面キャラクター + 左下チャット + 上部バー + 左ドロワー）にし、
-  `?mode=split`（互換: 左: チャット / 右: ステージ）/ `?mode=chat`（チャットのみ）/
-  `?mode=stage&transparent=1`（配信画面）を切り替える。split は互換用のレガシーレイアウトで、
-  CSS Grid の 2 カラムは 1100px 以下では縦積みになり、stage がチャットの下に来る。字幕は `#stage` の中に
-  置き、split / stage で表示する（`llm_delta` で伸ばし、`llm_complete` で確定。OBS 側のテキストソース不要）。
+  `?mode=chat`（チャットのみ）/ `?mode=stage&transparent=1`（配信画面）を切り替える。
+  字幕は `#stage` の中に置き、stage で表示する
+  （`llm_delta` で伸ばし、`llm_complete` で確定。OBS 側のテキストソース不要）。
 - チャットのみ（`?mode=chat`）ではアバターを描画しない（pixi を読み込まない）。
 
 

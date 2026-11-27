@@ -1,12 +1,12 @@
-/** 画面レイアウト（chat: チャットのみ / stage: 配信向け / split: チャット + ステージ / studio: キャラクター + 左下チャット） */
-export type StageMode = "chat" | "stage" | "split" | "studio";
+/** 画面レイアウト（chat: チャットのみ / stage: 配信向け / studio: キャラクター + 左下チャット） */
+export type StageMode = "chat" | "stage" | "studio";
 
 export interface StageOptions {
   mode: StageMode;
   transparent: boolean;
 }
 
-const MODES: StageMode[] = ["chat", "stage", "split", "studio"];
+const MODES: StageMode[] = ["chat", "stage", "studio"];
 
 /**
  * `location.search` からレイアウトの指定を読む（`?mode=studio&transparent=1`）。

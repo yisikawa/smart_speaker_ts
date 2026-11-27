@@ -29,12 +29,11 @@ export class StageView {
   apply(options: StageOptions): void {
     this.mode = options.mode;
     document.body.classList.toggle("studio-mode", options.mode === "studio");
-    document.body.classList.toggle("split-mode", options.mode === "split");
     document.body.classList.toggle("chat-mode", options.mode === "chat");
     document.body.classList.toggle("stage-mode", options.mode === "stage");
     document.body.classList.toggle("transparent", options.transparent);
     this.stageEl.classList.toggle("hidden", options.mode === "chat");
-    // 字幕は配信向けの stage / split で使う。studio はチャットが字幕を兼ねる
+    // 字幕は配信向けの stage で使う。studio はチャットが字幕を兼ねる
     this.captionEl.classList.toggle(
       "hidden",
       options.mode === "chat" || options.mode === "studio"

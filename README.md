@@ -149,7 +149,6 @@ npm run https:setup     # mkcert を検出して certs\server.crt / server.key �
 ```powershell
 .\start.bat              # 既定: studio（全面キャラクター + 左下チャット）
 .\start.bat /studio      # studio を明示
-.\start.bat /split       # 従来の 2 画面（左: チャット / 右: アバター）
 .\start.bat /chat        # チャットのみ
 .\start.bat /stage       # 配信画面（アバター + 字幕）
 .\start.bat /nobrowser   # ブラウザを自動で開かない
@@ -164,7 +163,7 @@ npm start              # node dist/backend/index.js
 # または scripts\run.bat（start.bat へ委譲）
 ```
 
-ブラウザで <http://localhost:3000>（既定は studio: 全面キャラクター + 左下チャット）を開きます。従来の 2 画面は `?mode=split`（`start.bat /split`）です。
+ブラウザで <http://localhost:3000>（既定は studio: 全面キャラクター + 左下チャット）を開きます。
 
 ### B 案（日英で同じ声）を使う場合
 
@@ -260,8 +259,7 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
 - 読み上げは**文単位**（`tts.split_sentences = true`）。1 文目が確定した時点で話し始める。
   文の区切りは `min_sentence_chars` / `max_sentence_chars` で調整できる（`false` で従来動作）
 - 画面: 既定の `http://localhost:3000/` は **studio（全面キャラクター + 左下チャット）**。
-  従来の 2 画面は `?mode=split`（`start.bat /split`）、`?mode=chat` で従来のチャットのみ、
-  `?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
+  `?mode=chat` でチャットのみ、`?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
   OBS のブラウザソース（1920×1080 / 30fps）にそのまま入れられる
 - アバター: モデルが無いときは CSS 立ち絵（`renderer: "sprite"`）で表示し、`volumes` に合わせて口が動く
   （チャットのみ `?mode=chat` ではアバターを描画しないため、Live2D のランタイムも読み込まない）
@@ -375,7 +373,7 @@ npm run clean          # dist / dist-test の削除
 | `pipeline.test.ts` | 無音 / 1 ターン / テキスト入力 / フォローアップ / バージイン / 中断 / ブラウザ音声 1 ターン |
 | `shared-pcm.test.ts` | WAV 生成・Base64・リサンプル・ゲイン（ブラウザと共通） |
 | `audio-payload.test.ts` | `submit_audio` の検証（Base64/WAV/サイズ/形式） |
-| `stage-mode.test.ts` | `?mode=` の解析（studio / split / chat / stage・既定 studio・不正値フォールバック） |
+| `stage-mode.test.ts` | `?mode=` の解析（studio / chat / stage・既定 studio・不正値フォールバック） |
 | `frontend-script.test.ts` | ビルド済み `app.js` を擬似 DOM で実行（WS 接続・hello 描画・ボタン送信・設定・ハンバーガー開閉・Esc/背景クリック） |
 
 ## 構成

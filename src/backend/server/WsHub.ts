@@ -48,7 +48,9 @@ export class WsHub {
     this.logger = new Logger("WS");
     this.wss = new WebSocketServer({ server: deps.server, path: deps.path ?? "/ws" });
 
-    this.wss.on("connection", (ws, req) => this.handleConnection(ws, req.url ?? undefined));
+    this.wss.on("connection", (ws, req) =>
+      this.handleConnection(ws, req.url ?? undefined, req.socket.remoteAddress ?? undefined)
+    );
     this.wss.on("error", (error) => this.logger.error("WebSocket サーバーエラー", error));
 
     this.offPipeline = deps.pipeline.on((event) => {
@@ -60,14 +62,17 @@ export class WsHub {
     this.heartbeat.unref?.();
   }
 
-  private handleConnection(ws: WebSocket, url?: string): void {
+  private handleConnection(ws: WebSocket, url?: string, remote?: string): void {
     this.clients.add(ws);
     this.alive.set(ws, true);
     const id = `c${++this.nextClientId}`;
     this.clientIds.set(ws, id);
-    this.clientRoles.set(ws, parseClientRole(url));
+    const role = parseClientRole(url);
+    this.clientRoles.set(ws, role);
+    this.logger.info(
+      `クライアント接続 (${this.clients.size}): ${id} role=${role} from=${remote ?? "?"}`
+    );
     this.refreshPrimary();
-    this.logger.info(`クライアント接続 (${this.clients.size})`);
 
     ws.on("pong", () => this.alive.set(ws, true));
     ws.on("close", () => {
@@ -261,6 +266,10 @@ export class WsHub {
       }
     }
     this.primaryId = pickPrimaryClientId(identities);
+    const primary = identities.find((client) => client.id === this.primaryId);
+    this.logger.info(
+      `音声出力担当: ${this.primaryId ?? "なし"}${primary ? `（role=${primary.role}）` : ""}`
+    );
   }
 
   /** アバターのモデル候補（毎回の走査は軽い。失敗しても hello は返す） */
