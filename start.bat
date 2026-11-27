@@ -17,7 +17,6 @@ if /i "%~1"=="--no-browser" set "OPEN_BROWSER=0"
 if /i "%~1"=="/studio" set "LAYOUT=studio"
 if /i "%~1"=="/chat" set "LAYOUT=chat"
 if /i "%~1"=="/stage" set "LAYOUT=stage"
-if /i "%~1"=="/split" set "LAYOUT=split"
 if /i "%~1"=="/all" set "START_ALL=1"
 shift
 goto :parse_args
@@ -149,7 +148,7 @@ if not errorlevel 1 (
 :: ---------------------------------------------------------------
 echo.
 echo アプリを起動します: %APP_URL%
-echo   レイアウト: studio=キャラクター + 左下チャット（既定） / split=従来の 2 画面 / chat=チャットのみ / stage=配信画面
+echo   レイアウト: studio=キャラクター + 左下チャット（既定） / chat=チャットのみ / stage=配信画面
 if "%SCHEME%"=="https" (
     echo   他の PC / スマホから: https://^<このPCのIP^>:%PORT%/  （IP は npm run https:setup が表示します）
 ) else (
@@ -157,7 +156,7 @@ if "%SCHEME%"=="https" (
 )
 if "%OPEN_BROWSER%"=="1" (
     echo 3 秒後にブラウザで %LAYOUT% レイアウトを開きます
-    echo   指定: start.bat /studio /split /chat /stage /nobrowser
+    echo   指定: start.bat /studio /chat /stage /nobrowser
     start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process '%APP_URL%'" >nul 2>&1
 )
 echo   start.bat /all で GPT-SoVITS と RVC も起動・待機します

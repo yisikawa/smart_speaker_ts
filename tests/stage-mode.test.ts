@@ -7,10 +7,9 @@ test("既定は studio（キャラクター + 左下チャット）", () => {
   assert.deepEqual(parseStageOptions("?"), { mode: "studio", transparent: false });
 });
 
-test("mode=chat / stage / split / studio を読む", () => {
+test("mode=chat / stage / studio を読む", () => {
   assert.deepEqual(parseStageOptions("?mode=chat"), { mode: "chat", transparent: false });
   assert.deepEqual(parseStageOptions("?mode=stage"), { mode: "stage", transparent: false });
-  assert.deepEqual(parseStageOptions("?mode=split"), { mode: "split", transparent: false });
   assert.deepEqual(parseStageOptions("?mode=studio"), { mode: "studio", transparent: false });
 });
 

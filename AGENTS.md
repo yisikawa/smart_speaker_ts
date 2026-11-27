@@ -127,9 +127,8 @@ src/backend/index.ts                                ← Composition Root（DI �
     モデルは `Live2DModels/` と `live2d-models/` の両方を見る（`AVATAR_MODEL_DIRS`）。
     口パクは `mouthLevelAt()`（`shared/avatar/lipSync.ts`）に再生位置と `volumes` を渡す。
     `StageView` は既定を **studio（全面キャラクター + 左下チャット + 上部バー + 左ドロワー）** にし、
-    `?mode=split`（従来の 2 画面）/ `?mode=chat`（チャットのみ）/
-    `?mode=stage&transparent=1`（配信画面）で切り替える。字幕は `#stage` の中に置き、
-    split / stage で表示する（studio ではチャットが字幕を兼ねる）。
+    `?mode=chat`（チャットのみ）/ `?mode=stage&transparent=1`（配信画面）で切り替える。
+    字幕は `#stage` の中に置き、stage で表示する（studio ではチャットが字幕を兼ねる）。
     ハンバーガーメニューは `frontend/MenuDrawer.ts`、常時表示はマイク/停止・状態・レベル。
 
 12-13. **感情タグは TTS の前に必ず除去する**（`shared/avatar/emotion.ts` の `extractEmotion`）。
