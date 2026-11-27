@@ -18,12 +18,18 @@ interface StubElement {
   scrollTop: number;
   scrollHeight: number;
   children: StubElement[];
+  attributes: Record<string, string>;
   classList: {
     toggle(): void;
     add(): void;
     remove(): void;
     contains(): boolean;
   };
+  focus(): void;
+  setAttribute(name: string, value: string): void;
+  getAttribute(name: string): string | null;
+  hasAttribute(name: string): boolean;
+  querySelectorAll(): StubElement[];
   addEventListener(type: string, handler: (event?: unknown) => void): void;
   appendChild(child: StubElement): StubElement;
   append(...nodes: StubElement[]): void;
@@ -32,6 +38,7 @@ interface StubElement {
 
 function createElement(id?: string): StubElement {
   const listeners: Record<string, (event?: unknown) => void> = {};
+  const attributes: Record<string, string> = {};
   const element: StubElement = {
     id,
     className: "",
@@ -43,12 +50,20 @@ function createElement(id?: string): StubElement {
     scrollTop: 0,
     scrollHeight: 0,
     children: [],
+    attributes,
     classList: {
       toggle: () => undefined,
       add: () => undefined,
       remove: () => undefined,
       contains: () => false,
     },
+    focus: () => undefined,
+    setAttribute: (name, value) => {
+      attributes[name] = value;
+    },
+    getAttribute: (name) => attributes[name] ?? null,
+    hasAttribute: (name) => name in attributes,
+    querySelectorAll: () => [],
     addEventListener: (type, handler) => {
       listeners[type] = handler;
     },
@@ -119,6 +134,10 @@ const ELEMENT_IDS = [
   "sttModelType",
   "llmModel",
   "settingsNote",
+  "btnMenu",
+  "btnMenuClose",
+  "menuDrawer",
+  "menuBackdrop",
 ];
 
 interface FetchCall {
@@ -462,4 +481,18 @@ test("言語セレクトの変更で PATCH /api/config が送られる（言語�
     data: JSON.stringify({ type: "language", language: "en", character: { name: "Sakura", label: "Cheerful" } }),
   });
   assert.equal(elements.get("characterName")!.textContent, "Sakura");
+});
+
+test("ハンバーガーでドロワーを開閉できる", () => {
+  const { elements } = bootApp();
+  const btnMenu = elements.get("btnMenu")!;
+  const drawer = elements.get("menuDrawer")!;
+
+  btnMenu.trigger("click");
+  assert.equal(btnMenu.getAttribute("aria-expanded"), "true");
+  assert.equal(drawer.getAttribute("aria-hidden"), "false");
+
+  elements.get("btnMenuClose")!.trigger("click");
+  assert.equal(btnMenu.getAttribute("aria-expanded"), "false");
+  assert.equal(drawer.getAttribute("aria-hidden"), "true");
 });
