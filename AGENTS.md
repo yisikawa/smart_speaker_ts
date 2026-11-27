@@ -126,8 +126,11 @@ src/backend/index.ts                                ← Composition Root（DI �
     （`/live2d-core/` で配信・gitignore）が無い/失敗したら sprite へフォールバックする。
     モデルは `Live2DModels/` と `live2d-models/` の両方を見る（`AVATAR_MODEL_DIRS`）。
     口パクは `mouthLevelAt()`（`shared/avatar/lipSync.ts`）に再生位置と `volumes` を渡す。
-    `StageView` は既定を **split（左: チャット / 右: アバター）** にし、`?mode=chat`（チャットのみ）と
-    `?mode=stage&transparent=1`（配信画面）で切り替える。字幕は `#stage` の中に置き、split / stage で表示する。
+    `StageView` は既定を **studio（全面キャラクター + 左下チャット + 上部バー + 左ドロワー）** にし、
+    `?mode=split`（従来の 2 画面）/ `?mode=chat`（チャットのみ）/
+    `?mode=stage&transparent=1`（配信画面）で切り替える。字幕は `#stage` の中に置き、
+    split / stage で表示する（studio ではチャットが字幕を兼ねる）。
+    ハンバーガーメニューは `frontend/MenuDrawer.ts`、常時表示はマイク/停止・状態・レベル。
 
 12-13. **感情タグは TTS の前に必ず除去する**（`shared/avatar/emotion.ts` の `extractEmotion`）。
     タグ→表情名の対応は `avatar.expressions`（空文字は「変えない」）。タグが無ければ

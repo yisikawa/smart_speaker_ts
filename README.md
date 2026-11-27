@@ -141,13 +141,15 @@ npm run https:setup     # mkcert を検出して certs\server.crt / server.key �
 - mkcert が無い場合は `winget install FiloSottile.mkcert` で入れてから実行してください
 
 ```powershell
-.\start.bat              # 2画面（左: チャット / 右: アバター）で起動
+.\start.bat              # 既定: studio（全面キャラクター + 左下チャット）
+.\start.bat /studio      # studio を明示
+.\start.bat /split       # 従来の 2 画面（左: チャット / 右: アバター）
 .\start.bat /chat        # チャットのみ
 .\start.bat /stage       # 配信画面（アバター + 字幕）
 .\start.bat /nobrowser   # ブラウザを自動で開かない
 ```
 
-`start.bat` は既定で `http://localhost:3000/?mode=split` を開きます（`PORT` を変えた場合はそのポート）。
+`start.bat` は既定で `http://localhost:3000/?mode=studio` を開きます（`PORT` を変えた場合はそのポート）。
 
 コマンドラインから直接起動する場合:
 
