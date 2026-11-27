@@ -8,6 +8,7 @@ logs/*.wav
 logs/*.out
 logs/*.err
 logs/tts-spike/
+logs/start-all.state.json
 models/*.bin
 # sherpa-onnx のモデル（scripts/setup-sherpa.ps1 で取得）
 models/sherpa-*/

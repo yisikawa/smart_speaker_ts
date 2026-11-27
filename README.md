@@ -103,8 +103,20 @@ model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
 
 Windows では `start.bat` をダブルクリックするのが簡単です（依存パッケージ・ビルド・Ollama / TTS サーバー・モデルの有無を確認してから起動し、ブラウザを開きます）。
 TTS サーバーは **VOICEVOX（:50021）と GPT-SoVITS（:9880）のどちらか**が動いていれば OK です。
-終了は **`quit.bat`**（アプリ・RVC ワーカーの停止、ポート解放の確認、一時ファイルの掃除まで行います。
-GPT-SoVITS / VOICEVOX も止めるなら `quit.bat /all`）。
+終了は **`quit.bat`**（アプリ・ffplay・`start.bat /all` が起動した RVC ワーカー / GPT-SoVITS の停止、
+ポート解放の確認、一時ファイルの掃除まで行います）。手動で起動した GPT-SoVITS / RVC ワーカーは残ります。
+それらも止めるなら `quit.bat /all`（VOICEVOX も停止します）。
+
+GPT-SoVITS と RVC もまとめて起動する場合は `/all` を付けます。未起動のサービスを
+GPT-SoVITS → RVC の順に起動し、準備完了（`/docs` / `/health`）を待ってからアプリを起動します。
+`start.bat /all` が起動したサービスは `quit.bat`（通常実行）で停止できます。
+
+```powershell
+.\start.bat /all              # GPT-SoVITS + RVC + アプリ
+.\start.bat /all /nobrowser   # ブラウザを開かない
+```
+
+タイムアウトは既定 180 秒です（`START_ALL_TIMEOUT` に 10 以上の秒数を指定すると変更できます）。
 
 > ブラウザのマイクは **`http://localhost:3000`（または `http://127.0.0.1:3000`）** で開けば使えます（localhost は「安全なコンテキスト」扱いのため **https は不要**）。
 > **他の PC / スマホから使う場合は HTTPS が必要**です（下の「HTTPS で他の PC から使う」）。
@@ -155,6 +167,8 @@ scripts\start-gpt-sovits.bat   # :9880 で待受（モデルのロードに数�
 .\start.bat                    # 続けてアプリを起動
 ```
 
+`start.bat /all` を使うと、GPT-SoVITS の起動と準備完了待ちもまとめて行えます。
+
 - パスは環境変数 `GPT_SOVITS_HOME`（既定 `D:\LLMProjects\GPT-SoVITS`）で変えられます
 - セットアップ手順は [docs/TTS_MULTILINGUAL.md](docs/TTS_MULTILINGUAL.md) の §2-B
 - **`config/settings.toml` を編集したらアプリを再起動してから `npm run smoke`**。`smoke` は `PATCH /api/config`
@@ -169,6 +183,8 @@ GPT-SoVITS の声を RVC のモデルでさらに寄せられます（`[tts.voic
 ```powershell
 scripts\start-rvc-worker.bat   # :9890 で待受（初回はモデルのロード + ウォームアップで 25 秒ほど）
 ```
+
+`start.bat /all` は RVC ワーカーの起動とウォームアップ待ちも行います。
 
 ```toml
 [tts.voice_conversion]

@@ -24,7 +24,8 @@
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
 | 既定設定の同期 | `npm run config:default`（`schema.ts` の既定値を `settings.default.toml` へ反映。コメントは保持） |
 | 起動 | `.\start.bat`（または `npm start` / `scripts\run.bat`） |
-| 終了（後処理込み） | `.\quit.bat`（`/all` で GPT-SoVITS・VOICEVOX も停止、`/yes` で確認なし。実処理は `scripts\quit.ps1`） |
+| 全部まとめて起動 | `.\start.bat /all`（GPT-SoVITS → RVC の起動・準備完了待ち込み） |
+| 終了（後処理込み） | `.\quit.bat`（`/all` で手動起動分も含めた RVC ワーカー・GPT-SoVITS・VOICEVOX も停止、`/yes` で確認なし。実処理は `scripts\quit.ps1`） |
 | HTTPS 証明書の生成 | `npm run https:setup`（mkcert で `certs/server.crt` / `key` を生成。LAN IP も SAN に入る。`-Force` で作り直し） |
 | 疎通確認 | 起動中に `npm run smoke`（`SMOKE_BASE` で URL 変更可） |
 | マイク診断（サーバー録音） | `npm run check-audio` |
@@ -208,6 +209,11 @@ src/backend/index.ts                                ← Composition Root（DI �
     - サーバーは `buildVadSettings(audio)`、hello は `buildClientVadSettings(audio)`
     - hello の組み立ては `backend/server/helloPayload.ts` の `buildHelloPayload()`
     - 手写しが復活していないことは `tests/vad-settings-single-source.test.ts` が検出する
+
+12-22. **`start.bat /all` は起動したサービスだけを `logs\start-all.state.json` に記録する**
+    - `quit.bat` 通常実行はアプリ・ffplay・記録済みの `/all` 起動サービス（RVC ワーカー / GPT-SoVITS）を停止する。手動起動した GPT-SoVITS / RVC ワーカーは残す
+    - `quit.bat /all` は手動起動分も含めて GPT-SoVITS / RVC ワーカー / VOICEVOX を停止する
+    - 状態ファイルは gitignore 対象。タイムアウトは `START_ALL_TIMEOUT`（既定 180 秒）
 
 13. **VAD のしきい値は「較正」で決まる**
     - 較正（既定 0.5 秒）は**中央値**を使い、`silence_threshold × 1.5` を超える音は「発話・物音」として学習しない

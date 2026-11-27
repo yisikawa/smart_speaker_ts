@@ -29,12 +29,14 @@ echo ========================================
 echo.
 echo 停止するもの:
 echo   - アプリ本体        (node dist\backend\index.js / :%PORT%)
-echo   - RVC ワーカー      (scripts\rvc_worker.py / :%RVC_PORT%)
 if "%STOP_ALL%"=="1" (
-    echo   - GPT-SoVITS API    (api_v2.py / :9880)
-    echo   - VOICEVOX ENGINE   (:50021)
+    echo   - RVC ワーカー      ^(手動起動分も含む / :%RVC_PORT%^)
+    echo   - GPT-SoVITS API    ^(手動起動分も含む / :9880^)
+    echo   - VOICEVOX ENGINE   ^(:50021^)
 ) else (
-    echo   - GPT-SoVITS / VOICEVOX は止めません（止めるには quit.bat /all）
+    echo   - RVC ワーカー      ^(start.bat /all が起動した場合のみ / :%RVC_PORT%^)
+    echo   - GPT-SoVITS        ^(start.bat /all が起動した場合のみ / :9880^)
+    echo   - VOICEVOX は止めません（止めるには quit.bat /all）
 )
 echo   - ffplay の孤児プロセス（再生の残り）
 echo.
@@ -62,7 +64,7 @@ set "EXIT_CODE=%ERRORLEVEL%"
 
 echo.
 if "%EXIT_CODE%"=="0" (
-    echo 終了しました。次回は start.bat で起動してください。
+    echo 終了しました。次回は start.bat で起動してください（まとめて起動するなら start.bat /all）。
 ) else (
     echo 一部の後処理に失敗しました（code=%EXIT_CODE%）。上のメッセージを確認してください。
 )
@@ -72,7 +74,7 @@ exit /b %EXIT_CODE%
 
 :usage
 echo 使い方: quit.bat [/all] [/yes]
-echo   /all   GPT-SoVITS（:9880）と VOICEVOX（:50021）も停止する
+echo   /all   RVC ワーカー（:%RVC_PORT%）・GPT-SoVITS（:9880）・VOICEVOX（:50021）も停止する（手動起動分を含む）
 echo   /yes   確認なしで実行する（自動化向け）
 echo   終了コード: 0=成功 / 1=一部失敗
 exit /b 0
