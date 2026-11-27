@@ -141,13 +141,15 @@ npm run https:setup     # mkcert を検出して certs\server.crt / server.key �
 - mkcert が無い場合は `winget install FiloSottile.mkcert` で入れてから実行してください
 
 ```powershell
-.\start.bat              # 2画面（左: チャット / 右: アバター）で起動
+.\start.bat              # 既定: studio（全面キャラクター + 左下チャット）
+.\start.bat /studio      # studio を明示
+.\start.bat /split       # 従来の 2 画面（左: チャット / 右: アバター）
 .\start.bat /chat        # チャットのみ
 .\start.bat /stage       # 配信画面（アバター + 字幕）
 .\start.bat /nobrowser   # ブラウザを自動で開かない
 ```
 
-`start.bat` は既定で `http://localhost:3000/?mode=split` を開きます（`PORT` を変えた場合はそのポート）。
+`start.bat` は既定で `http://localhost:3000/?mode=studio` を開きます（`PORT` を変えた場合はそのポート）。
 
 コマンドラインから直接起動する場合:
 
@@ -156,7 +158,7 @@ npm start              # node dist/backend/index.js
 # または scripts\run.bat（start.bat へ委譲）
 ```
 
-ブラウザで <http://localhost:3000>（既定は2画面）を開きます。
+ブラウザで <http://localhost:3000>（既定は studio: 全面キャラクター + 左下チャット）を開きます。従来の 2 画面は `?mode=split`（`start.bat /split`）です。
 
 ### B 案（日英で同じ声）を使う場合
 
@@ -251,8 +253,9 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
   `http://localhost:3000/?role=display`。未接続なら自動で ffplay に戻る
 - 読み上げは**文単位**（`tts.split_sentences = true`）。1 文目が確定した時点で話し始める。
   文の区切りは `min_sentence_chars` / `max_sentence_chars` で調整できる（`false` で従来動作）
-- 画面: 既定の `http://localhost:3000/` は **左にチャット、右にアバター** の 2 画面レイアウト。
-  `?mode=chat` で従来のチャットのみ、`?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
+- 画面: 既定の `http://localhost:3000/` は **studio（全面キャラクター + 左下チャット）**。
+  従来の 2 画面は `?mode=split`（`start.bat /split`）、`?mode=chat` で従来のチャットのみ、
+  `?mode=stage&transparent=1` で「アバター + 字幕」だけの配信画面。
   OBS のブラウザソース（1920×1080 / 30fps）にそのまま入れられる
 - アバター: モデルが無いときは CSS 立ち絵（`renderer: "sprite"`）で表示し、`volumes` に合わせて口が動く
   （チャットのみ `?mode=chat` ではアバターを描画しないため、Live2D のランタイムも読み込まない）

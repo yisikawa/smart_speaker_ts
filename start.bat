@@ -8,12 +8,13 @@ cd /d "%APP_DIR%"
 
 if not defined PORT set "PORT=3000"
 set "OPEN_BROWSER=1"
-set "LAYOUT=split"
+set "LAYOUT=studio"
 set "START_ALL=0"
 :parse_args
 if "%~1"=="" goto :args_done
 if /i "%~1"=="/nobrowser" set "OPEN_BROWSER=0"
 if /i "%~1"=="--no-browser" set "OPEN_BROWSER=0"
+if /i "%~1"=="/studio" set "LAYOUT=studio"
 if /i "%~1"=="/chat" set "LAYOUT=chat"
 if /i "%~1"=="/stage" set "LAYOUT=stage"
 if /i "%~1"=="/split" set "LAYOUT=split"
@@ -148,7 +149,7 @@ if not errorlevel 1 (
 :: ---------------------------------------------------------------
 echo.
 echo アプリを起動します: %APP_URL%
-echo   %LAYOUT% : split=チャット + アバター（2画面） / chat=チャットのみ / stage=配信画面
+echo   レイアウト: studio=キャラクター + 左下チャット（既定） / split=従来の 2 画面 / chat=チャットのみ / stage=配信画面
 if "%SCHEME%"=="https" (
     echo   他の PC / スマホから: https://^<このPCのIP^>:%PORT%/  （IP は npm run https:setup が表示します）
 ) else (
@@ -156,7 +157,7 @@ if "%SCHEME%"=="https" (
 )
 if "%OPEN_BROWSER%"=="1" (
     echo 3 秒後にブラウザで %LAYOUT% レイアウトを開きます
-    echo （ブラウザを開かない場合は start.bat /nobrowser、レイアウト指定は /chat または /stage）
+    echo   指定: start.bat /studio /split /chat /stage /nobrowser
     start "" /b powershell -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Seconds 3; Start-Process '%APP_URL%'" >nul 2>&1
 )
 echo   start.bat /all で GPT-SoVITS と RVC も起動・待機します

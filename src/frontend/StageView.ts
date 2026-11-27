@@ -24,16 +24,21 @@ export class StageView {
   private readonly stageEl = must<HTMLElement>("stage");
   private readonly captionEl = must<HTMLElement>("caption");
   private readonly avatar = new AvatarStage();
-  private mode: StageOptions["mode"] = "split";
+  private mode: StageOptions["mode"] = "studio";
 
   apply(options: StageOptions): void {
     this.mode = options.mode;
-    document.body.classList.toggle("stage-mode", options.mode === "stage");
+    document.body.classList.toggle("studio-mode", options.mode === "studio");
     document.body.classList.toggle("split-mode", options.mode === "split");
+    document.body.classList.toggle("chat-mode", options.mode === "chat");
+    document.body.classList.toggle("stage-mode", options.mode === "stage");
     document.body.classList.toggle("transparent", options.transparent);
     this.stageEl.classList.toggle("hidden", options.mode === "chat");
-    // 字幕は配信向けの stage / split で使う（空文字のときは CSS の :empty で隠れる）
-    this.captionEl.classList.toggle("hidden", options.mode === "chat");
+    // 字幕は配信向けの stage / split で使う。studio はチャットが字幕を兼ねる
+    this.captionEl.classList.toggle(
+      "hidden",
+      options.mode === "chat" || options.mode === "studio"
+    );
   }
 
   async mountAvatar(config: AvatarConfigPayload): Promise<void> {
@@ -44,7 +49,8 @@ export class StageView {
     }
     await this.avatar.mount(this.stageEl, config);
     const empty = config.renderer === "none";
-    this.stageEl.classList.toggle("hidden", empty);
+    // studio は背景とキャラ情報を残す（アバター無しのフォールバック）
+    this.stageEl.classList.toggle("hidden", empty && this.mode !== "studio");
   }
 
   setMouth(level: number): void {
@@ -58,7 +64,7 @@ export class StageView {
   setCaption(text: string, final: boolean): void {
     this.captionEl.textContent = text;
     this.captionEl.classList.toggle("final", final);
-    if (this.mode !== "chat") {
+    if (this.mode !== "chat" && this.mode !== "studio") {
       this.captionEl.classList.remove("hidden");
     }
   }

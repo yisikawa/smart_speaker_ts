@@ -12,6 +12,7 @@ import { errorText } from "../shared/errorText";
 import { ChatView } from "./ChatView";
 import { AudioPlayer } from "./AudioPlayer";
 import { LipSyncDriver } from "./avatar/LipSyncDriver";
+import { MenuDrawer } from "./MenuDrawer";
 import { MicLoop } from "./MicLoop";
 import { StageView } from "./StageView";
 import { parseStageOptions } from "../shared/ui/stageMode";
@@ -41,6 +42,8 @@ class SumikaApp {
   private readonly micLoop: MicLoop;
   /** 設定メニュー（STT / LLM のモデル切り替え） */
   private readonly settings: SettingsPanel;
+  /** ハンバーガーメニュー（左ドロワー） */
+  private readonly menu = new MenuDrawer();
   /** ブラウザ再生（tts_audio）のキュー。`playbackTarget=browser` のときだけ作る */
   private audioPlayer: AudioPlayer | null = null;
   /** 配信向けステージ（アバター + 字幕） */
@@ -92,6 +95,8 @@ class SumikaApp {
 
   start(): void {
     this.stage.apply(parseStageOptions(window.location.search ?? ""));
+    this.menu.bind();
+    this.menu.close();
     this.bindEvents();
     this.settings.bind();
     // ページ破棄時にマイクと AudioContext を残さない（次回の起動で「使用中」にならない）
