@@ -40,7 +40,10 @@ export class WsClient {
     }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    this.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    // ページのクエリ（`?role=display`）はサーバーの役割判定が WS の req.url から読むため、
+    // 接続 URL にも引き継ぐ（落とすと常に control 扱いになり、tts_audio が届かない）。
+    const search = window.location.search ?? "";
+    this.ws = new WebSocket(`${protocol}//${window.location.host}/ws${search}`);
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;

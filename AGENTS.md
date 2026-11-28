@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 299 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 306 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -252,6 +252,9 @@ src/backend/index.ts                                ← Composition Root（DI �
       `%LOCALAPPDATA%\Ollama\server.log` と `ollama ps`（`size_vram`）を見る
 
 18. **`tts_audio` は primary client（`role=display`）にだけ送る**。全配信すると複数タブで二重再生する。
+    `role` は**ページのクエリを WS 接続 URL に引き継いで**サーバーへ渡す（`WsClient.connect`）。
+    落とすと表示タブも `control` 扱いになり、先に繋いだ PC にだけ音声が飛んで**スマホが無音**になる
+    （回帰テスト: `tests/frontend-script.test.ts`）。
     クライアントの `audio_playback_done` が来なくても **`durationMs + 1500ms` で必ず resolve** する
     （解かないと `speaking` のまま固まる）。
 19. **Live2D の Core とモデルはリポジトリに入れない**（`vendor/`・`live2d-models/`・`Live2DModels/` は gitignore）。
