@@ -9,7 +9,7 @@
 
 ローカル完結型の AI 音声アシスタント（TypeScript。バックエンド Node.js + ブラウザ GUI）。
 
-- STT: whisper.cpp（CUDA 版に差し替え済み）または sherpa-onnx（`stt.engine` で切替） / LLM: Ollama / TTS: VOICEVOX
+- STT: sherpa-onnx（既定）または whisper.cpp（CUDA 版に差し替え済み。`stt.engine` で切替） / LLM: Ollama / TTS: GPT-SoVITS（`[tts]` / `[tts.ja]` / `[tts.en]`）
 - 音声入力: **既定はブラウザのマイク**（`getUserMedia`）。`audio.input_mode = "server"` で ffmpeg 録音に切替
 - すべて localhost 完結。音声・テキストは外部送信しない
 
@@ -149,8 +149,8 @@ src/backend/index.ts                                ← Composition Root（DI �
       `setImmediate` 内の例外は `logger.error` で受ける（ApiRouter の try/catch の外に出るため）
 
 12-15. **読み上げは `TtsRouter` 経由**（`VoicevoxTtsService` を直接 DI しない）。ja は `[tts.ja]`（未指定キーは
-    `[tts]` 直下・既定は VOICEVOX）、en は `[tts.en]` のプロファイル（`openai_speech` = OpenAI 互換
-    `/v1/audio/speech` / `gpt_sovits` = api_v2 `/tts`）。**日英で同じ声（B 案）は ja/en に同じ設定を書く**。
+    `[tts]` 直下・既定は GPT-SoVITS）、en は `[tts.en]` のプロファイル（`gpt_sovits` = api_v2 `/tts` /
+    `openai_speech` = OpenAI 互換 `/v1/audio/speech`）。**日英で同じ声（B 案）は ja/en に同じ設定を書く**。
     - **`TtsRouter.synthesize()` は必ず 16bit PCM モノラルへ正規化してから返す**（口パクの `buildVolumeEnvelope()` は
       16bit 以外を解析できず、`volumes=[]` になる）。RVC / 44.1kHz / 32bit float を挟むときは特に注意
     - `tts.en.engine=gpt_sovits` は参照音声（1〜5 秒）とその書き起こしが必要。声の権利（VOICEVOX 音源の学習可否）は規約を確認する
@@ -288,7 +288,7 @@ src/backend/index.ts                                ← Composition Root（DI �
   （設計: `docs/superpowers/specs/2026-11-25-latent-bug-refactor-design.md`。再発防止は 12-19〜12-21）。
 - 未実装（設定のみ）: `[rag]` / `[recipe_db]` / `[music]` / `[apps.proactive_speech]` / `[apps.home_assistant]` / ウェイクワード
   （真実源は `ConfigManager.UNSUPPORTED_SECTIONS`）
-- STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は whisper）
+- STT は `stt.engine` で whisper.cpp / sherpa-onnx を切り替え可能（sherpa は CPU 0.2〜0.4 秒/発話・幻聴なし。既定は sherpa）
 - **画面の「⚙️ 設定」から LLM モデルと STT のエンジン／モデルを切り替えられる**（`GET /api/models`・
   `PUT /api/models/llm`・`PUT /api/models/stt`。設定は即保存、次の発話から有効）
 - **日英モード切替（P1 実装済み）**: ヘッダの `日本語 / English`（`conversation.language`）。

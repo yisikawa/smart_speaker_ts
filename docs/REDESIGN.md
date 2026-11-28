@@ -612,7 +612,7 @@ VTuber 化の第 1 段。詳細は `docs/superpowers/specs/2026-11-15-vtuber-ava
 
 - `[avatar]`（`enabled` / `model_path` / `scale` / `offset_x,y` / `background` / `lip_sync_*` /
   `emotion_tags_enabled` / `emotion_heuristic_enabled` / `expressions` / `emotion_styles` / `motions`）
-- `audio.playback_target = "server" | "browser"`（既定 `server`）
+- `audio.playback_target = "server" | "browser"`（既定 `browser`。口パクは browser 再生でのみ動く）
 - `[llm] keep_alive` / `num_ctx`（VRAM 使用量の制御。Ollama の body へ渡す）
 - `[tts] split_sentences` / `prefetch_depth` / `min_sentence_chars` / `max_sentence_chars`（P2 で使用）
 - `[gui] layout` / `caption_enabled` / `caption_font_size`（P3 で使用）
@@ -718,7 +718,7 @@ LLM 差分 ── SentenceSplitter.push() ──► 確定した文 ──► Sp
 
 **TTS の切替**: `TtsRouter`（`SttSwitcher` と同型）。
 
-- ja: `[tts.ja]`（未指定キーは `[tts]` 直下。既定は VOICEVOX）
+- ja: `[tts.ja]`（未指定キーは `[tts]` 直下。既定は GPT-SoVITS）
 - en: `[tts.en].engine` により `OpenAiSpeechTtsService`（`/v1/audio/speech`）または `GptSovitsTtsService`（`/tts`）
 - **B 案（日英で同じ声）**: `[tts.ja]` と `[tts.en]` に同じエンジン・同じ参照音声を書けば、両モードとも同じ TTS を使う
 - **合成後は必ず 16bit PCM モノラルへ正規化**（`services/wavNormalize.ts`）。口パクの `buildVolumeEnvelope()` は

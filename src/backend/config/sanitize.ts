@@ -173,22 +173,24 @@ export function sanitizeConfig(config: AppConfig): string[] {
 
   const engine = config.stt.engine;
   if (engine !== "whisper" && engine !== "sherpa") {
-    warnings.push(`stt.engine=${String(engine)} は未対応のため "whisper" を使用します`);
-    config.stt.engine = "whisper";
+    warnings.push(
+      `stt.engine=${String(engine)} は未対応のため "${DEFAULT_CONFIG.stt.engine}" を使用します`
+    );
+    config.stt.engine = DEFAULT_CONFIG.stt.engine;
   }
 
   if (!isSherpaModelType(config.stt.sherpa_model_type)) {
     warnings.push(
-      `stt.sherpa_model_type=${String(config.stt.sherpa_model_type)} は未対応のため "nemo_transducer" を使用します`
+      `stt.sherpa_model_type=${String(config.stt.sherpa_model_type)} は未対応のため "${DEFAULT_CONFIG.stt.sherpa_model_type}" を使用します`
     );
-    config.stt.sherpa_model_type = "nemo_transducer";
+    config.stt.sherpa_model_type = DEFAULT_CONFIG.stt.sherpa_model_type;
   }
 
   if (!config.stt.sherpa_provider.trim()) {
-    config.stt.sherpa_provider = "cpu";
+    config.stt.sherpa_provider = DEFAULT_CONFIG.stt.sherpa_provider;
   }
   if (!config.stt.sherpa_language.trim()) {
-    config.stt.sherpa_language = config.stt.language || "ja";
+    config.stt.sherpa_language = config.stt.language || DEFAULT_CONFIG.stt.sherpa_language;
   }
 
   if (!Array.isArray(config.wakeword.wakeword_path)) {
@@ -197,8 +199,10 @@ export function sanitizeConfig(config: AppConfig): string[] {
   }
 
   if (config.audio.playback_target !== "server" && config.audio.playback_target !== "browser") {
-    warnings.push(`audio.playback_target=${String(config.audio.playback_target)} は未対応のため "server" を使用します`);
-    config.audio.playback_target = "server";
+    warnings.push(
+      `audio.playback_target=${String(config.audio.playback_target)} は未対応のため "${DEFAULT_CONFIG.audio.playback_target}" を使用します`
+    );
+    config.audio.playback_target = DEFAULT_CONFIG.audio.playback_target;
   }
 
   if (config.gui.layout !== "chat" && config.gui.layout !== "stage") {
@@ -210,37 +214,39 @@ export function sanitizeConfig(config: AppConfig): string[] {
     config.llm.keep_alive = "30m";
   }
 
-  // 言語モード（ja / en 以外は既定の ja に戻す）
+  // 言語モード（ja / en 以外は既定値に戻す）
   if (config.conversation.language !== "ja" && config.conversation.language !== "en") {
     warnings.push(
-      `conversation.language=${String(config.conversation.language)} は未対応のため "ja" を使用します`
+      `conversation.language=${String(config.conversation.language)} は未対応のため "${DEFAULT_CONFIG.conversation.language}" を使用します`
     );
-    config.conversation.language = "ja";
+    config.conversation.language = DEFAULT_CONFIG.conversation.language;
   }
 
   // 読み上げエンジン（日本語＝[tts]、英語＝[tts.en]）
   const ttsEngines = ["voicevox", "openai_speech", "gpt_sovits"];
   if (!ttsEngines.includes(config.tts.engine)) {
-    warnings.push(`tts.engine=${String(config.tts.engine)} は未対応のため "voicevox" を使用します`);
-    config.tts.engine = "voicevox";
+    warnings.push(
+      `tts.engine=${String(config.tts.engine)} は未対応のため "${DEFAULT_CONFIG.tts.engine}" を使用します`
+    );
+    config.tts.engine = DEFAULT_CONFIG.tts.engine;
   }
   if (!config.tts.en || typeof config.tts.en !== "object") {
     config.tts.en = { ...DEFAULT_CONFIG.tts.en };
   }
   if (!ttsEngines.includes(config.tts.en.engine)) {
     warnings.push(
-      `tts.en.engine=${String(config.tts.en.engine)} は未対応のため "openai_speech" を使用します`
+      `tts.en.engine=${String(config.tts.en.engine)} は未対応のため "${DEFAULT_CONFIG.tts.en.engine}" を使用します`
     );
-    config.tts.en.engine = "openai_speech";
+    config.tts.en.engine = DEFAULT_CONFIG.tts.en.engine;
   }
   if (!config.tts.en.endpoint.trim()) {
     config.tts.en.endpoint = DEFAULT_CONFIG.tts.en.endpoint;
   }
   if (!config.tts.en.prompt_lang.trim()) {
-    config.tts.en.prompt_lang = "en";
+    config.tts.en.prompt_lang = DEFAULT_CONFIG.tts.en.prompt_lang;
   }
 
-  // 日本語モードの上書き（[tts.ja]。未指定なら [tts] 直下＝VOICEVOX）
+  // 日本語モードの上書き（[tts.ja]。未指定なら [tts] 直下）
   if (!config.tts.ja || typeof config.tts.ja !== "object") {
     config.tts.ja = {};
   }

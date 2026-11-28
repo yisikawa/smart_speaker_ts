@@ -60,7 +60,7 @@ test("browser が使えなければ server へフォールバックする", () =
 });
 
 test("playback_target=server なら browser があっても server", () => {
-  const project = createTempProject();
+  const project = createTempProject({ patch: { audio: { playback_target: "server" } } });
   try {
     const server = fakeSink("server");
     const browser = fakeSink("browser");

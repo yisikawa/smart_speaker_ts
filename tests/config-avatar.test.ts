@@ -46,9 +46,9 @@ test("llm の keep_alive / num_ctx", () => {
 test("audio.playback_target は server / browser のみ許可", () => {
   const project = createTempProject();
   try {
-    assert.equal(project.config.getAudio().playback_target, "server");
+    assert.equal(project.config.getAudio().playback_target, "browser");
     project.config.update({ audio: { playback_target: "bogus" as unknown as "server" } });
-    assert.equal(project.config.getAudio().playback_target, "server");
+    assert.equal(project.config.getAudio().playback_target, "browser");
   } finally {
     project.cleanup();
   }

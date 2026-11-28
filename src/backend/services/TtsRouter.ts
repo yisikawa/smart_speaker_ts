@@ -19,7 +19,7 @@ interface ResolvedTts {
 /**
  * 言語モードに応じて読み上げ実装を選ぶファサード。
  *
- * - ja: `[tts.ja]`（未指定キーは `[tts]` 直下。既定は VOICEVOX）
+ * - ja: `[tts.ja]`（未指定キーは `[tts]` 直下。既定は GPT-SoVITS）
  * - en: `[tts.en]`
  *
  * **B 案（日英で同じ声）**: `[tts.ja]` と `[tts.en]` に同じエンジン・同じ参照音声を書けば、

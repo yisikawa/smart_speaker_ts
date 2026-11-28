@@ -55,7 +55,7 @@ export interface AudioConfig {
   device_settle_ms: number;
   /** 音声入力の方式: browser（ブラウザのマイク） / server（ffmpeg で録音） */
   input_mode: "browser" | "server";
-  /** 再生の出力先: server（ffplay）/ browser（WebAudio） */
+  /** 再生の出力先: server（ffplay）/ browser（WebAudio）。既定は browser（口パクはこちらでのみ動く） */
   playback_target: "server" | "browser";
 }
 
@@ -204,7 +204,7 @@ export interface TtsProfile {
   prompt_lang: string;
 }
 
-/** 読み上げ後の声質変換（RVC など）。既定は無効 */
+/** 読み上げ後の声質変換（RVC など）。既定は有効（モデル未設定なら素通し） */
 export interface VoiceConversionConfig {
   enabled: boolean;
   /** 変換ワーカーの HTTP エンドポイント（例: http://127.0.0.1:9890） */
@@ -246,7 +246,7 @@ export interface TTSConfig {
   en: TtsProfile;
   /**
    * 日本語モードの上書き（`[tts]` 直下の既存キーが既定値）。
-   * B 案（日英で同じエンジン・同じ声）にするときは、ここに en と同じ設定を書く。
+   * B 案（日英で同じ声）のため、既定では en と同じエンジン・参照音声を指す。
    */
   ja: TtsProfileOverride;
   /** 読み上げ後の声質変換（任意） */
@@ -422,7 +422,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     player: "auto",
     device_settle_ms: 250,
     input_mode: "browser",
-    playback_target: "server",
+    playback_target: "browser",
   },
   wakeword: {
     wakeword_path: [],
@@ -431,20 +431,20 @@ export const DEFAULT_CONFIG: AppConfig = {
     min_scores: 3,
   },
   conversation: {
-    language: "ja",
+    language: "en",
     reset_history_on_language_change: false,
     auto_start: false,
     followup_enabled: true,
     max_followup_turns: 3,
     followup_timeout_seconds: 6.0,
-    followup_guard_ms: 250,
+    followup_guard_ms: 400,
     keep_listening: true,
     barge_in_enabled: false,
     barge_in_min_score: 0.08,
   },
   stt: {
-    engine: "whisper",
-    model_path: "models/ggml-large-v3-turbo.bin",
+    engine: "sherpa",
+    model_path: "models/ggml-large-v3-turbo-q5_0.bin",
     binary_path: "whisper.cpp/main.exe",
     language: "ja",
     use_gpu: true,
@@ -485,8 +485,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     num_ctx: 4096,
   },
   tts: {
-    engine: "voicevox",
-    endpoint: "http://127.0.0.1:50021",
+    engine: "gpt_sovits",
+    endpoint: "http://127.0.0.1:9880",
     speaker_id: 2,
     speed: 1.0,
     pitch: 0.0,
@@ -501,24 +501,31 @@ export const DEFAULT_CONFIG: AppConfig = {
     // 24 にすると長い文は読点で割られ、初声が約 1.4 秒に収まる
     max_sentence_chars: 24,
     en: {
-      engine: "openai_speech",
-      endpoint: "http://127.0.0.1:8880",
+      engine: "gpt_sovits",
+      endpoint: "http://127.0.0.1:9880",
       model: "kokoro",
       voice: "af_heart",
       speaker_id: 0,
       speed: 1.0,
-      reference_wav: "",
-      reference_text: "",
-      prompt_lang: "en",
+      reference_wav: "assets/voices/ref_ja.wav",
+      reference_text: "こんにちは。私は音声アシスタントです。今日も元気に会話しましょう。",
+      prompt_lang: "ja",
     },
-    ja: {},
+    ja: {
+      // B 案（日英で同じ声）: [tts] 直下と同じ GPT-SoVITS と参照音声を使う
+      engine: "gpt_sovits",
+      endpoint: "http://127.0.0.1:9880",
+      reference_wav: "assets/voices/ref_ja.wav",
+      reference_text: "こんにちは。私は音声アシスタントです。今日も元気に会話しましょう。",
+      prompt_lang: "ja",
+    },
     voice_conversion: {
       // RVC は既定で有効。モデル未設定・ワーカー未起動なら自動でスキップして素の声で読む
       enabled: true,
       endpoint: "http://127.0.0.1:9890",
-      model_path: "",
-      // 空なら `.pth` から自動ペアリング（<name>.index → <name>_v2.index → <name>*.index）
-      index_path: "",
+      model_path: "models/imadaMio.pth",
+      // 空なら未使用（`.pth` との自動ペアリングは未実装）
+      index_path: "models/imadaMio_v2.index",
       pitch: 0,
       f0_method: "rmvpe",
       // index は「学習データの声にさらに寄せる」補助。実測: 0 は 0.75 の約 2 倍速い
@@ -530,7 +537,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   avatar: {
     enabled: true,
-    model_path: "live2d-models/hiyori/hiyori.model3.json",
+    model_path: "Live2DModels/hiyori_vts/hiyori.model3.json",
     sprite_image: "",
     scale: 1.0,
     offset_x: 0.5,

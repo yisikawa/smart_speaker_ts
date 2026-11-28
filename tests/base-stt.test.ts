@@ -27,7 +27,7 @@ class FakeStt extends BaseSttService {
 }
 
 test("BaseSttService は幻聴と判定したテキストを空にする（共通フィルタ）", async () => {
-  const project = createTempProject({ prefix: "sumika-stt-" });
+  const project = createTempProject({ prefix: "sumika-stt-", patch: { conversation: { language: "ja" } } });
   try {
     const service = new FakeStt({ config: project.config }, { text: "ご視聴ありがとうございました。" });
     const result = await service.transcribe(Buffer.alloc(3200));
@@ -56,7 +56,7 @@ test("filter_hallucinations=false なら幻聴でもそのまま返す", async (
 });
 
 test("BaseSttService は中断された signal で AbortError を投げる", async () => {
-  const project = createTempProject({ prefix: "sumika-stt-" });
+  const project = createTempProject({ prefix: "sumika-stt-", patch: { conversation: { language: "ja" } } });
   try {
     const service = new FakeStt({ config: project.config }, { text: "こんにちは" });
     const controller = new AbortController();
@@ -76,7 +76,7 @@ test("BaseSttService は中断された signal で AbortError を投げる", asy
 });
 
 test("言語はサブクラスの上書きが優先される（SenseVoice 等）", async () => {
-  const project = createTempProject({ prefix: "sumika-stt-" });
+  const project = createTempProject({ prefix: "sumika-stt-", patch: { conversation: { language: "ja" } } });
   try {
     const service = new FakeStt({ config: project.config }, { text: "こんにちは", note: "テスト" }, "en");
     const result = await service.transcribe(Buffer.alloc(3200));

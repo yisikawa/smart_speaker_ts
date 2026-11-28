@@ -8,7 +8,10 @@ import { WhisperSttService } from "../src/backend/services/WhisperSttService";
 import { createTempProject, TempProject } from "./helpers/project";
 
 function withConfig(engine: "whisper" | "sherpa"): TempProject {
-  return createTempProject({ prefix: "sumika-sherpa-", patch: { stt: { engine } } });
+  return createTempProject({
+    prefix: "sumika-sherpa-",
+    patch: { stt: { engine }, conversation: { language: "ja" } },
+  });
 }
 
 test("createSttService は stt.engine に応じた実装を返す", () => {
@@ -27,13 +30,16 @@ test("createSttService は stt.engine に応じた実装を返す", () => {
   }
 });
 
-test("stt.engine が未対応値なら whisper に補正される", () => {
-  const project = createTempProject({ prefix: "sumika-sherpa-" });
+test("stt.engine が未対応値なら既定の sherpa に補正される", () => {
+  const project = createTempProject({
+    prefix: "sumika-sherpa-",
+    patch: { conversation: { language: "ja" } },
+  });
   try {
     const config = project.config;
     config.update({ stt: { engine: "unknown" as unknown as "whisper" } });
 
-    assert.equal(config.getSTT().engine, "whisper");
+    assert.equal(config.getSTT().engine, "sherpa");
     assert.ok(config.getWarnings().some((warning) => warning.includes("stt.engine")));
   } finally {
     project.cleanup();
