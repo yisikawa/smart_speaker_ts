@@ -66,6 +66,7 @@ export class WsPlaybackSink implements PlaybackSink {
         utteranceId: meta.utteranceId,
         text: meta.text,
         expression: meta.expression,
+        emotion: meta.emotion,
         audio: bytesToBase64(wav),
         volumes: meta.volumes,
         sliceMs: meta.sliceMs,

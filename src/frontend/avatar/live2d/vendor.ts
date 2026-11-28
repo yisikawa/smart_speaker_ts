@@ -41,7 +41,16 @@ function loadScript(src: string): Promise<void> {
     }
     // pixi-live2d-display は window.PIXI.Ticker を自動更新に使う
     global.PIXI = PIXI;
-    const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+    const cubism4 = await import("pixi-live2d-display/cubism4");
+    const { Live2DModel } = cubism4;
+    // `cubism4` サブパスの ambient 型宣言（src/frontend/types/）は Live2DModel しか
+    // 公開していないため narrow cast する（実行時は CubismConfig が export されている）
+    const { CubismConfig } = cubism4 as unknown as {
+      CubismConfig: { setOpacityFromMotion: boolean };
+    };
+    // pixi-live2d-display の既定（false）ではモーションの PartOpacity カーブを
+    // パラメータとして解釈して無視するため、パーツ表示切替（hiyori の PartArmA/B）を有効にする
+    CubismConfig.setOpacityFromMotion = true;
     Live2DModel.registerTicker(PIXI.Ticker);
     global.SumikaLive2D = { PIXI, Live2DModel };
     console.info("[Avatar] Live2D ランタイムを読み込みました");

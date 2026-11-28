@@ -4,7 +4,7 @@ import { ConversationHistory } from "../src/backend/conversation/ConversationHis
 import { PromptBuilder } from "../src/backend/conversation/PromptBuilder";
 import { TurnHooks, TurnRunner } from "../src/backend/conversation/TurnRunner";
 import { Logger } from "../src/backend/core/logger";
-import type { LanguageModel, TextToSpeech } from "../src/backend/core/ports";
+import type { LanguageModel, PlaybackMeta, TextToSpeech } from "../src/backend/core/ports";
 import type { PipelineEvent } from "../src/shared/protocol";
 import { encodeWav } from "../src/backend/services/wav";
 import { createTempProject } from "./helpers/project";
@@ -22,6 +22,7 @@ function setup(options: { replies: string[]; split?: boolean; language?: "ja" | 
   });
   const synthCalls: string[] = [];
   const played: string[] = [];
+  const metas: PlaybackMeta[] = [];
   const events: PipelineEvent[] = [];
   let call = 0;
   const llm: LanguageModel = {
@@ -64,12 +65,13 @@ function setup(options: { replies: string[]; split?: boolean; language?: "ja" | 
     onHistoryChanged: () => undefined,
     onReply: () => undefined,
     play: async (_wav, meta) => {
+      metas.push(meta);
       played.push(meta.text);
       return undefined;
     },
     stopPlayback: () => undefined,
   };
-  return { project, runner, hooks, synthCalls, played, events };
+  return { project, runner, hooks, synthCalls, played, metas, events };
 }
 
 test("文ごとに合成して順番に再生する", async () => {
@@ -107,6 +109,19 @@ test("感情タグは読み上げから除かれる", async () => {
   }
 });
 
+test("感情タグの感情キーを meta に伝える", async () => {
+  const ctx = setup({ replies: ["おはよう！[喜] いい天気だね。"] });
+  try {
+    await ctx.runner.run("やあ", ctx.hooks, new AbortController().signal);
+    assert.ok(
+      ctx.metas.some((meta) => meta.emotion === "happy"),
+      "感情キーが tts_audio 用の meta に載ること"
+    );
+  } finally {
+    ctx.project.cleanup();
+  }
+});
+
 test("ハングルを検出したら読み直す（speech_reset）", async () => {
   const ctx = setup({ replies: ["안녕하세요。", "こんにちは。元気です。"] });
   try {
@@ -135,6 +150,28 @@ test("英語モードで日本語が混ざったら読み直す（speech_reset�
       ctx.synthCalls.some((text) => text.includes("Hello")),
       "英語で読み直す"
     );
+  } finally {
+    ctx.project.cleanup();
+  }
+});
+
+test("split_sentences=false でもタグを読み上げず感情キーを渡す", async () => {
+  const ctx = setup({ replies: ["おはよう！[喜] いい天気だね。"], split: false });
+  try {
+    await ctx.runner.run("やあ", ctx.hooks, new AbortController().signal);
+    assert.deepEqual(ctx.synthCalls, ["おはよう！ いい天気だね。"]);
+    assert.equal(ctx.metas[0]?.emotion, "happy");
+  } finally {
+    ctx.project.cleanup();
+  }
+});
+
+test("split_sentences=false で感情タグだけの応答は読み上げない", async () => {
+  const ctx = setup({ replies: ["[喜]"], split: false });
+  try {
+    await ctx.runner.run("やあ", ctx.hooks, new AbortController().signal);
+    assert.deepEqual(ctx.synthCalls, []);
+    assert.equal(ctx.events.some((event) => event.type === "tts_started"), false);
   } finally {
     ctx.project.cleanup();
   }

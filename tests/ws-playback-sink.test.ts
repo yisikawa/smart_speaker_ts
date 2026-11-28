@@ -11,6 +11,7 @@ const meta: PlaybackMeta = {
   utteranceId: "u1",
   text: "こんにちは",
   expression: "exp_01",
+  emotion: "happy",
   volumes: [0.5, 1],
   sliceMs: 20,
   durationMs: 100,
@@ -36,13 +37,14 @@ test("tts_audio を送り、ack で解決する", async () => {
   assert.equal(sent.length, 1);
   const message = sent[0] as {
     type: "event";
-    event: { type: string; utteranceId: string; audio: string; expression?: string };
+    event: { type: string; utteranceId: string; audio: string; expression?: string; emotion?: string };
   };
   assert.equal(message.type, "event");
   assert.equal(message.event.type, "tts_audio");
   assert.equal(message.event.utteranceId, "u1");
   assert.equal(message.event.audio, "AQID");
   assert.equal(message.event.expression, "exp_01");
+  assert.equal(message.event.emotion, "happy");
 
   sink.resolveDone("u1");
   await handle.finished;

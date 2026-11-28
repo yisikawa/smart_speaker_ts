@@ -642,6 +642,11 @@ TurnRunner ── meta（utteranceId / text / volumes / sliceMs / durationMs）�
 - モデルディレクトリは実際の名前（`/Live2DModels` または `/live2d-models`）で静的配信し、
   Cubism Core は `/live2d-core/`（`vendor/live2d/`）で配信する。
 - `vendor/`・`live2d-models/`・`Live2DModels/` は gitignore。CI はモデル無しで通る。
+- `tts_audio.emotion` は感情キー（happy / angry / ...）。クライアントは `avatar.motions` で
+  モーショングループへ変換して `playMotion()` する。`Motions.Idle` はモデルの待機モーション。
+  既定の対応は happy→M05 / angry→M03 / sad→M04 / surprised→M01 / shy→M07 / thinking→M09
+  （`schema.ts` と `config/settings.default.toml`）。モーションは `tts_audio` を受けた
+  ブラウザ再生（`audio.playback_target = "browser"`）でのみ動き、サーバー再生には無い。
 
 ### 13.4 文単位ストリーミング（P2）
 

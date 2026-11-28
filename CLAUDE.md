@@ -7,6 +7,6 @@
 - 残作業: `docs/TODO.md`（優先度つきバックログ。完了したら同ファイルから削除する）
 - ビルド: `npm run build`（フロントは **esbuild バンドル**。`tsc` 出力はブラウザで動きません）
 - 検証: `npm run verify`（typecheck → test → build を一括。作業後はこれ 1 本）
-- テスト: `npm test`（`node:test`, 306 件, `--test-timeout=30000`）
+- テスト: `npm test`（`node:test`, 315 件, `--test-timeout=30000`）
 - 起動: `.\start.bat`
 - ブランチ: 作業は `develop`（`main` は動作確認済みの状態）

@@ -1,3 +1,4 @@
+import type { EmotionKey } from "../../shared/avatar/emotion";
 import type { CaptureEndReason } from "../../shared/protocol";
 import { LlmMessage, LlmTool } from "./messages";
 
@@ -63,6 +64,8 @@ export interface PlaybackMeta {
   text: string;
   /** この文で発火する表情（モデルの表情名。無ければ undefined） */
   expression?: string;
+  /** 感情キー（クライアントのモーション選択用。無ければ undefined） */
+  emotion?: EmotionKey;
   /** スライスごとの 0..1（口パク用）。サーバー再生では未使用 */
   volumes: number[];
   sliceMs: number;

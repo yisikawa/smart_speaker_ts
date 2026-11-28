@@ -8,6 +8,7 @@ import type {
   ServerMessage,
 } from "../shared/protocol";
 import { getLanguagePack, isLanguageMode } from "../shared/i18n/languagePack";
+import { selectMotionGroup } from "../shared/avatar/motionSelection";
 import { errorText } from "../shared/errorText";
 import { ChatView } from "./ChatView";
 import { AudioPlayer } from "./AudioPlayer";
@@ -59,6 +60,10 @@ class SumikaApp {
   private assistantState: AssistantState = "idle";
   /** 診断パネルを開いているか */
   private diagnosticsOpen = false;
+  /** 感情キー → モーショングループ（hello.avatar.motions） */
+  private avatarMotions: Record<string, string> = {};
+  /** 現在再生中のモーショングループ（同一ターン内の連続再生を抑制） */
+  private currentMotion: string | null = null;
 
   constructor() {
     this.ws = new WsClient({
@@ -291,6 +296,8 @@ class SumikaApp {
     this.view.setCharacter(hello.character.name, hello.character.label);
     this.view.setVersion(hello.version);
     this.inputMode = hello.audio.inputMode;
+    this.avatarMotions = { ...(hello.avatar?.motions ?? {}) };
+    this.currentMotion = null;
     this.micLoop.configure(hello.audio);
     if (hello.audio.inputMode === "browser") {
       void this.micLoop.refreshDevices();
@@ -344,6 +351,7 @@ class SumikaApp {
         break;
       case "llm_started":
         this.caption = "";
+        this.currentMotion = null;
         this.stage.setCaption("", false);
         break;
       case "llm_delta":
@@ -362,13 +370,21 @@ class SumikaApp {
         // ブラウザ入力モードでは、再生中の割り込み（バージイン）をブラウザ側で監視する
         this.micLoop.startBargeMonitor();
         break;
-      case "tts_audio":
+      case "tts_audio": {
         this.stage.setExpression(event.expression ?? null);
+        const motion = selectMotionGroup(this.avatarMotions, event.emotion, this.currentMotion);
+        if (motion) {
+          this.currentMotion = motion;
+          this.stage.playMotion(motion);
+        }
         this.audioPlayer?.enqueue(event);
         break;
+      }
       case "speech_reset":
         // 言語ガードの読み直し。旧言語の音声・キューの世代を進めて破棄する
         this.audioPlayer?.stop();
+        // 読み直し後、同じ感情でもモーションを再生し直せるようにする
+        this.currentMotion = null;
         view.addSystemNote(getLanguagePack(this.language).prompt.speechResetNote);
         break;
       case "speaking_finished":

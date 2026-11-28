@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 306 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 315 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -132,6 +132,10 @@ src/backend/index.ts                                ← Composition Root（DI �
     （`/live2d-core/` で配信・gitignore）が無い/失敗したら sprite へフォールバックする。
     モデルは `Live2DModels/` と `live2d-models/` の両方を見る（`AVATAR_MODEL_DIRS`）。
     口パクは `mouthLevelAt()`（`shared/avatar/lipSync.ts`）に再生位置と `volumes` を渡す。
+    なお pixi-live2d-display は `CubismConfig.setOpacityFromMotion` の既定が `false` で、
+    モーションの PartOpacity カーブをパラメータとして解釈して捨てる（パーツが隠れない）。
+    `live2d/vendor.ts` がモデル読込前に `true` を設定し、hiyori の PartArmA/PartArmB の
+    表示切替モーションが効くようにしている。
     `StageView` は既定を **studio（全面キャラクター + 左下チャット + 上部バー + 左ドロワー）** にし、
     `?mode=chat`（チャットのみ）/ `?mode=stage&transparent=1`（配信画面）で切り替える。
     字幕は `#stage` の中に置き、stage で表示する（studio ではチャットが字幕を兼ねる）。
@@ -140,6 +144,13 @@ src/backend/index.ts                                ← Composition Root（DI �
 12-13. **感情タグは TTS の前に必ず除去する**（`shared/avatar/emotion.ts` の `extractEmotion`）。
     タグ→表情名の対応は `avatar.expressions`（空文字は「変えない」）。タグが無ければ
     `emotion_heuristic_enabled` のときだけ語彙推定する。表情は `tts_audio.expression` で画面へ渡す。
+    - 感情キーは `tts_audio.emotion` でクライアントへ渡し、`[avatar.motions]` の対応で
+      `stage.playMotion()` する。モデル側は `Motions.Idle` が必須（hiyori は PartArmA/B の切り替え）。
+    - 既定の対応は happy→M05 / angry→M03 / sad→M04 / surprised→M01 / shy→M07 / thinking→M09
+      （`schema.ts` と `config/settings.default.toml`。`npm run config:default` で同期）。
+    - モーションは `tts_audio` を受けた画面側で動かす（primary クライアントが居て
+      `audio.playback_target = "browser"` のときのみ）。サーバー再生（ffplay）では
+      `tts_audio` が送られないためモーションは動かない。
 
 12-14. **言語モード（ja / en）は `conversation.language` が唯一の真実源**。切替は `PATCH /api/config` で行い、
     `ConfigManager.onChange` から `SttSwitcher.reconfigure()` / `TtsRouter.reconfigure()` が走る（次の発話から有効）。

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { buildVolumeEnvelope } from "../../shared/audio/envelope";
+import type { EmotionKey } from "../../shared/avatar/emotion";
 import { Logger } from "../core/logger";
 import type { PlaybackMeta, TextToSpeech } from "../core/ports";
 import { wavDurationMs } from "../services/wav";
@@ -27,6 +28,7 @@ export interface SpeechQueueResult {
 interface Item {
   text: string;
   expression?: string;
+  emotion?: EmotionKey;
   promise?: Promise<Buffer | null>;
 }
 
@@ -49,12 +51,12 @@ export class SpeechQueue {
 
   constructor(private readonly deps: SpeechQueueDeps) {}
 
-  enqueue(text: string, expression?: string): void {
+  enqueue(text: string, expression?: string, emotion?: EmotionKey): void {
     const trimmed = text.trim();
     if (!trimmed || this.stopped || this.deps.signal.aborted) {
       return;
     }
-    this.items.push({ text: trimmed, expression });
+    this.items.push({ text: trimmed, expression, emotion });
     void this.run();
   }
 
@@ -110,7 +112,7 @@ export class SpeechQueue {
         }
 
         this.items.shift();
-        const barge = await this.deps.play(wav, this.meta(wav, item.text, item.expression));
+        const barge = await this.deps.play(wav, this.meta(wav, item.text, item.expression, item.emotion));
         if (this.stopped) {
           return;
         }
@@ -141,11 +143,17 @@ export class SpeechQueue {
     return item.promise;
   }
 
-  private meta(wav: Buffer, text: string, expression?: string): PlaybackMeta {
+  private meta(
+    wav: Buffer,
+    text: string,
+    expression?: string,
+    emotion?: EmotionKey
+  ): PlaybackMeta {
     return {
       utteranceId: randomUUID(),
       text,
       expression,
+      emotion,
       volumes: buildVolumeEnvelope(wav),
       sliceMs: 20,
       durationMs: wavDurationMs(wav, this.deps.sampleRate),
