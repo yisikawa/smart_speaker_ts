@@ -33,6 +33,11 @@ function setup(): {
 } {
   const temp = createTempDir("sumika-stt-switch-");
   const config = new ConfigManager({ rootDir: temp.dir });
+  // テストの前提を旧既定（日本語・whisper / f16）に固定する
+  config.update({
+    conversation: { language: "ja" },
+    stt: { engine: "whisper", model_path: "models/ggml-large-v3-turbo.bin" },
+  });
   const created: FakeStt[] = [];
   const switcher = new SttSwitcher({
     config,

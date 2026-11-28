@@ -280,9 +280,9 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
 
 ### 認識エンジンの切り替え（whisper / sherpa-onnx）
 
-現在の `config/settings.toml` では **sherpa-onnx（日本語）** を使用しています（英語モード `[stt.en]` は whisper.cpp）。
-sherpa-onnx は幻聴が構造的に起きない CTC 系モデルで、CPU のみで動作し GPU を LLM に空けられます。
-コードの既定値（`schema.ts` / `settings.default.toml`）は whisper.cpp です。切り替えは `[stt] engine` で行います。
+現在の `config/settings.toml` とコードの既定値（`schema.ts` / `settings.default.toml`）は **sherpa-onnx（日本語）** です
+（英語モード `[stt.en]` は whisper.cpp）。sherpa-onnx は幻聴が構造的に起きない CTC 系モデルで、CPU のみで動作し GPU を LLM に空けられます。
+whisper.cpp に戻す場合は `[stt] engine = "whisper"` を指定します。
 
 ```powershell
 npm install sherpa-onnx-node                              # Windows x64 は DLL 同梱（追加設定不要）

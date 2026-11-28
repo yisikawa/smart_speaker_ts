@@ -88,6 +88,23 @@ test("sanitizeConfig は範囲外の値を補正し、警告を返す", () => {
   assert.equal(warnings.length, 3, warnings.join(" / "));
 });
 
+test("sanitizeConfig は未対応の enum を現在の既定値へ補正する", () => {
+  const config = clone();
+  config.stt.engine = "unknown" as typeof config.stt.engine;
+  config.tts.engine = "unknown" as typeof config.tts.engine;
+  config.tts.en.engine = "unknown" as typeof config.tts.en.engine;
+  config.audio.playback_target = "unknown" as typeof config.audio.playback_target;
+  config.conversation.language = "unknown" as typeof config.conversation.language;
+
+  sanitizeConfig(config);
+
+  assert.equal(config.stt.engine, DEFAULT_CONFIG.stt.engine);
+  assert.equal(config.tts.engine, DEFAULT_CONFIG.tts.engine);
+  assert.equal(config.tts.en.engine, DEFAULT_CONFIG.tts.en.engine);
+  assert.equal(config.audio.playback_target, DEFAULT_CONFIG.audio.playback_target);
+  assert.equal(config.conversation.language, DEFAULT_CONFIG.conversation.language);
+});
+
 test("ConfigManager はユーザー設定が無ければ既定値で起動する", () => {
   const dir = tempDir();
   try {
@@ -115,7 +132,7 @@ test("update は settings.toml へ保存し、再読み込みで復元できる"
     const reloaded = new ConfigManager({ rootDir: dir });
     assert.equal(reloaded.getTTS().speaker_id, 8);
     assert.equal(reloaded.getConversation().followup_enabled, false);
-    assert.equal(reloaded.getTTS().engine, "voicevox");
+    assert.equal(reloaded.getTTS().engine, DEFAULT_CONFIG.tts.engine);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

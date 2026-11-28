@@ -54,6 +54,7 @@ function setup(options: {
       audio: { input_mode: "server", ...(options.configPatch?.audio ?? {}) },
       // 無限に聞き続けないよう、テストでは明示的に停止させる（keep_listening のテストで上書き）
       conversation: {
+        language: "ja",
         barge_in_enabled: false,
         followup_enabled: false,
         keep_listening: false,

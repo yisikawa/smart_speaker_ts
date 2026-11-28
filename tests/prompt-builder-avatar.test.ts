@@ -4,7 +4,9 @@ import { PromptBuilder } from "../src/backend/conversation/PromptBuilder";
 import { createTempProject } from "./helpers/project";
 
 function build(emotionTags: boolean): string {
-  const project = createTempProject({ patch: { avatar: { emotion_tags_enabled: emotionTags } } });
+  const project = createTempProject({
+    patch: { avatar: { emotion_tags_enabled: emotionTags }, conversation: { language: "ja" } },
+  });
   try {
     return new PromptBuilder({
       config: project.config,

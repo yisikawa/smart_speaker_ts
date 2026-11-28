@@ -11,6 +11,7 @@ import { createTempProject } from "./helpers/project";
 test("stopSpeaking 後は残りの文を再生しない", async () => {
   const project = createTempProject({
     patch: {
+      conversation: { language: "ja" },
       tts: {
         split_sentences: true,
         prefetch_depth: 0,

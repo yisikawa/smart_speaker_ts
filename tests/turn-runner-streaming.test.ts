@@ -17,7 +17,7 @@ function setup(options: { replies: string[]; split?: boolean; language?: "ja" | 
   const project = createTempProject({
     patch: {
       tts: { split_sentences: options.split ?? true, min_sentence_chars: 4, max_sentence_chars: 60 },
-      ...(options.language ? { conversation: { language: options.language } } : {}),
+      conversation: { language: options.language ?? "ja" },
     },
   });
   const synthCalls: string[] = [];

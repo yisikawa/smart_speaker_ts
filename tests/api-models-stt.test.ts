@@ -92,7 +92,7 @@ test("未知の sherpa_model_type は 400 で拒否し、設定を保存しな�
 
 test("有効な sherpa_model_type は設定へ保存される", async () => {
   const project = createTempProject({
-    patch: { stt: { engine: "sherpa" } },
+    patch: { conversation: { language: "ja" }, stt: { engine: "sherpa" } },
   });
   const modelDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-sherpa-"));
   fs.writeFileSync(path.join(modelDir, "tokens.txt"), "");

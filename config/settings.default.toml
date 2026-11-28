@@ -44,7 +44,9 @@ device_settle_ms = 250
 # 音声入力の方式: browser（ブラウザのマイク） / server（ffmpeg で録音）
 # browser では画面の「聞き取り開始」から録音します（ffmpeg 不要）
 input_mode = "browser"
-playback_target = "server"
+# 再生の出力先: server（ffplay）/ browser（WebAudio）
+# 口パク・表情は browser 再生でのみ動きます（server では tts_audio を送らないため）
+playback_target = "browser"
 
 [wakeword]
 # ウェイクワードモデル（将来のエンジン用・現在は未使用）
@@ -60,7 +62,7 @@ followup_enabled = true
 max_followup_turns = 3
 followup_timeout_seconds = 6.0
 # 応答直後にマイクを開くまでの待ち（エコー防止, ms）
-followup_guard_ms = 250
+followup_guard_ms = 400
 # フォローアップ回数の上限に達しても聞き取りを続ける（停止を押すまで待機）
 keep_listening = true
 # バージイン（再生中の割り込み）。スピーカー出力をマイクが拾うと自分の声で割り込むため既定は無効。
@@ -68,13 +70,14 @@ keep_listening = true
 barge_in_enabled = false
 # バージイン判定の RMS しきい値（0..1）
 barge_in_min_score = 0.08
-language = "ja"
+# 応答言語: ja（日本語） / en（英語）。STT・プロンプト・TTS・UI が追従する
+language = "en"
 reset_history_on_language_change = false
 
 [stt]
-# 既定は f16（高精度・1.5GB）。GPU の VRAM が少ない場合は q5_0（約 550MB）を推奨。
+# 既定は q5_0（約 550MB。VRAM 4GB でも動く）。GPU に余裕があれば f16（高精度・1.5GB）も使えます。
 # q5_0 は `whisper.cpp/whisper-quantize.exe models/ggml-large-v3-turbo.bin models/ggml-large-v3-turbo-q5_0.bin q5_0` で生成できます。
-model_path = "models/ggml-large-v3-turbo.bin"
+model_path = "models/ggml-large-v3-turbo-q5_0.bin"
 # CUDA 版では main.exe が廃止され whisper-cli.exe に統合されています。
 # scripts/setup-whisper-cuda.ps1 は互換のため whisper-cli.exe を main.exe としても配置します。
 binary_path = "whisper.cpp/main.exe"
@@ -105,7 +108,8 @@ min_input_rms = 0.002
 # --- 認識エンジン ---
 # whisper: whisper.cpp（model_path / binary_path を使用）
 # sherpa:  sherpa-onnx（下の sherpa_* を使用。GPU 不要・幻聴なしの CTC 系モデル）
-engine = "whisper"
+# 既定は sherpa。whisper に戻す場合は engine = "whisper" を指定します。
+engine = "sherpa"
 # モデルディレクトリ（*.onnx と tokens.txt）。scripts/setup-sherpa.ps1 で取得できます
 sherpa_model_dir = "models/sherpa-onnx-nemo-parakeet-tdt_ctc-0.6b-ja-35000-int8"
 # nemo_ctc（単一 model.onnx） / nemo_transducer / sense_voice / zipformer_transducer
@@ -142,8 +146,9 @@ num_ctx = 4096
 character_file_en = "config/characters/sakura.en.toml"
 
 [tts]
-engine = "voicevox"
-endpoint = "http://127.0.0.1:50021"
+# 既定は GPT-SoVITS。日本語モードは [tts.ja]、英語モードは [tts.en] が上書きする
+engine = "gpt_sovits"
+endpoint = "http://127.0.0.1:9880"
 speaker_id = 2
 speed = 1.0
 pitch = 0.0
@@ -155,36 +160,37 @@ min_sentence_chars = 4
 max_sentence_chars = 24
 
 # --- 日本語モードの上書き（未指定キーは [tts] 直下の値を使う） ---
-# 既定は VOICEVOX。B 案（日英で同じ声）にするときは、[tts.en] と同じエンジン・参照音声を書く。
-# [tts.ja]
-# engine = "gpt_sovits"
-# endpoint = "http://127.0.0.1:9880"
-# reference_wav = "assets/voices/ref.wav"
-# reference_text = "参照音声の書き起こし"
-# prompt_lang = "ja"
+# B 案（日英で同じ声）のため、既定では [tts.en] と同じ GPT-SoVITS と参照音声を使う。
+[tts.ja]
+engine = "gpt_sovits"
+endpoint = "http://127.0.0.1:9880"
+reference_wav = "assets/voices/ref_ja.wav"
+reference_text = "こんにちは。私は音声アシスタントです。今日も元気に会話しましょう。"
+prompt_lang = "ja"
 
 # --- 英語モードの読み上げ（conversation.language = "en" のとき使う） ---
 # engine: openai_speech（OpenAI 互換 /v1/audio/speech） | gpt_sovits（api_v2） | voicevox
 # 同じ声質で日英を読み上げたい場合は gpt_sovits + 参照音声を推奨（docs/TTS_MULTILINGUAL.md）
 [tts.en]
-engine = "openai_speech"
-endpoint = "http://127.0.0.1:8880"
+engine = "gpt_sovits"
+endpoint = "http://127.0.0.1:9880"
 model = "kokoro"
 voice = "af_heart"
 speaker_id = 0
 speed = 1.0
 # GPT-SoVITS 用（engine = "gpt_sovits" のとき）。1〜5 秒の参照音声とその書き起こし
-reference_wav = ""
-reference_text = ""
-prompt_lang = "en"
+reference_wav = "assets/voices/ref_ja.wav"
+reference_text = "こんにちは。私は音声アシスタントです。今日も元気に会話しましょう。"
+prompt_lang = "ja"
 
-# --- 声質変換（任意。B 案が成功した後に検証する） ---
+# --- 声質変換（既定で有効） ---
 # RVC などの変換ワーカー（POST /convert, base64 WAV）へ読み上げを通す。
+# モデル未設定・ワーカー未起動なら自動でスキップして素の声で読み上げる。
 [tts.voice_conversion]
 enabled = true
 endpoint = "http://127.0.0.1:9890"
-model_path = ""
-index_path = ""
+model_path = "models/imadaMio.pth"
+index_path = "models/imadaMio_v2.index"
 pitch = 0
 f0_method = "rmvpe"
 index_rate = 0
@@ -271,7 +277,7 @@ token = ""
 
 [avatar]
 enabled = true
-model_path = "live2d-models/hiyori/hiyori.model3.json"
+model_path = "Live2DModels/hiyori_vts/hiyori.model3.json"
 scale = 1
 offset_x = 0.5
 offset_y = 0.85

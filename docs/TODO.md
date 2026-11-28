@@ -29,7 +29,6 @@
 | # | 項目 | 現状 / 理由 | 受け入れ条件 | 見積 |
 |---|---|---|---|---|
 | 2-1 | **sherpa-onnx の追加検証** | `nemo_ctc`（Parakeet 0.6B JA）のみ実機確認済み。`sense_voice` / `nemo_transducer` / `zipformer_transducer` は未検証 | 各モデルでの手順と実測（速度・幻聴・精度）を `docs/ASR_OPTIONS.md` に追記。可能なら `npm run check-stt`（新設）で 1 発話を流して比較できる | 1 日 |
-| 2-2 | **既定 STT エンジンの決定** | 既定は `whisper`（互換性重視）。実測では sherpa が速く幻聴も無い | 既定をどちらにするか決め、README / `settings.default.toml` / `AGENTS.md` を更新（移行手順も記載） | 0.5 日 |
 | 2-3 | **sherpa の中断対応** | `decode()` は同期で 200〜400ms ブロックし、`stop()` が効かない | `decodeAsync` かワーカースレッドで中断可能にする（または「中断不可」を明記して UI で許容） | 1 日 |
 | 2-4 | **会話履歴の永続化** | プロセス再起動で履歴が消える（`data/` は未使用） | `data/history.json` へ保存し、起動時に復元。`/api/history` の挙動は不変 | 0.5 日 |
 | 2-5 | **ログのローテーション** | `logs/app.log` は追記のみで肥大化する | 起動時または日次でローテーション（`logs/app-YYYYMMDD.log` など）。サイズ上限を設定可能に | 0.5 日 |
@@ -90,7 +89,7 @@
 | テキスト入力 / 連続会話（フォローアップ）/ 停止 | ✅ |
 | 幻聴・エコー・短断片・繰り返しの破棄（＋`turn_skipped` 通知） | ✅ |
 | 応答言語ガード（ハングル混入時に 1 回だけ再生成） | ✅ |
-| STT エンジン切替（whisper.cpp / sherpa-onnx） | ✅（既定は whisper。画面の「⚙️ 設定」から切替可） |
+| STT エンジン切替（whisper.cpp / sherpa-onnx） | ✅（既定は sherpa。画面の「⚙️ 設定」から切替可） |
 | LLM モデル切替（Ollama の導入済み一覧から選択） | ✅（画面の「⚙️ 設定」。未導入は 400 で拒否） |
 | 診断（`/api/diagnostics`・画面の「診断」パネル） | ✅ |
 | 設定 API（GET/PATCH/reload・`warnings`） | ✅（画面の「⚙️ 設定」はモデル切替のみ。しきい値 UI は 1-1） |

@@ -13,7 +13,7 @@ const model: AvatarModelInfo = {
 };
 
 test("モデルが見つかれば live2d", () => {
-  const payload = buildAvatarPayload(DEFAULT_CONFIG.avatar, [model]);
+  const payload = buildAvatarPayload({ ...DEFAULT_CONFIG.avatar, model_path: model.path }, [model]);
   assert.equal(payload.renderer, "live2d");
   assert.equal(payload.modelUrl, "/live2d-models/hiyori/hiyori.model3.json");
   assert.deepEqual(payload.lipSync, { sliceMs: 20, smoothing: 0.4, gain: 1 });

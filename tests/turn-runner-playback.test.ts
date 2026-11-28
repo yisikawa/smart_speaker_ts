@@ -11,7 +11,7 @@ import { createTempProject } from "./helpers/project";
 Logger.configure({ level: "error" });
 
 test("play に volumes 付きの meta を渡す", async () => {
-  const project = createTempProject();
+  const project = createTempProject({ patch: { conversation: { language: "ja" } } });
   try {
     const wav = encodeWav(Buffer.alloc(4800, 1), 24000); // 100ms / 24kHz
     const llm: LanguageModel = {

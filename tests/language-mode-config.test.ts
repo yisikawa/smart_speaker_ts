@@ -6,11 +6,12 @@ import { resolveJaProfile } from "../src/backend/services/ttsProfiles";
 import { DEFAULT_CONFIG } from "../src/backend/config/schema";
 import { createTempProject } from "./helpers/project";
 
-test("既定は日本語モードで、STT は [stt] の値を使う", () => {
+test("既定は英語モードで、STT は [stt.en] を合成する", () => {
   const project = createTempProject();
   try {
-    assert.equal(project.config.getLanguage(), "ja");
-    assert.equal(project.config.getSTT().language, "ja");
+    assert.equal(project.config.getLanguage(), "en");
+    assert.equal(project.config.getSTT().language, "en");
+    assert.equal(project.config.getSTT().engine, "whisper");
   } finally {
     project.cleanup();
   }
@@ -40,11 +41,14 @@ test("英語モードでは [stt.en] が上書きとして合成される", () =
 
 test("TtsRouter は言語モードで実装を切り替える", () => {
   const project = createTempProject({
-    patch: { tts: { en: { engine: "openai_speech", model: "kokoro", voice: "af_heart" } } },
+    patch: {
+      conversation: { language: "ja" },
+      tts: { en: { engine: "openai_speech", model: "kokoro", voice: "af_heart" } },
+    },
   });
   try {
     const router = new TtsRouter({ config: project.config });
-    assert.match(router.describe(), /^voicevox:/);
+    assert.equal(router.describe(), "gpt_sovits:assets/voices/ref_ja.wav");
     assert.equal(router.reconfigure(), false, "変更が無ければ作り直さない");
 
     project.config.update({ conversation: { language: "en" } });
@@ -73,7 +77,8 @@ test("CharacterService は英語用のキャラクター定義を読み分ける
 
 test("resolveJaProfile は [tts.ja] の未指定キーを [tts] 直下で補う", () => {
   const base = resolveJaProfile(DEFAULT_CONFIG.tts);
-  assert.equal(base.engine, "voicevox");
+  assert.equal(base.engine, "gpt_sovits");
+  assert.equal(base.reference_wav, "assets/voices/ref_ja.wav");
   assert.equal(base.endpoint, DEFAULT_CONFIG.tts.endpoint);
   assert.equal(base.speaker_id, DEFAULT_CONFIG.tts.speaker_id);
 
@@ -98,7 +103,7 @@ test("[tts.ja] と [tts.en] を同じエンジンにすると日英で同じ声�
     prompt_lang: "ja",
   };
   const project = createTempProject({
-    patch: { tts: { ja: { ...same }, en: { ...same } } },
+    patch: { conversation: { language: "ja" }, tts: { ja: { ...same }, en: { ...same } } },
   });
   try {
     const router = new TtsRouter({ config: project.config });
