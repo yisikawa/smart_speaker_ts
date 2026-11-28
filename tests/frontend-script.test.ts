@@ -181,7 +181,11 @@ function flush(): Promise<void> {
 }
 
 function bootApp(
-  location: { protocol: string; host: string } = { protocol: "http:", host: "localhost:3000" }
+  location: { protocol: string; host: string; search: string } = {
+    protocol: "http:",
+    host: "localhost:3000",
+    search: "",
+  }
 ): {
   elements: Map<string, StubElement>;
   ws: FakeWebSocket | undefined;
@@ -333,6 +337,24 @@ test("読み込み直後に WebSocket へ接続し、hello でサービス状態
   assert.equal(elements.get("status")!.textContent, "待機中");
 });
 
+test("ページの ?role=display を WebSocket の URL に引き継ぐ（表示担当として接続する）", () => {
+  // サーバーは WS の req.url から役割を読む（clientRole.ts）。
+  // ページのクエリを落とすと role=control 扱いになり、tts_audio が届かず無音になる。
+  const { ws } = bootApp({ protocol: "https:", host: "192.168.111.104:3010", search: "?role=display" });
+
+  assert.equal(ws?.url, "wss://192.168.111.104:3010/ws?role=display");
+});
+
+test("レイアウト指定などのクエリも WebSocket の URL に引き継ぐ", () => {
+  const { ws } = bootApp({
+    protocol: "http:",
+    host: "localhost:3000",
+    search: "?mode=stage&transparent=1&role=display",
+  });
+
+  assert.equal(ws?.url, "ws://localhost:3000/ws?mode=stage&transparent=1&role=display");
+});
+
 test("「聞き取り開始」ボタンで start_listening がサーバーへ送られる", () => {
   const { elements, ws } = bootApp();
   ws?.onopen?.();
@@ -373,7 +395,7 @@ test("中断で llm_complete が来なくても、次の応答は新しい吹き
 });
 
 test("file:// で開いた場合は WebSocket を作らず、起動方法を案内する", () => {
-  const { elements, ws } = bootApp({ protocol: "file:", host: "" });
+  const { elements, ws } = bootApp({ protocol: "file:", host: "", search: "" });
 
   assert.equal(ws, undefined);
   assert.match(elements.get("services")!.textContent, /start\.bat/);
