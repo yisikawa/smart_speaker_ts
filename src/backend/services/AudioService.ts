@@ -1,6 +1,5 @@
 import { spawn, spawnSync, ChildProcess, ChildProcessWithoutNullStreams } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type { CaptureEndReason } from "../../shared/protocol";
 import { applyGain, bytesToInt16, int16ToBytes } from "../../shared/audio/pcm";
@@ -9,6 +8,7 @@ import { VadEngine } from "../../shared/audio/vad";
 import { ConfigManager } from "../config/ConfigManager";
 import { AudioConfig } from "../config/schema";
 import { Logger } from "../core/logger";
+import { runtimeTempDir } from "../core/paths";
 import {
   AudioDevice,
   AudioIO,
@@ -53,7 +53,7 @@ export class AudioService implements AudioIO {
       },
       tmpFile: () =>
         path.join(
-          os.tmpdir(),
+          runtimeTempDir(deps.config.rootDir),
           `sumika_play_${process.pid}_${Date.now()}_${Math.random().toString(36).slice(2)}.wav`
         ),
     });

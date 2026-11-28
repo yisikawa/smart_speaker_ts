@@ -24,3 +24,16 @@ export function findProjectRoot(startDir: string = __dirname): string {
 export function ensureDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
 }
+
+/**
+ * 実行時の一時ファイル置き場（プロジェクト配下の `tmp/`）。
+ *
+ * C: の `%TEMP%` は使わない。Windows のセキュリティソフトが子プロセス
+ * （whisper.cpp など）の C: への書き込みをブロックし、出力ファイルが作れず
+ * STT が空になる環境があるため、アプリが書き込みを確認できるプロジェクト内に置く。
+ */
+export function runtimeTempDir(rootDir: string): string {
+  const dir = path.join(rootDir, "tmp");
+  ensureDir(dir);
+  return dir;
+}

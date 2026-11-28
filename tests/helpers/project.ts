@@ -5,7 +5,6 @@
  * 各テストで `mkdtempSync` + `ConfigManager` + `config.update` を書き写さないようにする。
  */
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { ConfigManager } from "../../src/backend/config/ConfigManager";
 import type { AppConfig, DeepPartial } from "../../src/backend/config/schema";
@@ -13,6 +12,16 @@ import { encodeWav } from "../../src/backend/services/wav";
 
 /** リポジトリのルート（dist-test/tests/helpers → 3 階層上） */
 export const PROJECT_ROOT = path.resolve(__dirname, "..", "..", "..");
+
+/**
+ * テスト用の一時ディレクトリ置き場。
+ * C: の `%TEMP%` は使わず、プロジェクト配下の `tmp/tests` に作る。
+ */
+function tempRoot(): string {
+  const dir = path.join(PROJECT_ROOT, "tmp", "tests");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 export interface TempProject {
   rootDir: string;
@@ -32,7 +41,7 @@ export interface TempProjectOptions {
 
 /** 一時プロジェクトを作る（呼び出し側で必ず cleanup すること） */
 export function createTempProject(options: TempProjectOptions = {}): TempProject {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), options.prefix ?? "sumika-test-"));
+  const rootDir = fs.mkdtempSync(path.join(tempRoot(), options.prefix ?? "sumika-test-"));
   if (options.copyConfig) {
     fs.cpSync(path.join(PROJECT_ROOT, "config"), path.join(rootDir, "config"), { recursive: true });
   }
@@ -49,7 +58,7 @@ export function createTempProject(options: TempProjectOptions = {}): TempProject
 
 /** 設定だけが目的の一時ディレクトリ（ConfigManager を作らない） */
 export function createTempDir(prefix = "sumika-test-"): { dir: string; cleanup: () => void } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dir = fs.mkdtempSync(path.join(tempRoot(), prefix));
   return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 

@@ -9,6 +9,8 @@ logs/*.out
 logs/*.err
 logs/tts-spike/
 logs/start-all.state.json
+# 実行時の一時ファイル（C: の %TEMP% は使わない）
+tmp/
 models/*.bin
 # sherpa-onnx のモデル（scripts/setup-sherpa.ps1 で取得）
 models/sherpa-*/

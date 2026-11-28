@@ -68,6 +68,12 @@ src/backend/index.ts                                ← Composition Root（DI �
    ワーカーではなく**サーバー本体**が `https.createServer` に切り替わる（WS も `wss:`）。
    フロントの `WsClient` は `location.protocol` から `ws`/`wss` を選ぶので変更不要
 5. **whisper.cpp の `-ng` は「GPU 無効」**。`use_gpu=false` のときだけ付与。
+5-1. **実行時の一時ファイルはプロジェクト配下の `tmp/`（C: の `%TEMP%` は使わない）**
+    `runtimeTempDir()`（`core/paths.ts`）が `<root>/tmp` を返し、STT の作業ディレクトリと
+    再生用 WAV がここを使う。Windows のセキュリティソフトが子プロセスの C: への書き込みを
+    ブロックすると whisper の出力ファイルが作れず `(空)` になる（`open: failed to open ... for writing`）。
+    `WhisperSttService` は出力ファイルが無い場合に stdout の区間行から復元する（警告は 1 回だけ）。
+    `npm run check-audio` でマイクが正常なのに `認識完了: (空)` が続くときはこれを疑う。
 6. **1.9 系で `main.exe` は廃止**（`whisper-cli.exe`）。互換のためスクリプトが `main.exe` も配置。
 7. **VRAM 4GB では f16（1.6GB）が厳しい** → `ggml-large-v3-turbo-q5_0.bin`（547MB）を使用中。
 8. **server（ffmpeg）モードはマイクを直列化**（`device_settle_ms=250` + 孤児プロセス防止）。

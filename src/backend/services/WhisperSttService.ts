@@ -1,8 +1,8 @@
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { runProcess } from "../core/childProcess";
 import { abortError } from "../core/errors";
+import { runtimeTempDir } from "../core/paths";
 import { BaseSttService, RecognizeResult } from "./BaseSttService";
 import { joinSegments, WhisperSegment } from "./transcriptFilter";
 
@@ -17,6 +17,8 @@ interface WhisperJson {
  * 注意: whisper.cpp の `-ng` は「GPU を無効化」するフラグである。
  * 旧実装は use_gpu=true のときに `-ng` を渡しており意味が逆だった。
  *
+ * 作業ディレクトリはプロジェクト配下の `tmp/`（C: の `%TEMP%` は使わない）。
+ *
  * 無音・雑音に対する幻聴（「ご視聴ありがとうございました」等）対策として、
  * - `-sns`（非音声トークン抑制）
  * - `-mc 0`（文脈を引き継がない）
@@ -25,6 +27,9 @@ interface WhisperJson {
  * を併用する（テキスト側の幻聴判定は `BaseSttService` が行う）。
  */
 export class WhisperSttService extends BaseSttService {
+  /** 出力ファイルが作れない環境で 1 回だけ警告する */
+  private stdoutFallbackWarned = false;
+
   private binaryPath(): string {
     return this.deps.config.resolvePath(this.deps.config.getSTT().binary_path);
   }
@@ -99,7 +104,9 @@ export class WhisperSttService extends BaseSttService {
       throw new Error(`Whisper モデルが見つかりません: ${model}`);
     }
 
-    const workDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "sumika-stt-"));
+    const workDir = await fs.promises.mkdtemp(
+      path.join(runtimeTempDir(this.deps.config.rootDir), "stt-")
+    );
     const inputPath = path.join(workDir, "input.wav");
     const outputBase = path.join(workDir, "output");
 
@@ -122,6 +129,8 @@ export class WhisperSttService extends BaseSttService {
 
       const textPath = `${outputBase}.txt`;
       const jsonPath = `${outputBase}.json`;
+      const jsonExists = fs.existsSync(jsonPath);
+      const textExists = fs.existsSync(textPath);
       let text = "";
       let droppedSegments = 0;
 
@@ -134,16 +143,65 @@ export class WhisperSttService extends BaseSttService {
         });
         text = joined.text;
         droppedSegments = joined.dropped;
-      } else if (fs.existsSync(textPath)) {
+      } else if (textExists) {
         text = (await fs.promises.readFile(textPath, "utf-8")).trim();
       }
 
-      return {
-        text,
-        note: droppedSegments > 0 ? `低信頼の区間 ${droppedSegments} 件を破棄` : undefined,
-      };
+      let note =
+        droppedSegments > 0 ? `低信頼の区間 ${droppedSegments} 件を破棄` : undefined;
+
+      // 出力ファイルが全く作られない環境（セキュリティソフトが子プロセスの書き込みを
+      // ブロックする等）では、whisper.cpp が stdout に出す区間行から復元する。
+      // 出力ファイルがあるのに空の場合は「無音」の判定を尊重し、stdout へは落とさない。
+      if (!text && !jsonExists && !textExists) {
+        const fromStdout = parseWhisperStdout(result.stdout, stt.language);
+        if (fromStdout) {
+          text = fromStdout;
+          note = "出力ファイルが無いため stdout から読み取り";
+          if (!this.stdoutFallbackWarned) {
+            this.stdoutFallbackWarned = true;
+            this.logger.warn(
+              "whisper.cpp の出力ファイルを作成できません（セキュリティソフト等の書き込みブロック）。stdout から認識結果を読み取ります"
+            );
+          }
+        } else if (!this.stdoutFallbackWarned) {
+          this.stdoutFallbackWarned = true;
+          this.logger.warn(
+            `whisper.cpp の出力ファイルがありません。stderr: ${result.stderr.slice(-300).replace(/\s+/g, " ")}`
+          );
+        }
+      }
+
+      return { text, note };
     } finally {
       await fs.promises.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
+}
+
+/**
+ * whisper.cpp が stdout に出す区間行からテキストを復元する。
+ *
+ * `-otxt` / `-ojf` の出力ファイルが作成できない環境（Windows のセキュリティソフトが
+ * 子プロセスの書き込みをブロックする等）向けのフォールバック。
+ * 形式: `[00:00:00.000 --> 00:00:02.180]   Hello.`
+ */
+export function parseWhisperStdout(stdout: string, language: string): string {
+  const segments: string[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const match =
+      /^\[\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}\]\s*(.*)$/.exec(
+        line.trim()
+      );
+    if (!match) {
+      continue;
+    }
+    const text = match[1].trim();
+    if (!text || /^\[(?:BLANK_AUDIO|MUSIC|.*music.*)\]$/i.test(text)) {
+      continue;
+    }
+    segments.push(text);
+  }
+  // 英語は区切りに空白が必要。日本語などはそのまま連結する
+  return segments.join(language.toLowerCase().startsWith("en") ? " " : "").trim();
 }

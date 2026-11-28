@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as http from "node:http";
-import * as os from "node:os";
 import * as path from "node:path";
 import express from "express";
 import type { ConversationPipeline } from "../src/backend/conversation/ConversationPipeline";
@@ -10,7 +9,7 @@ import type { AudioIO, LanguageModel } from "../src/backend/core/ports";
 import type { CharacterService } from "../src/backend/services/CharacterService";
 import type { ServiceMonitor } from "../src/backend/server/ServiceMonitor";
 import { createApiRouter } from "../src/backend/server/ApiRouter";
-import { createTempProject } from "./helpers/project";
+import { createTempDir, createTempProject } from "./helpers/project";
 
 function listen(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -24,7 +23,8 @@ function listen(server: http.Server): Promise<number> {
 
 test("未知の sherpa_model_type は 400 で拒否し、設定を保存しない", async () => {
   const project = createTempProject();
-  const modelDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-sherpa-"));
+  const model = createTempDir("sumika-sherpa-");
+  const modelDir = model.dir;
   fs.writeFileSync(path.join(modelDir, "tokens.txt"), "");
 
   const updated: unknown[] = [];
@@ -85,7 +85,7 @@ test("未知の sherpa_model_type は 400 で拒否し、設定を保存しな�
     assert.notEqual(project.config.getSTT().sherpa_model_type, "bogus_type");
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    fs.rmSync(modelDir, { recursive: true, force: true });
+    model.cleanup();
     project.cleanup();
   }
 });
@@ -94,7 +94,8 @@ test("有効な sherpa_model_type は設定へ保存される", async () => {
   const project = createTempProject({
     patch: { conversation: { language: "ja" }, stt: { engine: "sherpa" } },
   });
-  const modelDir = fs.mkdtempSync(path.join(os.tmpdir(), "sumika-sherpa-"));
+  const model = createTempDir("sumika-sherpa-");
+  const modelDir = model.dir;
   fs.writeFileSync(path.join(modelDir, "tokens.txt"), "");
 
   const app = express();
@@ -144,7 +145,7 @@ test("有効な sherpa_model_type は設定へ保存される", async () => {
     assert.equal(project.config.getSTT().engine, "sherpa");
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    fs.rmSync(modelDir, { recursive: true, force: true });
+    model.cleanup();
     project.cleanup();
   }
 });
