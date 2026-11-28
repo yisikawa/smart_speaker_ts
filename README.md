@@ -253,6 +253,26 @@ index_rate = 0   # 0 は 0.75 の約 2 倍速い（1 秒音声で 250ms vs 535ms
   Live2D（pixi + `pixi-live2d-display`）で描画し、無い/読めない場合は CSS 立ち絵（sprite）へ自動フォールバックする
 - `model3.json` は `FileReferences.Moc` があれば有効（VTube Studio の書き出しは Expressions / Motions を
   持たないことがある）。`Expressions[].Name` / `Motions` のキーは `avatar.expressions` / `avatar.motions` の対応に使う
+- hiyori のように PartArmA / PartArmB を持つモデルは、`model3.json` の
+  `FileReferences.Motions` に `Idle`（例: `animations/hiyori_m02.motion3.json`）を登録する。
+  `Idle` は自動再生され、余分な腕パーツ（PartArmB）が隠れて 4 本腕にならない。感情タグに応じたモーションは
+  `[avatar.motions]` で「感情キー → モーショングループ」を設定する（例: `happy = "M05"`）。
+  再現用に、必要な `Motions`（`FileReferences` の中）は次のとおり（腕が B に切り替わる m06 / m08 は登録しない）:
+
+  ```json
+  "Motions": {
+    "Idle": [{ "File": "animations/hiyori_m02.motion3.json" }],
+    "M01": [{ "File": "animations/hiyori_m01.motion3.json" }],
+    "M03": [{ "File": "animations/hiyori_m03.motion3.json" }],
+    "M04": [{ "File": "animations/hiyori_m04.motion3.json" }],
+    "M05": [{ "File": "animations/hiyori_m05.motion3.json" }],
+    "M07": [{ "File": "animations/hiyori_m07.motion3.json" }],
+    "M09": [{ "File": "animations/hiyori_m09.motion3.json" }],
+    "M10": [{ "File": "animations/hiyori_m10.motion3.json" }]
+  }
+  ```
+- 感情モーションは、画面が `tts_audio` を受け取ったときだけ動く（ブラウザ再生、
+  `audio.playback_target = "browser"`）。サーバー再生（ffplay）ではモーションは動かない
 - 口パク: `Groups[].Name = "LipSync"` のパラメータ（無ければ `ParamMouthOpenY`）を `volumes` に合わせて動かす
 - 音声: `audio.playback_target = "browser"` でブラウザ再生（WebAudio）。表示担当タブは
   `http://localhost:3000/?role=display`。未接続なら自動で ffplay に戻る
@@ -364,7 +384,7 @@ port = 8080
 ```powershell
 npm run verify         # typecheck → test → build をまとめて実行（作業後はこれ 1 本）
 npm run typecheck      # 型チェック（backend）
-npm test               # ユニット/結合テスト（node:test, 299 ケース）
+npm test               # ユニット/結合テスト（node:test, 315 ケース）
 npm run clean:tests    # dist-test の削除（pretest から自動実行）
 npm run config:default # schema.ts の既定値を settings.default.toml へ同期（コメントは保持）
 npm run smoke          # 起動中サーバーの疎通確認

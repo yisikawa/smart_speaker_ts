@@ -22,7 +22,7 @@ interface Live2DModelLike {
     settings?: { groups?: Array<{ Name?: string; Ids?: string[] }> };
   };
   expression(name: string): Promise<boolean>;
-  motion(group: string, index?: number): Promise<boolean>;
+  motion(group: string, index?: number, priority?: number): Promise<boolean>;
   destroy(): void;
 }
 
@@ -45,6 +45,8 @@ const VENDOR_TIMEOUT_MS = 15000;
 const BOTTOM_RATIO = 0.98;
 /** ステージ高さに対するモデルの高さ（scale で拡大縮小する） */
 const MODEL_HEIGHT_RATIO = 0.92;
+/** pixi-live2d-display の MotionPriority.FORCE（IDLE=1 / NORMAL=2 / FORCE=3） */
+const MOTION_PRIORITY_FORCE = 3;
 
 function currentVendor(): Live2DVendor | { error: string } | undefined {
   return (window as unknown as Live2DWindow).SumikaLive2D;
@@ -169,7 +171,8 @@ export class Live2DRenderer implements AvatarRenderer {
     if (!this.model) {
       return;
     }
-    void this.model.motion(group, index).catch(() => false);
+    // ターン途中の感情変化は、再生中の NORMAL モーションごと上書きする必要がある
+    void this.model.motion(group, index, MOTION_PRIORITY_FORCE).catch(() => false);
   }
 
   destroy(): void {

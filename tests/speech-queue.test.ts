@@ -126,3 +126,17 @@ test("バージインがあれば止めて WAV を返す", async () => {
   assert.equal(result.played, 1);
   assert.equal(result.bargeWav, barge);
 });
+
+test("感情キーを meta に伝搬する", async () => {
+  const metas: PlaybackMeta[] = [];
+  const queue = makeQueue({
+    tts: makeTts([]),
+    playImpl: async (_wav, meta) => {
+      metas.push(meta);
+      return undefined;
+    },
+  });
+  queue.enqueue("やった！", undefined, "happy");
+  await queue.drain();
+  assert.equal(metas[0]?.emotion, "happy");
+});

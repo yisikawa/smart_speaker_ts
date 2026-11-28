@@ -12,7 +12,7 @@ import { containsDisallowedScript, languageRetryInstruction } from "./languageGu
 import { PromptBuilder } from "./PromptBuilder";
 import { SpeechQueue } from "./SpeechQueue";
 import { SentenceSplitter, SentenceSplitterOptions } from "../../shared/text/sentenceSplitter";
-import { extractEmotion } from "../../shared/avatar/emotion";
+import { extractEmotion, type EmotionKey } from "../../shared/avatar/emotion";
 import { getLanguagePack } from "../../shared/i18n/languagePack";
 
 export interface TurnDeps {
@@ -139,12 +139,23 @@ export class TurnRunner {
     hooks.onReply(reply);
     hooks.onHistoryChanged();
 
+    const avatarConfig = this.deps.config.getAvatar();
+    const pack = getLanguagePack(mode);
+    const { text: spoken, expression, emotion } = extractEmotion(reply, avatarConfig.expressions, {
+      heuristic: avatarConfig.emotion_heuristic_enabled,
+      vocabulary: pack.emotion,
+    });
+
+    if (!spoken) {
+      this.logger.warn("感情タグのみの応答のため読み上げません");
+      return undefined;
+    }
     hooks.setState("speaking");
     hooks.emit({ type: "tts_started" });
     const ttsStartedAt = Date.now();
     let wav: Buffer;
     try {
-      wav = await this.deps.tts.synthesize(reply, { signal });
+      wav = await this.deps.tts.synthesize(spoken, { signal });
     } catch (error) {
       if (signal.aborted) {
         return undefined;
@@ -153,7 +164,7 @@ export class TurnRunner {
       return undefined;
     }
     hooks.emit({ type: "tts_complete", elapsedMs: Date.now() - ttsStartedAt });
-    return hooks.play(wav, this.meta(wav, reply));
+    return hooks.play(wav, this.meta(wav, spoken, expression ?? undefined, emotion ?? undefined));
   }
 
   /** 文単位で合成・再生する（既定） */
@@ -172,7 +183,7 @@ export class TurnRunner {
     let queue: SpeechQueue | null = this.createQueue(hooks, signal);
 
     const enqueue = (raw: string): void => {
-      const { text, expression } = extractEmotion(raw, avatarConfig.expressions, {
+      const { text, expression, emotion } = extractEmotion(raw, avatarConfig.expressions, {
         heuristic: avatarConfig.emotion_heuristic_enabled,
         vocabulary: pack.emotion,
       });
@@ -194,7 +205,7 @@ export class TurnRunner {
         hooks.setState("speaking");
         hooks.emit({ type: "speaking_started" });
       }
-      queue.enqueue(text, expression ?? undefined);
+      queue.enqueue(text, expression ?? undefined, emotion ?? undefined);
     };
 
     let reply = "";
@@ -291,10 +302,17 @@ export class TurnRunner {
   }
 
   /** 表示・口パク用のメタ情報 */
-  private meta(wav: Buffer, text: string): PlaybackMeta {
+  private meta(
+    wav: Buffer,
+    text: string,
+    expression?: string,
+    emotion?: EmotionKey
+  ): PlaybackMeta {
     return {
       utteranceId: randomUUID(),
       text,
+      expression,
+      emotion,
       volumes: buildVolumeEnvelope(wav),
       sliceMs: 20,
       durationMs: wavDurationMs(wav, this.deps.config.getAudio().sample_rate),

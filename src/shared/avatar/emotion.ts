@@ -30,6 +30,8 @@ export interface EmotionExtraction {
   text: string;
   /** 解決済みのモデル表情名（無ければ null） */
   expression: string | null;
+  /** タグ・推定から得た感情キー（無ければ null） */
+  emotion: EmotionKey | null;
 }
 
 /**
@@ -58,7 +60,7 @@ export function extractEmotion(
   }
 
   const expression = key ? expressions[key] || null : null;
-  return { text: stripped.replace(/\s{2,}/g, " ").trim(), expression };
+  return { text: stripped.replace(/\s{2,}/g, " ").trim(), expression, emotion: key };
 }
 
 /** タグの中身（日本語 or 英語キー）を意味キーへ */

@@ -5,6 +5,7 @@
  * コンパイル後の JavaScript には実行時依存（require）が残らない。
  */
 
+import type { EmotionKey } from "./avatar/emotion";
 import type { AvatarModelInfo } from "./avatar/modelCatalog";
 import type { LanguageMode } from "./i18n/languagePack";
 
@@ -67,6 +68,8 @@ export type PipelineEvent =
       text: string;
       /** 発火する表情（モデルの表情名） */
       expression?: string;
+      /** 感情キー（クライアントのモーション選択用） */
+      emotion?: EmotionKey;
       /** base64 WAV */
       audio: string;
       /** 20ms スライスごとの 0..1（口パク用） */

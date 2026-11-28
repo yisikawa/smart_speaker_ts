@@ -552,7 +552,14 @@ export const DEFAULT_CONFIG: AppConfig = {
     emotion_heuristic_enabled: true,
     expressions: { happy: "", angry: "", sad: "", surprised: "", shy: "", thinking: "" },
     emotion_styles: { happy: "", angry: "", sad: "" },
-    motions: { greeting: "", nod: "" },
+    motions: {
+      happy: "M05",
+      angry: "M03",
+      sad: "M04",
+      surprised: "M01",
+      shy: "M07",
+      thinking: "M09",
+    },
   },
   rag: {
     enabled: true,

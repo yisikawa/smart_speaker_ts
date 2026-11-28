@@ -60,6 +60,10 @@ export class StageView {
     this.avatar.setExpression(name);
   }
 
+  playMotion(group: string): void {
+    this.avatar.playMotion(group);
+  }
+
   setCaption(text: string, final: boolean): void {
     this.captionEl.textContent = text;
     this.captionEl.classList.toggle("final", final);

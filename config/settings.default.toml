@@ -303,8 +303,12 @@ angry = ""
 sad = ""
 
 [avatar.motions]
-greeting = ""
-nod = ""
+happy = "M05"
+angry = "M03"
+sad = "M04"
+surprised = "M01"
+shy = "M07"
+thinking = "M09"
 
 
 [server]
