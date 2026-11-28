@@ -1,5 +1,6 @@
 import { AppConfig, DEFAULT_CONFIG } from "./schema";
 import { isSherpaModelType } from "../../shared/stt/modelTypes";
+import { DEFAULT_PORT, MAX_PORT, MIN_PORT, isValidPort } from "../../shared/port";
 
 /** 数値項目を持つセクション */
 type NumericSection = "audio" | "conversation" | "stt" | "llm" | "tts" | "avatar" | "gui";
@@ -270,6 +271,12 @@ export function sanitizeConfig(config: AppConfig): string[] {
   if (!srv || typeof srv !== "object") {
     config.server = { ...DEFAULT_CONFIG.server };
   } else {
+    if (!isValidPort(srv.port)) {
+      warnings.push(
+        `server.port=${String(srv.port)} は ${MIN_PORT}..${MAX_PORT} の整数ではないため ${DEFAULT_PORT} を使用します`
+      );
+      srv.port = DEFAULT_PORT;
+    }
     if (typeof srv.https !== "boolean") srv.https = DEFAULT_CONFIG.server.https;
     if (typeof srv.cert_path !== "string") srv.cert_path = DEFAULT_CONFIG.server.cert_path;
     if (typeof srv.key_path !== "string") srv.key_path = DEFAULT_CONFIG.server.key_path;

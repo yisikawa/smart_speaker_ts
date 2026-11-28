@@ -6,7 +6,6 @@ title Sumika TypeScript
 set "APP_DIR=%~dp0"
 cd /d "%APP_DIR%"
 
-if not defined PORT set "PORT=3000"
 set "OPEN_BROWSER=1"
 set "LAYOUT=studio"
 set "START_ALL=0"
@@ -25,7 +24,6 @@ goto :parse_args
 :: マイク（getUserMedia）は secure context（https か localhost）でのみ動く。
 set "SCHEME=http"
 if exist "certs\server.crt" if exist "certs\server.key" set "SCHEME=https"
-set "APP_URL=%SCHEME%://localhost:%PORT%/?mode=%LAYOUT%"
 
 echo.
 echo ========================================
@@ -72,6 +70,13 @@ if not exist "dist\backend\index.js" (
 ) else (
     echo [3/6] ビルド成果物: OK
 )
+
+:: ---------------------------------------------------------------
+:: 3.5. ポートの解決（PORT 環境変数 > [server] port > 3000）
+:: ---------------------------------------------------------------
+for /f "usebackq delims=" %%p in (`node "scripts\resolve-port.js"`) do set "PORT=%%p"
+if not defined PORT set "PORT=3000"
+set "APP_URL=%SCHEME%://localhost:%PORT%/?mode=%LAYOUT%"
 
 :: ---------------------------------------------------------------
 :: 4. Ollama（未起動なら起動を試みる）
@@ -139,7 +144,7 @@ netstat -ano | findstr /C:":%PORT% " | findstr /C:"LISTENING" >nul 2>&1
 if not errorlevel 1 (
     echo.
     echo [警告] ポート %PORT% は既に使用中です。
-    echo        既存のプロセスを終了するか、環境変数 PORT を変更してください。
+    echo        既存のプロセスを終了するか、config\settings.toml の [server] port か環境変数 PORT を変更してください。
     echo.
 )
 

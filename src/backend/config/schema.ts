@@ -324,6 +324,8 @@ export interface GUIConfig {
 
 /** 配信（HTTPS・LAN 公開）の設定 */
 export interface ServerConfig {
+  /** 待受ポート（1..65535）。`PORT` 環境変数が設定されていればそちらを優先する */
+  port: number;
   /**
    * HTTPS で待ち受ける。`certs/server.crt` と `certs/server.key` が無いときは
    * HTTP にフォールバックする（起動ログに警告を出す）。
@@ -583,6 +585,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     caption_font_size: 34,
   },
   server: {
+    port: 3000,
     https: true,
     cert_path: "",
     key_path: "",

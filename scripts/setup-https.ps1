@@ -16,6 +16,14 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
+# 案内文で使う実効ポートを解決する（PORT > [server] port > 3000）。失敗時は 3000。
+$appPort = 3000
+try {
+    $portText = (& node (Join-Path $PSScriptRoot "resolve-port.js") 2>$null | Out-String).Trim()
+    if ($portText -match '^\d+$') { $appPort = [int]$portText }
+} catch {
+}
+
 function Resolve-Mkcert {
     $cmd = Get-Command mkcert -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
@@ -84,8 +92,8 @@ Write-Host ""
 Write-Host "[https] 完了: $certFile" -ForegroundColor Green
 Write-Host ""
 Write-Host "次の手順:" -ForegroundColor Cyan
-Write-Host "  1. .\start.bat で起動（https://localhost:3000 が開きます）"
-Write-Host "  2. 他の PC / スマホからは https://<このPCのIP>:3000 で開く"
+Write-Host "  1. .\start.bat で起動（https://localhost:$appPort が開きます）"
+Write-Host "  2. 他の PC / スマホからは https://<このPCのIP>:$appPort で開く"
 Write-Host "  3. 他の端末で証明書の警告が出る場合は、次の CA を配布して信頼してください:"
 Write-Host "       $caRoot\rootCA.pem"
 Write-Host "     - Windows: rootCA.pem を開く → 証明書のインストール → 「信頼されたルート証明機関」"

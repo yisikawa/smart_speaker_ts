@@ -18,7 +18,7 @@
 | 目的 | コマンド |
 |---|---|
 | ビルド | `npm run build`（clean → backend tsc → frontend 型チェック → 静的コピー + esbuild バンドル） |
-| テスト | `npm test`（`node:test` / 285 件 / `--test-timeout=30000`） |
+| テスト | `npm test`（`node:test` / 299 件 / `--test-timeout=30000`） |
 | 型のみ | `npm run typecheck` |
 | まとめて検証 | `npm run verify`（typecheck → test → build。**作業後はこれ 1 本**） |
 | テスト成果物の掃除 | `npm run clean:tests`（`dist-test` を削除。`pretest` から自動実行） |
@@ -254,6 +254,9 @@ src/backend/index.ts                                ← Composition Root（DI �
 ## 5. 環境前提（この PC）
 
 - Windows / Node.js v24.11 / ffmpeg・ffplay あり（`C:\ffmpeg\bin`・PATH 済み）
+- **待受ポートは `[server] port`（既定 3000）**。`PORT` 環境変数が最優先。
+  `start.bat` / `quit.bat` / `scripts/start-stage.bat` / `scripts/setup-https.ps1` / `npm run smoke` は
+  `scripts/resolve-port.js` で同じ値を解決する。
 - **サブエージェント実行（superpowers SDD）は `cline-pass/deepseek-v4.1-flash-1017` を使う**（残高の影響を受けない。Anthropic 直・Cline の他モデルは残高不足で失敗する）
 - Ollama 稼働・**`gemma4:e2b-it-qat`**（導入済み: `llama3.2:3b` / `qwen2.5:7b` / `qwen2.5:14b` / `llama3.1:8b` / `nomic-embed-text`）
 - VOICEVOX ENGINE 0.26.1・`speaker_id = 2`（四国めたん）

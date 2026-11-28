@@ -308,6 +308,8 @@ nod = ""
 
 
 [server]
+# 待受ポート（PORT 環境変数が設定されていればそちらが優先）
+port = 3000
 https = true
 cert_path = ""
 key_path = ""

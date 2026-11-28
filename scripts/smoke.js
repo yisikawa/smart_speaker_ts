@@ -1,11 +1,12 @@
 /**
  * 起動中サーバーに対する簡易スモークテスト。
  * 使い方: サーバーを起動した状態で `node scripts/smoke.js`
- * 環境変数 SMOKE_BASE で接続先を変更できる（既定: http://127.0.0.1:3000）
+ * 接続先: SMOKE_BASE > PORT 環境変数 > config/settings.toml の [server] port > 3000
  */
 const WebSocket = require("ws");
+const { resolvePort } = require("./resolve-port");
 
-const BASE = process.env.SMOKE_BASE ?? "http://127.0.0.1:3000";
+const BASE = process.env.SMOKE_BASE ?? `http://127.0.0.1:${resolvePort()}`;
 const isHttps = BASE.startsWith("https:");
 /** 自己署名（mkcert）でも通す。`NODE_EXTRA_CA_CERTS` を渡せば検証もできる */
 const transport = isHttps ? require("https") : require("http");
