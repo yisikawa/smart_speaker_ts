@@ -89,7 +89,7 @@ if (-not (Test-Path $backupDir)) {
 
 # --- zip の取得 ---
 if ([string]::IsNullOrWhiteSpace($ZipPath)) {
-    $downloadDir = Join-Path $env:TEMP "sumika-whisper-cuda"
+    $downloadDir = Join-Path $rootDir "tmp\sumika-whisper-cuda"
     New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
     $ZipPath = Join-Path $downloadDir $AssetName
 
