@@ -9,6 +9,7 @@ import { Logger, LogLevel } from "./core/logger";
 import { findProjectRoot } from "./core/paths";
 import { AppServer } from "./server/AppServer";
 import { loadTls } from "./server/tls";
+import { resolvePort } from "../shared/port";
 import { WsPlaybackSink } from "./server/WsPlaybackSink";
 import { AudioService } from "./services/AudioService";
 import { CharacterService } from "./services/CharacterService";
@@ -90,7 +91,7 @@ async function main(): Promise<void> {
   });
 
   // 4. サーバー
-  const port = Number(process.env.PORT ?? 3000);
+  const port = resolvePort(process.env.PORT, config.getServer().port);
   // HTTPS は `certs/` の証明書があれば自動で有効（マイクは secure context でのみ動く）
   const serverCfg = config.getServer();
   const tlsResult = loadTls(rootDir, serverCfg);

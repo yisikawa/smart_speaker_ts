@@ -329,7 +329,7 @@ sherpa_provider = "cpu"
 | `[stt]` | `model_path`, `binary_path`, `language`, `use_gpu`, `flash_attn`, `beam_size`, `threads`, `suppress_non_speech`, `max_context`, `no_speech_thold`, `drop_no_speech_prob`, `drop_avg_logprob`, `filter_hallucinations`, `min_input_rms`, `engine`, `sherpa_model_dir`, `sherpa_model_type`, `sherpa_provider`, `sherpa_language`, `[stt.en]`（英語モードの上書き） |
 | `[llm]` | `endpoint`, `model`, `character_file`, `character_file_en`, `temperature`, `max_tokens`, `history_turns`, `response_timeout_seconds`, `model_load_timeout_seconds` |
 | `[tts]` | `engine`, `endpoint`, `speaker_id`, `speed`, `pitch`, `volume`, `split_sentences`, `prefetch_depth`, `[tts.ja]`（日本語の上書き）, `[tts.en]`（英語の音声プロファイル）, `[tts.voice_conversion]`（任意の RVC） |
-| `[server]` | `https`（既定 true。`certs/` が無ければ HTTP）, `cert_path`, `key_path`, `host`（空=全インターフェース。LAN 公開用） |
+| `[server]` | `port`（既定 3000。`PORT` 環境変数が最優先）, `https`（既定 true。`certs/` が無ければ HTTP）, `cert_path`, `key_path`, `host`（空=全インターフェース。LAN 公開用） |
 
 設定の反映:
 
@@ -345,12 +345,26 @@ curl -X PATCH http://localhost:3000/api/config -H "Content-Type: application/jso
 > 上書き前の内容は `config/settings.toml.bak` に退避されます。
 > `GET/PATCH /api/config` の応答には、検証で補正された内容が `warnings` として含まれます（`/api/health` と同じ内容）。
 
+### 待受ポートを変える
+
+`config/settings.toml` の `[server] port` で変更できます（既定 3000）。`PORT` 環境変数を設定した場合はそちらが優先されます。
+
+```toml
+[server]
+port = 8080
+```
+
+`start.bat` の先頭に `set "PORT=8080"` を書けば、その起動だけの一時上書きになります。
+`start.bat` / `quit.bat` / `npm run smoke` / `scripts\start-stage.bat` / HTTPS の案内は
+`scripts/resolve-port.js` で同じ値を解決します。
+変更は次回起動から有効です。start.bat の中だけで PORT を設定した場合、quit.bat / npm run smoke は別プロセスなのでその値を見ません。全ツールで揃えるには [server] port か、シェルで PORT を設定してください。
+
 ## 開発
 
 ```powershell
 npm run verify         # typecheck → test → build をまとめて実行（作業後はこれ 1 本）
 npm run typecheck      # 型チェック（backend）
-npm test               # ユニット/結合テスト（node:test, 289 ケース）
+npm test               # ユニット/結合テスト（node:test, 299 ケース）
 npm run clean:tests    # dist-test の削除（pretest から自動実行）
 npm run config:default # schema.ts の既定値を settings.default.toml へ同期（コメントは保持）
 npm run smoke          # 起動中サーバーの疎通確認

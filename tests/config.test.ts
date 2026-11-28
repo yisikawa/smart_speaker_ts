@@ -105,6 +105,32 @@ test("sanitizeConfig は未対応の enum を現在の既定値へ補正する",
   assert.equal(config.conversation.language, DEFAULT_CONFIG.conversation.language);
 });
 
+test("server.port の既定値は 3000", () => {
+  assert.equal(DEFAULT_CONFIG.server.port, 3000);
+});
+
+test("sanitizeConfig は server.port を 1..65535 の整数に補正する", () => {
+  const config = clone();
+  config.server.port = 70000;
+  const warnings = sanitizeConfig(config);
+  assert.equal(config.server.port, DEFAULT_CONFIG.server.port);
+  assert.ok(warnings.some((w) => w.includes("server.port")));
+});
+
+test("ConfigManager は settings.toml の server.port を読む", () => {
+  const dir = tempDir();
+  try {
+    const manager = new ConfigManager({ rootDir: dir });
+    manager.update({ server: { port: 8080 } });
+    assert.equal(manager.getServer().port, 8080);
+
+    const reloaded = new ConfigManager({ rootDir: dir });
+    assert.equal(reloaded.getServer().port, 8080);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("ConfigManager はユーザー設定が無ければ既定値で起動する", () => {
   const dir = tempDir();
   try {

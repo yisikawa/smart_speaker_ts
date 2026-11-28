@@ -6,6 +6,7 @@ title Sumika TypeScript - Quit
 set "APP_DIR=%~dp0"
 cd /d "%APP_DIR%"
 
+for /f "usebackq delims=" %%p in (`node "scripts\resolve-port.js"`) do set "PORT=%%p"
 if not defined PORT set "PORT=3000"
 set "RVC_PORT=9890"
 set "STOP_ALL=0"

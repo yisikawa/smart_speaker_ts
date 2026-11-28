@@ -112,7 +112,7 @@ class SumikaApp {
   private connect(): void {
     // start.bat を使わずに HTML を直接開いた場合は WebSocket を張れないため、明示する
     if (this.ws.isUnsupportedEnvironment) {
-      this.view.setServicesText("未接続（start.bat で起動し http://localhost:3000 を開いてください）", true);
+      this.view.setServicesText("未接続（start.bat で起動し、表示された URL を開いてください）", true);
       this.view.statusEl.className = "status error";
       this.view.statusEl.textContent = "未接続";
       return;

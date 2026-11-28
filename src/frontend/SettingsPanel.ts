@@ -31,7 +31,7 @@ const MODEL_TYPE_OPTIONS: { value: SherpaModelTypeName; label: string }[] = [
 async function requestJson<T>(method: "GET" | "PUT", path: string, body?: unknown): Promise<T> {
   if (typeof fetch !== "function") {
     throw new Error(
-      "この環境ではモデル設定を取得できません（start.bat で起動して http://localhost:3000 を開いてください）"
+      "この環境ではモデル設定を取得できません（start.bat で起動して、表示された URL を開いてください）"
     );
   }
   const response = await fetch(path, {
